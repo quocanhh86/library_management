@@ -4,7 +4,7 @@ Hệ thống quản lý ứng dụng — xây dựng với ASP.NET Core MVC (.NE
 
 ## 📋 Yêu cầu
 
-- [.NET 11.0 SDK](https://dotnet.microsoft.com/download)
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
 - SQL Server (hoặc SQL Server Express / Docker)
 
 ## 🚀 Bắt đầu
