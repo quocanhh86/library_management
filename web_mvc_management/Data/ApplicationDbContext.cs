@@ -62,9 +62,17 @@ public class ApplicationDbContext : DbContext
                     {
                         entry.Entity.CreatedAt = now;
                     }
+                    if (entry.Entity.UpdatedAt == default)
+                    {
+                        entry.Entity.UpdatedAt = now;
+                    }
                     if (entry.Entity.CreatedBy == null && currentUserId.HasValue)
                     {
                         entry.Entity.CreatedBy = currentUserId;
+                    }
+                    if (entry.Entity.UpdatedBy == null && currentUserId.HasValue)
+                    {
+                        entry.Entity.UpdatedBy = currentUserId;
                     }
                     break;
 

@@ -18,7 +18,7 @@ public class BookAuthor : IAuditableEntity, ISoftDelete
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset? UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Guid? CreatedBy { get; set; }
 
@@ -28,4 +28,3 @@ public class BookAuthor : IAuditableEntity, ISoftDelete
     public virtual Book Book { get; set; } = null!;
     public virtual Author Author { get; set; } = null!;
 }
-

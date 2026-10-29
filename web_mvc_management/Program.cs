@@ -1,3 +1,4 @@
+using web_mvc_management.Data;
 using web_mvc_management.Extensions;
 using web_mvc_management.Middlewares;
 
@@ -15,6 +16,13 @@ builder.Services.AddRepositories();
 builder.Services.AddApplicationServices();
 
 var app = builder.Build();
+
+// Seed initial clean demo data
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await DbInitializer.InitializeAsync(context);
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

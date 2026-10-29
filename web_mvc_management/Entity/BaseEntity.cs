@@ -17,10 +17,9 @@ public abstract class BaseEntity : IEntity<Guid>, IAuditableEntity, ISoftDelete
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset? UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Guid? CreatedBy { get; set; }
 
     public Guid? UpdatedBy { get; set; }
 }
-
