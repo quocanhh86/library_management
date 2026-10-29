@@ -100,3 +100,16 @@ appsettings.*.Local.json
 node_modules/
 wwwroot/lib/
 
+
+# AI Agent Setup, Configurations & Rules (Antigravity, Gemini, Claude)
+.agents/
+.agent/
+_agents/
+_agent/
+AGENTS.md
+GEMINI.md
+SOUL.md
+CLAUDE.md
+scripts/
+.claude/
+.gemini/

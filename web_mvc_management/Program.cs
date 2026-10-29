@@ -9,9 +9,10 @@ builder.Services.AddControllersWithViews();
 // Database
 builder.Services.AddDatabase(builder.Configuration);
 
-// Application Services & Repositories
-builder.Services.AddApplicationServices();
+// Common Infrastructure & Repositories
+builder.Services.AddInfrastructureServices();
 builder.Services.AddRepositories();
+builder.Services.AddApplicationServices();
 
 var app = builder.Build();
 

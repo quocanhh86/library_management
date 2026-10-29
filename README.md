@@ -1,10 +1,10 @@
 # App Management
 
-Hệ thống quản lý ứng dụng — xây dựng với ASP.NET Core MVC (.NET 11.0).
+Hệ thống quản lý ứng dụng — xây dựng với ASP.NET Core MVC (.NET 10.0).
 
 ## 📋 Yêu cầu
 
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
 - SQL Server (hoặc SQL Server Express / Docker)
 
 ## 🚀 Bắt đầu
@@ -40,7 +40,7 @@ dotnet ef database update
 dotnet run --project web_mvc_management
 ```
 
-Truy cập: https://localhost:5001
+Truy cập: https://localhost:5001 hoặc http://localhost:5024
 
 ## 📁 Cấu trúc dự án
 
@@ -71,7 +71,7 @@ app_management/
 
 ## 🛠️ Tech Stack
 
-- **Framework:** ASP.NET Core MVC (.NET 11.0)
+- **Framework:** ASP.NET Core MVC (.NET 10.0)
 - **ORM:** Entity Framework Core
 - **Database:** SQL Server
 - **Frontend:** Bootstrap 5, jQuery
@@ -79,4 +79,3 @@ app_management/
 ## 📝 License
 
 MIT
-
