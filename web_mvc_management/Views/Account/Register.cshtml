@@ -1,6 +1,6 @@
 @model web_mvc_management.Models.ViewModels.Auth.ReaderRegisterViewModel
 @{
-    ViewData["Title"] = "Đăng Ký Thẻ Bạn Đọc";
+    ViewData["Title"] = "Đăng Ký Mở Thẻ Bạn Đọc";
     var readerTypes = ViewBag.ReaderTypes as List<web_mvc_management.Entity.ReaderType> ?? new();
 }
 
@@ -12,14 +12,14 @@
                     <i class="bi bi-person-vcard fs-2"></i>
                 </div>
                 <h4 class="fw-bold mb-1">Đăng Ký Mở Thẻ Thư Viện UTC</h4>
-                <p class="text-white-50 small mb-0">Hệ thống cấp phát thẻ thư viện điện tử thông minh và an toàn 2 lớp OTP</p>
+                <p class="text-white-50 small mb-0">Hệ thống cấp phát thẻ thư viện điện tử thông minh bảo mật 2 lớp OTP</p>
             </div>
 
             <div class="card-body p-4 p-md-5">
-                <div id="registerAlertPlaceholder"></div>
-
-                <form id="readerRegisterForm" novalidate>
+                <form asp-action="Register" method="post" novalidate>
                     @Html.AntiForgeryToken()
+
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small mb-4" role="alert"></div>
 
                     <div class="border-bottom pb-2 mb-4">
                         <h6 class="fw-bold text-primary text-uppercase mb-0">
@@ -131,7 +131,7 @@
                             <label asp-for="ConfirmPassword" class="form-label fw-semibold text-secondary small">XÁC NHẬN MẬT KHẨU <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-lock-fill"></i></span>
-                                <input asp-for="ConfirmPassword" type="password" id="regConfirmPasswordInput" class="form-control border-start-0 ps-0" placeholder="Nhập lại mật khẩu..." required autocomplete="new-password" />
+                                <input asp-for="ConfirmPassword" type="password" class="form-control border-start-0 ps-0" placeholder="Nhập lại mật khẩu..." required autocomplete="new-password" />
                             </div>
                             <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
                         </div>
@@ -139,14 +139,13 @@
 
                     <div class="alert alert-light border small mt-4 p-3 rounded-3 text-secondary">
                         <i class="bi bi-info-circle-fill text-primary me-2"></i>
-                        Sau khi bấm <strong>"Nhận mã OTP mở thẻ"</strong>, hệ thống sẽ gửi mã xác thực gồm 6 chữ số tới hòm thư email của bạn. Thẻ thư viện điện tử sẽ được khởi tạo tự động ngay khi xác thực thành công.
+                        Hệ thống sử dụng cơ chế bảo mật xác thực 2 lớp qua Email. Sau khi gửi thông tin, bạn sẽ được chuyển tới trang nhập mã OTP gồm 6 chữ số để kích hoạt thẻ.
                     </div>
 
                     <div class="d-grid mt-4">
-                        <button type="submit" id="btnSubmitRegister" class="btn btn-primary py-2 fw-semibold rounded-3 shadow-sm">
-                            <span class="spinner-border spinner-border-sm me-2 d-none" id="registerSpinner" role="status"></span>
-                            <i class="bi bi-envelope-paper-heart me-1" id="registerBtnIcon"></i>
-                            Nhận Mã OTP Mở Thẻ
+                        <button type="submit" class="btn btn-primary py-2 fw-semibold rounded-3 shadow-sm">
+                            <i class="bi bi-envelope-paper-heart me-1"></i>
+                            Tiếp Tục &amp; Nhận Mã OTP Mở Thẻ &rarr;
                         </button>
                     </div>
 
@@ -159,366 +158,19 @@
     </div>
 </div>
 
-<!-- ========================================================================= -->
-<!-- MODAL XÁC THỰC OTP MỞ THẺ (REGISTER OTP MODAL)                             -->
-<!-- ========================================================================= -->
-<div class="modal fade" id="registerOtpModal" tabindex="-1" aria-labelledby="registerOtpModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0 shadow">
-            <div class="modal-header bg-primary text-white border-0 py-3">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-envelope-check-fill fs-4"></i>
-                    <div>
-                        <h5 class="modal-title fw-bold mb-0" id="registerOtpModalLabel">Xác Thực Mã OTP Mở Thẻ</h5>
-                        <p class="small text-white-50 mb-0">Kiểm tra hòm thư email để hoàn tất kích hoạt thẻ</p>
-                    </div>
-                </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <div class="modal-body p-4 text-center">
-                <div id="registerModalAlertPlaceholder"></div>
-
-                <div class="mb-3">
-                    <p class="text-muted small mb-1">Mã xác thực gồm 6 chữ số đã được gửi tới:</p>
-                    <p class="fw-bold text-dark fs-6" id="registerModalTargetEmail">-</p>
-                </div>
-
-                <!-- 6 Ô NHẬP OTP RIÊNG BIỆT -->
-                <div class="d-flex justify-content-center gap-2 mb-3" id="registerOtpInputsContainer">
-                    <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 reg-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" autocomplete="one-time-code" />
-                    <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 reg-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
-                    <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 reg-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
-                    <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 reg-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
-                    <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 reg-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
-                    <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 reg-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
-                </div>
-
-                <div class="text-muted small mb-3">
-                    <span>Mã OTP hết hạn sau: </span>
-                    <span class="fw-bold text-danger" id="registerOtpCountdown">05:00</span>
-                </div>
-
-                <div class="d-grid mb-3">
-                    <button type="button" id="btnConfirmRegisterOtp" class="btn btn-success py-2 fw-semibold rounded-3 shadow-sm">
-                        <span class="spinner-border spinner-border-sm me-2 d-none" id="registerOtpVerifySpinner" role="status"></span>
-                        <i class="bi bi-check-circle-fill me-1" id="registerOtpVerifyBtnIcon"></i>
-                        Xác Nhận & Cấp Thẻ Thư Viện
-                    </button>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
-                    <button type="button" class="btn btn-link btn-sm text-decoration-none text-muted" data-bs-dismiss="modal">
-                        <i class="bi bi-arrow-left me-1"></i>Sửa thông tin
-                    </button>
-                    <button type="button" id="btnResendRegisterOtp" class="btn btn-link btn-sm text-decoration-none text-primary fw-semibold" disabled>
-                        <i class="bi bi-arrow-clockwise me-1"></i>Gửi lại mã (<span id="registerResendCooldown">60</span>s)
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
-        $(function () {
-            let currentRegistrationData = null;
-            let currentTargetEmail = '';
-            let countdownInterval = null;
-            let resendCooldownInterval = null;
-            let otpExpirySeconds = 300;
-            let resendCooldownSeconds = 60;
-
-            const modalElement = document.getElementById('registerOtpModal');
-            const otpModal = new bootstrap.Modal(modalElement);
-
-            // Toggle show/hide password
-            $('#regTogglePasswordBtn').on('click', function () {
-                const input = $('#regPasswordInput');
-                const icon = $('#regTogglePasswordIcon');
-                if (input.attr('type') === 'password') {
-                    input.attr('type', 'text');
-                    icon.removeClass('bi-eye').addClass('bi-eye-slash');
-                } else {
-                    input.attr('type', 'password');
-                    icon.removeClass('bi-eye-slash').addClass('bi-eye');
-                }
-            });
-
-            // Gửi dữ liệu form đăng ký -> nhận OTP
-            $('#readerRegisterForm').on('submit', function (e) {
-                e.preventDefault();
-
-                if (!$(this).valid()) {
-                    return;
-                }
-
-                const formData = {
-                    FullName: $('#FullName').val().trim(),
-                    Username: $('#Username').val().trim(),
-                    Email: $('#Email').val().trim(),
-                    Phone: $('#Phone').val().trim(),
-                    ReaderTypeId: $('#ReaderTypeId').val(),
-                    MemberCode: $('#MemberCode').val().trim() || null,
-                    DateOfBirth: $('#DateOfBirth').val() || null,
-                    Address: $('#Address').val().trim() || null,
-                    Password: $('#regPasswordInput').val(),
-                    ConfirmPassword: $('#regConfirmPasswordInput').val()
-                };
-
-                const token = $('input[name="__RequestVerificationToken"]').val();
-
-                $('#btnSubmitRegister').prop('disabled', true);
-                $('#registerSpinner').removeClass('d-none');
-                $('#registerBtnIcon').addClass('d-none');
-                $('#registerAlertPlaceholder').empty();
-
-                $.ajax({
-                    url: '@Url.Action("SendRegisterOtp", "Account")',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    headers: {
-                        'RequestVerificationToken': token
-                    },
-                    data: JSON.stringify(formData),
-                    success: function (res) {
-                        $('#btnSubmitRegister').prop('disabled', false);
-                        $('#registerSpinner').addClass('d-none');
-                        $('#registerBtnIcon').removeClass('d-none');
-
-                        if (res.success) {
-                            currentRegistrationData = formData;
-                            currentTargetEmail = res.data.email;
-                            $('#registerModalTargetEmail').text(res.data.maskedEmail);
-
-                            clearOtpInputs();
-                            startCountdown();
-                            startResendCooldown();
-
-                            otpModal.show();
-                            setTimeout(() => {
-                                $('.reg-otp-digit').first().focus();
-                            }, 500);
-                        } else {
-                            showErrorAlert('#registerAlertPlaceholder', res.message || 'Không thể gửi mã OTP.');
-                        }
-                    },
-                    error: function (xhr) {
-                        $('#btnSubmitRegister').prop('disabled', false);
-                        $('#registerSpinner').addClass('d-none');
-                        $('#registerBtnIcon').removeClass('d-none');
-
-                        let errMsg = 'Đã có lỗi hệ thống xảy ra. Vui lòng thử lại sau.';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            errMsg = xhr.responseJSON.message;
-                        }
-                        showErrorAlert('#registerAlertPlaceholder', errMsg);
-                    }
-                });
-            });
-
-            // Xử lý 6 ô nhập OTP
-            const $otpInputs = $('.reg-otp-digit');
-            $otpInputs.each(function (index) {
-                $(this).on('input', function (e) {
-                    const val = $(this).val();
-                    if (val.length === 1) {
-                        if (index < $otpInputs.length - 1) {
-                            $otpInputs.eq(index + 1).focus();
-                        } else {
-                            $(this).blur();
-                            $('#btnConfirmRegisterOtp').click();
-                        }
-                    }
-                });
-
-                $(this).on('keydown', function (e) {
-                    if (e.key === 'Backspace' && !$(this).val() && index > 0) {
-                        $otpInputs.eq(index - 1).focus();
-                    }
-                });
-
-                $(this).on('paste', function (e) {
-                    e.preventDefault();
-                    const pasteData = (e.originalEvent.clipboardData || window.clipboardData).getData('text').trim();
-                    if (/^\d{6}$/.test(pasteData)) {
-                        pasteData.split('').forEach((char, i) => {
-                            if (i < $otpInputs.length) {
-                                $otpInputs.eq(i).val(char);
-                            }
-                        });
-                        $otpInputs.last().focus();
-                        $('#btnConfirmRegisterOtp').click();
-                    }
-                });
-            });
-
-            // Xác nhận mã OTP và cấp thẻ
-            $('#btnConfirmRegisterOtp').on('click', function () {
-                let otp = '';
-                $otpInputs.each(function () {
-                    otp += $(this).val();
-                });
-
-                if (otp.length !== 6) {
-                    showErrorAlert('#registerModalAlertPlaceholder', 'Vui lòng nhập đủ 6 chữ số mã OTP.');
-                    return;
-                }
-
-                if (!currentRegistrationData) {
-                    showErrorAlert('#registerModalAlertPlaceholder', 'Dữ liệu đăng ký không tồn tại. Vui lòng thử lại từ đầu.');
-                    return;
-                }
-
-                const token = $('input[name="__RequestVerificationToken"]').val();
-
-                $('#btnConfirmRegisterOtp').prop('disabled', true);
-                $('#registerOtpVerifySpinner').removeClass('d-none');
-                $('#registerOtpVerifyBtnIcon').addClass('d-none');
-                $('#registerModalAlertPlaceholder').empty();
-
-                $.ajax({
-                    url: '@Url.Action("CompleteRegistration", "Account")',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    headers: {
-                        'RequestVerificationToken': token
-                    },
-                    data: JSON.stringify({
-                        RegistrationData: currentRegistrationData,
-                        OtpCode: otp
-                    }),
-                    success: function (res) {
-                        $('#btnConfirmRegisterOtp').prop('disabled', false);
-                        $('#registerOtpVerifySpinner').addClass('d-none');
-                        $('#registerOtpVerifyBtnIcon').removeClass('d-none');
-
-                        if (res.success) {
-                            const cardInfo = res.data && res.data.cardNo ? ` Mã số thẻ: <strong>${res.data.cardNo}</strong>.` : '';
-                            $('#registerModalAlertPlaceholder').html(
-                                `<div class="alert alert-success d-flex align-items-center mb-3">
-                                    <i class="bi bi-check-circle-fill me-2 fs-5"></i>
-                                    <div>Đăng ký thành công!${cardInfo} Đang chuyển hướng tới trang đăng nhập...</div>
-                                </div>`
-                            );
-                            setTimeout(() => {
-                                window.location.href = res.data.redirectUrl || '@Url.Action("Login", "Account")';
-                            }, 2000);
-                        } else {
-                            showErrorAlert('#registerModalAlertPlaceholder', res.message || 'Mã OTP không hợp lệ hoặc đã hết hạn.');
-                            clearOtpInputs();
-                            $otpInputs.first().focus();
-                        }
-                    },
-                    error: function (xhr) {
-                        $('#btnConfirmRegisterOtp').prop('disabled', false);
-                        $('#registerOtpVerifySpinner').addClass('d-none');
-                        $('#registerOtpVerifyBtnIcon').removeClass('d-none');
-
-                        let errMsg = 'Xác thực thất bại. Vui lòng thử lại.';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            errMsg = xhr.responseJSON.message;
-                        }
-                        showErrorAlert('#registerModalAlertPlaceholder', errMsg);
-                        clearOtpInputs();
-                        $otpInputs.first().focus();
-                    }
-                });
-            });
-
-            // Gửi lại mã OTP
-            $('#btnResendRegisterOtp').on('click', function () {
-                if ($(this).prop('disabled') || !currentTargetEmail) return;
-
-                const token = $('input[name="__RequestVerificationToken"]').val();
-                $(this).prop('disabled', true);
-
-                $.ajax({
-                    url: '@Url.Action("ResendOtp", "Account")',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    headers: {
-                        'RequestVerificationToken': token
-                    },
-                    data: JSON.stringify({
-                        Email: currentTargetEmail,
-                        Purpose: '@web_mvc_management.Services.AuthService.PurposeRegister'
-                    }),
-                    success: function (res) {
-                        if (res.success) {
-                            $('#registerModalAlertPlaceholder').html(
-                                `<div class="alert alert-info py-2 small mb-3">
-                                    <i class="bi bi-info-circle-fill me-1"></i>${res.message || 'Mã OTP mới đã được gửi.'}
-                                </div>`
-                            );
-                            clearOtpInputs();
-                            startCountdown();
-                            startResendCooldown();
-                            $otpInputs.first().focus();
-                        } else {
-                            showErrorAlert('#registerModalAlertPlaceholder', res.message || 'Không thể gửi lại mã OTP.');
-                        }
-                    },
-                    error: function (xhr) {
-                        let errMsg = 'Lỗi gửi lại mã OTP.';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            errMsg = xhr.responseJSON.message;
-                        }
-                        showErrorAlert('#registerModalAlertPlaceholder', errMsg);
-                    }
-                });
-            });
-
-            function startCountdown() {
-                clearInterval(countdownInterval);
-                otpExpirySeconds = 300;
-                updateCountdownDisplay();
-                countdownInterval = setInterval(() => {
-                    otpExpirySeconds--;
-                    updateCountdownDisplay();
-                    if (otpExpirySeconds <= 0) {
-                        clearInterval(countdownInterval);
-                        $('#registerOtpCountdown').text('00:00 (Hết hạn)');
-                        showErrorAlert('#registerModalAlertPlaceholder', 'Mã OTP đã hết hiệu lực. Vui lòng bấm "Gửi lại mã".');
-                    }
-                }, 1000);
-            }
-
-            function updateCountdownDisplay() {
-                const m = Math.floor(otpExpirySeconds / 60);
-                const s = otpExpirySeconds % 60;
-                $('#registerOtpCountdown').text(`${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`);
-            }
-
-            function startResendCooldown() {
-                clearInterval(resendCooldownInterval);
-                resendCooldownSeconds = 60;
-                $('#btnResendRegisterOtp').prop('disabled', true);
-                $('#registerResendCooldown').text(resendCooldownSeconds);
-
-                resendCooldownInterval = setInterval(() => {
-                    resendCooldownSeconds--;
-                    $('#registerResendCooldown').text(resendCooldownSeconds);
-                    if (resendCooldownSeconds <= 0) {
-                        clearInterval(resendCooldownInterval);
-                        $('#btnResendRegisterOtp').prop('disabled', false).html('<i class="bi bi-arrow-clockwise me-1"></i>Gửi lại mã OTP');
-                    }
-                }, 1000);
-            }
-
-            function clearOtpInputs() {
-                $otpInputs.val('');
-            }
-
-            function showErrorAlert(containerId, message) {
-                $(containerId).html(
-                    `<div class="alert alert-danger alert-dismissible fade show small mb-3" role="alert">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>${message}
-                        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>`
-                );
+        // Minimal JavaScript: Chỉ dùng để bật/tắt hiển thị mật khẩu
+        $('#regTogglePasswordBtn').on('click', function () {
+            const input = $('#regPasswordInput');
+            const icon = $('#regTogglePasswordIcon');
+            if (input.attr('type') === 'password') {
+                input.attr('type', 'text');
+                icon.removeClass('bi-eye').addClass('bi-eye-slash');
+            } else {
+                input.attr('type', 'password');
+                icon.removeClass('bi-eye-slash').addClass('bi-eye');
             }
         });
     </script>

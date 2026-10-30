@@ -97,13 +97,25 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Đăng ký các hạ tầng dùng chung (Infrastructure).
+    /// Đăng ký các hạ tầng dùng chung (Infrastructure, Stateful Session, Caching).
     /// </summary>
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
         services.AddScoped<IUserContext, UserContext>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+
+        // Cấu hình Distributed Memory Cache & Stateful Session (MVC Server-Side State)
+        services.AddDistributedMemoryCache();
+        services.AddSession(options =>
+        {
+            options.IdleTimeout = TimeSpan.FromMinutes(30);
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.Cookie.Name = ".LibraryManagement.Session";
+        });
 
         return services;
     }
