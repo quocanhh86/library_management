@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
@@ -67,6 +72,10 @@ public class BaseRepository<TEntity>(ApplicationDbContext context) : IBaseReposi
         CancellationToken cancellationToken = default,
         params Expression<Func<TEntity, object>>[] includes)
     {
+        var safePageItemSize = pageSize <= 0 ? PaginationParams.DefaultPageItemSize : pageSize;
+        var normalizedPageNo = pageIndex <= 1 ? 1 : pageIndex;
+        var skip = (normalizedPageNo - 1) * safePageItemSize;
+
         var query = GetQueryable(asNoTracking);
 
         if (includes != null && includes.Length > 0)
@@ -86,15 +95,24 @@ public class BaseRepository<TEntity>(ApplicationDbContext context) : IBaseReposi
             query = orderBy(query);
         }
 
-        var safePageIndex = pageIndex < 1 ? 1 : pageIndex;
-        var safePageSize = pageSize < 1 ? 10 : pageSize;
-
         var items = await query
-            .Skip((safePageIndex - 1) * safePageSize)
-            .Take(safePageSize)
+            .Skip(skip)
+            .Take(safePageItemSize)
             .ToListAsync(cancellationToken);
 
-        return new PagedResult<TEntity>(items, totalCount, safePageIndex, safePageSize);
+        return new PagedResult<TEntity>(items, totalCount, normalizedPageNo, safePageItemSize);
+    }
+
+    public virtual async Task<PagedResult<TEntity>> GetPagedAsync(
+        PaginationParams pagination,
+        Expression<Func<TEntity, bool>>? predicate = null,
+        Func<IQueryable<TEntity>, IOrderedQueryable<TEntity>>? orderBy = null,
+        bool asNoTracking = true,
+        CancellationToken cancellationToken = default,
+        params Expression<Func<TEntity, object>>[] includes)
+    {
+        ArgumentNullException.ThrowIfNull(pagination);
+        return await GetPagedAsync(pagination.PageNo, pagination.PageItemSize, predicate, orderBy, asNoTracking, cancellationToken, includes);
     }
 
     public virtual async Task<TEntity> AddAsync(TEntity entity, CancellationToken cancellationToken = default)
@@ -142,4 +160,3 @@ public class BaseRepository<TEntity>(ApplicationDbContext context) : IBaseReposi
         return true;
     }
 }
-

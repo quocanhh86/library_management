@@ -52,10 +52,23 @@ public interface IBaseRepository<TEntity> where TEntity : class
 
     /// <summary>
     /// Truy vấn phân trang kèm điều kiện lọc và sắp xếp.
+    /// - Hỗ trợ pageIndex = 0 hoặc 1 đều truy vấn từ item 0 trong CSDL.
+    /// - pageSize mặc định = 10 (nếu không truyền hoặc <= 0).
     /// </summary>
     Task<PagedResult<TEntity>> GetPagedAsync(
         int pageIndex,
         int pageSize,
+        Expression<Func<TEntity, bool>>? predicate = null,
+        Func<IQueryable<TEntity>, IOrderedQueryable<TEntity>>? orderBy = null,
+        bool asNoTracking = true,
+        CancellationToken cancellationToken = default,
+        params Expression<Func<TEntity, object>>[] includes);
+
+    /// <summary>
+    /// Truy vấn phân trang từ đối tượng tham số phân trang chuẩn PaginationParams.
+    /// </summary>
+    Task<PagedResult<TEntity>> GetPagedAsync(
+        PaginationParams pagination,
         Expression<Func<TEntity, bool>>? predicate = null,
         Func<IQueryable<TEntity>, IOrderedQueryable<TEntity>>? orderBy = null,
         bool asNoTracking = true,
@@ -92,4 +105,3 @@ public interface IBaseRepository<TEntity> where TEntity : class
     /// </summary>
     Task<bool> SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
-
