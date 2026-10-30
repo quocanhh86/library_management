@@ -1,0 +1,281 @@
+@model web_mvc_management.Models.ViewModels.Auth.VerifyOtpViewModel
+@{
+    ViewData["Title"] = "Xác Thực Mã OTP";
+    var purposeTitle = Model.Purpose switch
+    {
+        web_mvc_management.Services.AuthService.PurposeRegister => "Xác Thực Mở Thẻ Độc Giả",
+        web_mvc_management.Services.AuthService.PurposeStaffLogin => "Xác Thực Đăng Nhập Cán Bộ",
+        _ => "Xác Thực Đăng Nhập 2FA"
+    };
+}
+
+<div class="row justify-content-center py-4">
+    <div class="col-12 col-md-8 col-lg-5">
+        <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="card-header bg-primary text-white text-center py-4">
+                <div class="d-inline-flex align-items-center justify-content-center bg-white text-primary rounded-circle p-3 mb-2 shadow-sm">
+                    <i class="bi bi-shield-check fs-2"></i>
+                </div>
+                <h4 class="fw-bold mb-1">@purposeTitle</h4>
+                <p class="text-white-50 small mb-0">Nhập mã OTP 6 chữ số được gửi tới hòm thư của bạn</p>
+            </div>
+
+            <div class="card-body p-4 p-md-5">
+                <div id="verifyAlertPlaceholder"></div>
+
+                <div class="text-center mb-4">
+                    <p class="text-muted small mb-1">Mã xác thực đã được gửi tới địa chỉ:</p>
+                    <p class="fw-bold text-dark fs-6">@(Model.MaskedEmail ?? Model.Email)</p>
+                </div>
+
+                <form id="verifyOtpForm" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="Email" />
+                    <input type="hidden" asp-for="Purpose" />
+                    <input type="hidden" asp-for="ReturnUrl" />
+
+                    <!-- 6 Ô NHẬP OTP RIÊNG BIỆT TỰ ĐỘNG FOCUS -->
+                    <div class="d-flex justify-content-center gap-2 mb-3" id="otpInputsContainer">
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 standalone-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" autocomplete="one-time-code" autofocus />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 standalone-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 standalone-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 standalone-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 standalone-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-4 standalone-otp-digit" style="width: 45px; height: 52px;" inputmode="numeric" />
+                    </div>
+
+                    <div class="text-center text-muted small mb-3">
+                        <span>Mã OTP hết hạn sau: </span>
+                        <span class="fw-bold text-danger" id="otpCountdown">05:00</span>
+                    </div>
+
+                    <div class="d-grid mb-3">
+                        <button type="button" id="btnSubmitOtp" class="btn btn-primary py-2 fw-semibold rounded-3 shadow-sm">
+                            <span class="spinner-border spinner-border-sm me-2 d-none" id="otpSpinner" role="status"></span>
+                            <i class="bi bi-patch-check-fill me-1" id="otpBtnIcon"></i>
+                            Xác Nhận Mã OTP
+                        </button>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                        <a asp-action="Login" class="btn btn-link btn-sm text-decoration-none text-muted">
+                            <i class="bi bi-arrow-left me-1"></i>Quay lại đăng nhập
+                        </a>
+                        <button type="button" id="btnResendOtp" class="btn btn-link btn-sm text-decoration-none text-primary fw-semibold" disabled>
+                            <i class="bi bi-arrow-clockwise me-1"></i>Gửi lại mã (<span id="resendCooldown">60</span>s)
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(function () {
+            let countdownInterval = null;
+            let resendCooldownInterval = null;
+            let otpExpirySeconds = 300;
+            let resendCooldownSeconds = 60;
+
+            const targetEmail = '@Model.Email';
+            const purpose = '@Model.Purpose';
+            const returnUrl = '@Model.ReturnUrl';
+            const token = $('input[name="__RequestVerificationToken"]').val();
+
+            const $otpInputs = $('.standalone-otp-digit');
+
+            $otpInputs.each(function (index) {
+                $(this).on('input', function (e) {
+                    const val = $(this).val();
+                    if (val.length === 1) {
+                        if (index < $otpInputs.length - 1) {
+                            $otpInputs.eq(index + 1).focus();
+                        } else {
+                            $(this).blur();
+                            $('#btnSubmitOtp').click();
+                        }
+                    }
+                });
+
+                $(this).on('keydown', function (e) {
+                    if (e.key === 'Backspace' && !$(this).val() && index > 0) {
+                        $otpInputs.eq(index - 1).focus();
+                    }
+                });
+
+                $(this).on('paste', function (e) {
+                    e.preventDefault();
+                    const pasteData = (e.originalEvent.clipboardData || window.clipboardData).getData('text').trim();
+                    if (/^\d{6}$/.test(pasteData)) {
+                        pasteData.split('').forEach((char, i) => {
+                            if (i < $otpInputs.length) {
+                                $otpInputs.eq(i).val(char);
+                            }
+                        });
+                        $otpInputs.last().focus();
+                        $('#btnSubmitOtp').click();
+                    }
+                });
+            });
+
+            $('#btnSubmitOtp').on('click', function () {
+                let otp = '';
+                $otpInputs.each(function () {
+                    otp += $(this).val();
+                });
+
+                if (otp.length !== 6) {
+                    showErrorAlert('Vui lòng nhập đầy đủ 6 chữ số mã OTP.');
+                    return;
+                }
+
+                $('#btnSubmitOtp').prop('disabled', true);
+                $('#otpSpinner').removeClass('d-none');
+                $('#otpBtnIcon').addClass('d-none');
+                $('#verifyAlertPlaceholder').empty();
+
+                $.ajax({
+                    url: '@Url.Action("VerifyLoginOtp", "Account")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: {
+                        'RequestVerificationToken': token
+                    },
+                    data: JSON.stringify({
+                        Email: targetEmail,
+                        OtpCode: otp,
+                        Purpose: purpose,
+                        ReturnUrl: returnUrl
+                    }),
+                    success: function (res) {
+                        $('#btnSubmitOtp').prop('disabled', false);
+                        $('#otpSpinner').addClass('d-none');
+                        $('#otpBtnIcon').removeClass('d-none');
+
+                        if (res.success) {
+                            $('#verifyAlertPlaceholder').html(
+                                `<div class="alert alert-success d-flex align-items-center mb-3">
+                                    <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+                                    <div>Xác thực thành công! Đang chuyển hướng...</div>
+                                </div>`
+                            );
+                            setTimeout(() => {
+                                window.location.href = res.data.redirectUrl || '@Url.Action("Index", "Home")';
+                            }, 1200);
+                        } else {
+                            showErrorAlert(res.message || 'Mã OTP không chính xác hoặc đã hết hiệu lực.');
+                            $otpInputs.val('');
+                            $otpInputs.first().focus();
+                        }
+                    },
+                    error: function (xhr) {
+                        $('#btnSubmitOtp').prop('disabled', false);
+                        $('#otpSpinner').addClass('d-none');
+                        $('#otpBtnIcon').removeClass('d-none');
+
+                        let errMsg = 'Xác thực thất bại. Vui lòng thử lại sau.';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errMsg = xhr.responseJSON.message;
+                        }
+                        showErrorAlert(errMsg);
+                        $otpInputs.val('');
+                        $otpInputs.first().focus();
+                    }
+                });
+            });
+
+            $('#btnResendOtp').on('click', function () {
+                if ($(this).prop('disabled')) return;
+                $(this).prop('disabled', true);
+
+                $.ajax({
+                    url: '@Url.Action("ResendOtp", "Account")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: {
+                        'RequestVerificationToken': token
+                    },
+                    data: JSON.stringify({
+                        Email: targetEmail,
+                        Purpose: purpose
+                    }),
+                    success: function (res) {
+                        if (res.success) {
+                            $('#verifyAlertPlaceholder').html(
+                                `<div class="alert alert-info py-2 small mb-3">
+                                    <i class="bi bi-info-circle-fill me-1"></i>${res.message || 'Mã OTP mới đã được gửi.'}
+                                </div>`
+                            );
+                            $otpInputs.val('');
+                            startCountdown();
+                            startResendCooldown();
+                            $otpInputs.first().focus();
+                        } else {
+                            showErrorAlert(res.message || 'Không thể gửi lại mã OTP.');
+                        }
+                    },
+                    error: function (xhr) {
+                        let errMsg = 'Lỗi gửi lại mã OTP.';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errMsg = xhr.responseJSON.message;
+                        }
+                        showErrorAlert(errMsg);
+                    }
+                });
+            });
+
+            function startCountdown() {
+                clearInterval(countdownInterval);
+                otpExpirySeconds = 300;
+                updateCountdownDisplay();
+                countdownInterval = setInterval(() => {
+                    otpExpirySeconds--;
+                    updateCountdownDisplay();
+                    if (otpExpirySeconds <= 0) {
+                        clearInterval(countdownInterval);
+                        $('#otpCountdown').text('00:00 (Hết hạn)');
+                        showErrorAlert('Mã OTP đã hết hiệu lực. Vui lòng bấm "Gửi lại mã".');
+                    }
+                }, 1000);
+            }
+
+            function updateCountdownDisplay() {
+                const m = Math.floor(otpExpirySeconds / 60);
+                const s = otpExpirySeconds % 60;
+                $('#otpCountdown').text(`${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`);
+            }
+
+            function startResendCooldown() {
+                clearInterval(resendCooldownInterval);
+                resendCooldownSeconds = 60;
+                $('#btnResendOtp').prop('disabled', true);
+                $('#resendCooldown').text(resendCooldownSeconds);
+
+                resendCooldownInterval = setInterval(() => {
+                    resendCooldownSeconds--;
+                    $('#resendCooldown').text(resendCooldownSeconds);
+                    if (resendCooldownSeconds <= 0) {
+                        clearInterval(resendCooldownInterval);
+                        $('#btnResendOtp').prop('disabled', false).html('<i class="bi bi-arrow-clockwise me-1"></i>Gửi lại mã OTP');
+                    }
+                }, 1000);
+            }
+
+            function showErrorAlert(message) {
+                $('#verifyAlertPlaceholder').html(
+                    `<div class="alert alert-danger alert-dismissible fade show small mb-3" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>${message}
+                        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>`
+                );
+            }
+
+            startCountdown();
+            startResendCooldown();
+            $otpInputs.first().focus();
+        });
+    </script>
+}

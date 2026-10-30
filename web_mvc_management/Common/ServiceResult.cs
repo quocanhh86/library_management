@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace web_mvc_management.Common;
 
 /// <summary>
@@ -9,6 +13,8 @@ public class ServiceResult
     public string Message { get; protected set; } = string.Empty;
     public List<string> Errors { get; protected set; } = [];
 
+    public bool IsSuccess => Succeeded;
+
     public static ServiceResult Success(string message = "Thao tác thành công.") =>
         new() { Succeeded = true, Message = message };
 
@@ -16,6 +22,12 @@ public class ServiceResult
         new() { Succeeded = false, Message = error, Errors = [error] };
 
     public static ServiceResult Failure(string message, IEnumerable<string> errors) =>
+        new() { Succeeded = false, Message = message, Errors = errors.ToList() };
+
+    public static ServiceResult ValidationError(string error) =>
+        new() { Succeeded = false, Message = error, Errors = [error] };
+
+    public static ServiceResult ValidationError(string message, IEnumerable<string> errors) =>
         new() { Succeeded = false, Message = message, Errors = errors.ToList() };
 }
 
@@ -34,5 +46,10 @@ public class ServiceResult<T> : ServiceResult
 
     public new static ServiceResult<T> Failure(string message, IEnumerable<string> errors) =>
         new() { Succeeded = false, Message = message, Errors = errors.ToList() };
-}
 
+    public new static ServiceResult<T> ValidationError(string error) =>
+        new() { Succeeded = false, Message = error, Errors = [error] };
+
+    public new static ServiceResult<T> ValidationError(string message, IEnumerable<string> errors) =>
+        new() { Succeeded = false, Message = message, Errors = errors.ToList() };
+}

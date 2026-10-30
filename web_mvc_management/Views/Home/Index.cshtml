@@ -1,8 +1,85 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@{
+    ViewData["Title"] = "Trang Chủ - Thư Viện Đại Học Giao Thông Vận Tải";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="py-5">
+    <!-- Hero Banner -->
+    <div class="row align-items-center g-5 py-4">
+        <div class="col-12 col-lg-7">
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill fw-semibold mb-3">
+                <i class="bi bi-shield-check me-1"></i>Hệ Thống Thư Viện Số Chuẩn An Toàn OWASP &amp; NIST
+            </span>
+            <h1 class="display-5 fw-bold text-dark lh-sm mb-3">
+                Thư Viện Số Trường Đại Học <span class="text-primary">Giao Thông Vận Tải</span>
+            </h1>
+            <p class="lead text-secondary mb-4">
+                Chào mừng bạn đến với cổng thông tin thư viện UTC. Hệ thống phục vụ tra cứu hàng chục nghìn đầu sách, tài liệu nghiên cứu, hỗ trợ sinh viên, giảng viên mượn trả tài liệu nhanh chóng với công nghệ bảo mật 2 lớp OTP an toàn tối đa.
+            </p>
+
+            <div class="d-flex flex-wrap gap-3">
+                @if (User.Identity?.IsAuthenticated != true)
+                {
+                    <a asp-controller="Account" asp-action="Register" class="btn btn-primary btn-lg px-4 py-2 rounded-3 shadow-sm">
+                        <i class="bi bi-person-plus me-2"></i>Đăng Ký Mở Thẻ Ngay
+                    </a>
+                    <a asp-controller="Account" asp-action="Login" class="btn btn-outline-primary btn-lg px-4 py-2 rounded-3">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>Đăng Nhập Độc Giả
+                    </a>
+                    <a asp-controller="Account" asp-action="StaffLogin" class="btn btn-outline-dark btn-lg px-4 py-2 rounded-3">
+                        <i class="bi bi-shield-lock me-2 text-warning"></i>Cổng Cán Bộ
+                    </a>
+                }
+                else
+                {
+                    var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Reader";
+                    var fullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity.Name;
+
+                    <div class="alert alert-success d-flex align-items-center w-100 p-3 rounded-4 shadow-sm">
+                        <i class="bi bi-person-check-fill fs-2 me-3 text-success"></i>
+                        <div>
+                            <div class="fw-bold fs-5">Xin chào, @fullName!</div>
+                            <div class="small text-muted">Bạn đang đăng nhập với tư cách: <span class="badge bg-success">@role</span>. Chúc bạn có trải nghiệm đọc sách hiệu quả!</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden bg-primary text-white p-4 p-md-5" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%) !important;">
+                <h4 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-lightning-charge-fill text-warning"></i>Tính Năng Nổi Bật
+                </h4>
+                <ul class="list-unstyled mb-0 d-flex flex-column gap-3">
+                    <li class="d-flex align-items-start gap-3">
+                        <div class="bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 36px; height: 36px;">
+                            <i class="bi bi-shield-lock-fill"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">Xác thực 2 lớp OTP qua Gmail</div>
+                            <small class="text-white-50">Mọi thao tác đăng ký thẻ, đăng nhập độc giả và cán bộ đều được bảo vệ bởi mã OTP động thời hạn 5 phút.</small>
+                        </div>
+                    </li>
+                    <li class="d-flex align-items-start gap-3">
+                        <div class="bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 36px; height: 36px;">
+                            <i class="bi bi-credit-card-2-front"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">Cấp thẻ điện tử tự động</div>
+                            <small class="text-white-50">Mã thẻ thư viện được phát hành tức thì ngay sau khi hoàn tất xác minh mã OTP hợp lệ.</small>
+                        </div>
+                    </li>
+                    <li class="d-flex align-items-start gap-3">
+                        <div class="bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 36px; height: 36px;">
+                            <i class="bi bi-lock-fill"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">Chống Brute-Force &amp; Timing Attack</div>
+                            <small class="text-white-50">Tự động tạm khóa tài khoản 15 phút sau 5 lần nhập sai và thiêu hủy mã OTP theo chuẩn forensic.</small>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
 </div>
