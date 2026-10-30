@@ -110,6 +110,7 @@ public static class DbInitializer
                 FullName = "Quản trị viên Hệ thống",
                 PasswordHash = defaultPasswordHash,
                 Phone = "0901234567",
+                Role = AppRoles.Admin,
                 Status = EntityStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
@@ -123,6 +124,7 @@ public static class DbInitializer
                 FullName = "Trần Thị Mai (Thủ thư)",
                 PasswordHash = defaultPasswordHash,
                 Phone = "0912345678",
+                Role = AppRoles.Librarian,
                 Status = EntityStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
@@ -136,6 +138,7 @@ public static class DbInitializer
                 FullName = "Nguyễn Văn Tuấn (Thủ thư)",
                 PasswordHash = defaultPasswordHash,
                 Phone = "0923456789",
+                Role = AppRoles.Librarian,
                 Status = EntityStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow

@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace web_mvc_management.Entity;
 
 /// <summary>
@@ -37,9 +40,16 @@ public class Reader : BaseEntity
 
     public string? LockReason { get; set; }
 
+    public int FailedLoginAttempts { get; set; } = 0;
+
+    public DateTimeOffset? LastLoginAttempt { get; set; }
+
+    public DateTimeOffset? LockedUntil { get; set; }
+
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString();
+
     // Navigation properties
     public virtual ReaderType ReaderType { get; set; } = null!;
     public virtual ICollection<BorrowSlip> BorrowSlips { get; set; } = [];
     public virtual ICollection<Reservation> Reservations { get; set; } = [];
 }
-

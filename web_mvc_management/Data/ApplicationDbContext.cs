@@ -35,6 +35,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Fine> Fines => Set<Fine>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<LibrarySetting> LibrarySettings => Set<LibrarySetting>();
+    public DbSet<OtpEntry> Otps => Set<OtpEntry>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -102,6 +103,11 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(255).IsUnicode(false);
             b.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(150);
             b.Property(x => x.Phone).HasColumnName("phone").HasMaxLength(20).IsUnicode(false);
+            b.Property(x => x.Role).HasColumnName("role").HasMaxLength(20).IsUnicode(false);
+            b.Property(x => x.FailedLoginAttempts).HasColumnName("failed_login_attempts");
+            b.Property(x => x.LastLoginAttempt).HasColumnName("last_login_attempt");
+            b.Property(x => x.LockedUntil).HasColumnName("locked_until");
+            b.Property(x => x.SecurityStamp).HasColumnName("security_stamp").HasMaxLength(36).IsUnicode(false);
             b.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             b.Property(x => x.Status).HasColumnName("status").HasMaxLength(10).IsUnicode(false);
             b.Property(x => x.CreatedAt).HasColumnName("created_at");
@@ -145,6 +151,10 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(255).IsUnicode(false);
             b.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(150);
             b.Property(x => x.Phone).HasColumnName("phone").HasMaxLength(20).IsUnicode(false);
+            b.Property(x => x.FailedLoginAttempts).HasColumnName("failed_login_attempts");
+            b.Property(x => x.LastLoginAttempt).HasColumnName("last_login_attempt");
+            b.Property(x => x.LockedUntil).HasColumnName("locked_until");
+            b.Property(x => x.SecurityStamp).HasColumnName("security_stamp").HasMaxLength(36).IsUnicode(false);
             b.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             b.Property(x => x.CardNo).HasColumnName("card_no").HasMaxLength(20).IsUnicode(false);
             b.Property(x => x.MemberCode).HasColumnName("member_code").HasMaxLength(30).IsUnicode(false);
@@ -473,6 +483,23 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             b.Property(x => x.CreatedBy).HasColumnName("created_by");
             b.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+        });
+
+        // 16. OtpEntry (SEC-08, SEC-12)
+        modelBuilder.Entity<OtpEntry>(b =>
+        {
+            b.ToTable("otps");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("id");
+            b.Property(x => x.Email).HasColumnName("email").HasMaxLength(255).IsUnicode(false);
+            b.Property(x => x.OtpCode).HasColumnName("otp_code").HasMaxLength(10).IsUnicode(false);
+            b.Property(x => x.Purpose).HasColumnName("purpose").HasMaxLength(30).IsUnicode(false);
+            b.Property(x => x.FailedAttempts).HasColumnName("failed_attempts");
+            b.Property(x => x.IsUsed).HasColumnName("is_used");
+            b.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            b.Property(x => x.CreatedAt).HasColumnName("created_at");
+
+            b.HasIndex(x => new { x.Email, x.Purpose, x.IsUsed, x.ExpiresAt });
         });
     }
 }
