@@ -64,3 +64,4 @@ public interface IPagedResult
     /// </summary>
     IReadOnlyList<int> GetPageNumbers(int maxDisplayPages = 5);
 }
+

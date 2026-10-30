@@ -174,7 +174,7 @@ public class AccountController(
             var pendingReg = HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration);
             if (pendingReg == null)
             {
-                SetErrorMessage("Phiên đăng ký đã hết hạn. Vui lòng điền lại thông tin mở thẻ.");
+                SetErrorMessage(ErrorMessages.Get(ErrorCode.RegisterSessionExpired));
                 return RedirectToAction(nameof(Register));
             }
             targetEmail = pendingReg.Email;
@@ -184,7 +184,7 @@ public class AccountController(
             var email = HttpContext.Session.GetString(SessionPendingLoginEmail);
             if (string.IsNullOrWhiteSpace(email))
             {
-                SetErrorMessage("Phiên đăng nhập đã hết hạn. Vui lòng thử lại.");
+                SetErrorMessage(ErrorMessages.Get(ErrorCode.AuthSessionExpired));
                 return RedirectToAction(purpose == AuthService.PurposeStaffLogin ? nameof(StaffLogin) : nameof(Login));
             }
             targetEmail = email;
@@ -217,7 +217,7 @@ public class AccountController(
             var pendingReg = HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration);
             if (pendingReg == null)
             {
-                SetErrorMessage("Phiên đăng ký đã hết hiệu lực. Vui lòng đăng ký lại.");
+                SetErrorMessage(ErrorMessages.Get(ErrorCode.RegisterSessionExpired));
                 return RedirectToAction(nameof(Register));
             }
 
@@ -243,7 +243,7 @@ public class AccountController(
             var email = HttpContext.Session.GetString(SessionPendingLoginEmail);
             if (string.IsNullOrWhiteSpace(email))
             {
-                SetErrorMessage("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+                SetErrorMessage(ErrorMessages.Get(ErrorCode.AuthSessionExpired));
                 return RedirectToAction(nameof(Login));
             }
 
@@ -285,7 +285,7 @@ public class AccountController(
             var email = HttpContext.Session.GetString(SessionPendingLoginEmail);
             if (string.IsNullOrWhiteSpace(email))
             {
-                SetErrorMessage("Phiên xác thực cán bộ đã hết hạn. Vui lòng nhập lại email.");
+                SetErrorMessage(ErrorMessages.Get(ErrorCode.AuthSessionExpired));
                 return RedirectToAction(nameof(StaffLogin));
             }
 
@@ -319,7 +319,7 @@ public class AccountController(
             return RedirectToLocal(returnUrl);
         }
 
-        ModelState.AddModelError(string.Empty, "Mục đích xác thực không hợp lệ (SEC-12).");
+        ModelState.AddModelError(string.Empty, ErrorMessages.Get(ErrorCode.OtpPurposeMismatch));
         return View(model);
     }
 
@@ -344,7 +344,7 @@ public class AccountController(
 
         if (string.IsNullOrWhiteSpace(email))
         {
-            SetErrorMessage("Không tìm thấy thông tin gửi lại mã OTP. Vui lòng thao tác lại.");
+            SetErrorMessage(ErrorMessages.Get(ErrorCode.OtpNotFound));
             return RedirectToAction(purpose == AuthService.PurposeStaffLogin ? nameof(StaffLogin) : nameof(Login));
         }
 

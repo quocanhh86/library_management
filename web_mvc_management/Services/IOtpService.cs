@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using web_mvc_management.Constant;
 
 namespace web_mvc_management.Services;
 
@@ -27,14 +28,14 @@ public class OtpVerificationResult
     public static OtpVerificationResult Incorrect(int remainingAttempts, string message) =>
         new() { Status = OtpStatus.Incorrect, RemainingAttempts = remainingAttempts, Message = message };
 
-    public static OtpVerificationResult Burned(string message = "Mã OTP đã bị tiêu hủy do nhập sai quá 5 lần. Vui lòng yêu cầu mã mới.") =>
-        new() { Status = OtpStatus.Burned, RemainingAttempts = 0, Message = message };
+    public static OtpVerificationResult Burned(string? message = null) =>
+        new() { Status = OtpStatus.Burned, RemainingAttempts = 0, Message = message ?? ErrorMessages.Format(ErrorCode.OtpBurned, 5) };
 
-    public static OtpVerificationResult Expired(string message = "Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.") =>
-        new() { Status = OtpStatus.Expired, RemainingAttempts = 0, Message = message };
+    public static OtpVerificationResult Expired(string? message = null) =>
+        new() { Status = OtpStatus.Expired, RemainingAttempts = 0, Message = message ?? ErrorMessages.Get(ErrorCode.OtpExpired) };
 
-    public static OtpVerificationResult NotFound(string message = "Mã OTP không tồn tại hoặc đã được sử dụng.") =>
-        new() { Status = OtpStatus.NotFound, RemainingAttempts = 0, Message = message };
+    public static OtpVerificationResult NotFound(string? message = null) =>
+        new() { Status = OtpStatus.NotFound, RemainingAttempts = 0, Message = message ?? ErrorMessages.Get(ErrorCode.OtpNotFound) };
 }
 
 /// <summary>

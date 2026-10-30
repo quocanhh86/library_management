@@ -51,7 +51,9 @@ app_management/
 ├── .env.example
 ├── README.md
 └── web_mvc_management/
-    ├── Controllers/          # Xử lý request
+    ├── Constant/             # Định nghĩa mã lỗi tập trung (ErrorCode, ErrorMessages), hằng số màn hình (ScreenConstants)
+    ├── Common/               # ServiceResult, phân trang dùng chung (IPagedResult, PaginationParams)
+    ├── Controllers/          # Xử lý request MVC
     ├── Models/
     │   ├── Entities/         # Entity classes (map DB)
     │   └── ViewModels/       # ViewModel cho Views

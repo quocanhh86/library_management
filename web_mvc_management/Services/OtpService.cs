@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using web_mvc_management.Constant;
 using web_mvc_management.Data;
 using web_mvc_management.Entity;
 using web_mvc_management.Infrastructure;
@@ -68,7 +69,7 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
-            return OtpVerificationResult.NotFound("Thông tin xác thực không đầy đủ.");
+            return OtpVerificationResult.NotFound(ErrorMessages.Get(ErrorCode.OtpInfoIncomplete));
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
@@ -89,7 +90,7 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
 
             if (entry == null)
             {
-                return OtpVerificationResult.NotFound();
+                return OtpVerificationResult.NotFound(ErrorMessages.Get(ErrorCode.OtpNotFound));
             }
 
             // Kiểm tra quá hạn
@@ -97,7 +98,7 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
             {
                 entry.IsUsed = true;
                 await context.SaveChangesAsync(cancellationToken);
-                return OtpVerificationResult.Expired();
+                return OtpVerificationResult.Expired(ErrorMessages.Get(ErrorCode.OtpExpired));
             }
 
             // Kiểm tra mã OTP đúng hay sai
@@ -120,12 +121,12 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
                 entry.IsUsed = true; // Vô hiệu hóa vĩnh viễn
                 await context.SaveChangesAsync(cancellationToken);
                 return OtpVerificationResult.Burned(
-                    $"Mã OTP đã bị tiêu hủy do nhập sai liên tiếp {MaxFailedAttempts} lần. Vui lòng yêu cầu mã mới.");
+                    ErrorMessages.Format(ErrorCode.OtpBurned, MaxFailedAttempts));
             }
 
             await context.SaveChangesAsync(cancellationToken);
             var remaining = MaxFailedAttempts - entry.FailedAttempts;
-            return OtpVerificationResult.Incorrect(remaining, $"Mã OTP không chính xác. Bạn còn {remaining} lần thử.");
+            return OtpVerificationResult.Incorrect(remaining, ErrorMessages.Format(ErrorCode.OtpInvalid, remaining));
         }
         finally
         {

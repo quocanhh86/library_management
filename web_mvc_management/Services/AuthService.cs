@@ -38,7 +38,7 @@ public class AuthService(
         // SEC-17: IP Rate Limiting (5 requests gửi OTP / phút)
         if (!rateLimiter.IsAllowed(clientIp, "SEND_OTP", 5))
         {
-            return ServiceResult.Failure("Bạn đã yêu cầu gửi mã quá nhiều lần từ IP này. Vui lòng thử lại sau 1 phút.");
+            return ServiceResult.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
@@ -48,29 +48,29 @@ public class AuthService(
         // SEC-22: Kiểm tra trùng lặp CSDL
         if (await context.Readers.AnyAsync(x => x.Username.ToLower() == normalizedUsername, ct))
         {
-            return ServiceResult.ValidationError("Tên đăng nhập này đã được sử dụng.");
+            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterDuplicateUsername));
         }
 
         if (await context.Readers.AnyAsync(x => x.Email.ToLower() == normalizedEmail, ct))
         {
-            return ServiceResult.ValidationError("Địa chỉ email này đã được đăng ký.");
+            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterDuplicateEmail));
         }
 
         if (await context.Readers.AnyAsync(x => x.Phone == normalizedPhone, ct))
         {
-            return ServiceResult.ValidationError("Số điện thoại này đã được đăng ký.");
+            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterDuplicatePhone));
         }
 
         if (!await context.ReaderTypes.AnyAsync(x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active, ct))
         {
-            return ServiceResult.ValidationError("Loại độc giả được chọn không hợp lệ.");
+            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterInvalidReaderType));
         }
 
         // Kiểm tra Cooldown gửi OTP
         var remainingCooldown = emailService.GetRemainingCooldownSeconds(normalizedEmail);
         if (remainingCooldown > 0)
         {
-            return ServiceResult.Failure($"Vui lòng chờ {remainingCooldown} giây trước khi yêu cầu gửi lại mã OTP.");
+            return ServiceResult.Failure(ErrorMessages.Format(ErrorCode.OtpCooldownActive, remainingCooldown));
         }
 
         // Sinh OTP & Gửi Email
@@ -92,7 +92,7 @@ public class AuthService(
         // SEC-17: IP Rate Limiting (15 lần verify / phút)
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<Reader>.Failure("Quá nhiều lượt xác thực từ IP của bạn. Vui lòng thử lại sau 1 phút.");
+            return ServiceResult<Reader>.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
@@ -108,7 +108,7 @@ public class AuthService(
         var readerType = await context.ReaderTypes.FirstOrDefaultAsync(x => x.Id == model.ReaderTypeId, ct);
         if (readerType == null)
         {
-            return ServiceResult<Reader>.Failure("Loại độc giả không tồn tại.");
+            return ServiceResult<Reader>.Failure(ErrorMessages.Get(ErrorCode.RegisterInvalidReaderType));
         }
 
         var today = dateTimeProvider.Today;
@@ -156,7 +156,7 @@ public class AuthService(
         // SEC-17: IP Rate Limiting (30 requests đăng nhập / phút)
         if (!rateLimiter.IsAllowed(clientIp, "LOGIN", 30))
         {
-            return ServiceResult<LoginStepResult>.Failure("Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 1 phút.");
+            return ServiceResult<LoginStepResult>.Failure(ErrorMessages.Get(ErrorCode.RateLimitLoginExceeded));
         }
 
         var usernameOrEmail = model.UsernameOrEmail.Trim().ToLowerInvariant();
@@ -169,7 +169,7 @@ public class AuthService(
         if (reader == null)
         {
             PasswordHasher.VerifyDummyPassword(model.Password);
-            return ServiceResult<LoginStepResult>.Failure("Tên đăng nhập hoặc mật khẩu không chính xác.");
+            return ServiceResult<LoginStepResult>.Failure(ErrorMessages.Get(ErrorCode.AuthInvalidCredentials));
         }
 
         // SEC-11: Kiểm tra khóa tài khoản do Brute-force
@@ -177,7 +177,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<LoginStepResult>.Failure(
-                $"Tài khoản đang bị tạm khóa để bảo vệ an toàn. Vui lòng thử lại sau {remainingMinutes} phút.");
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
         }
 
         // Kiểm tra trạng thái hoạt động của độc giả
@@ -185,8 +185,8 @@ public class AuthService(
         {
             return ServiceResult<LoginStepResult>.Failure(
                 reader.CardStatus == LibraryConstants.CardStatus.Locked
-                    ? $"Thẻ thư viện của bạn đang bị khóa: {reader.LockReason ?? "Liên hệ thủ thư để được hỗ trợ"}."
-                    : "Tài khoản của bạn đã bị vô hiệu hóa.");
+                    ? ErrorMessages.Format(ErrorCode.AuthCardLocked, reader.LockReason ?? "Liên hệ thủ thư để được hỗ trợ")
+                    : ErrorMessages.Get(ErrorCode.AuthAccountInactive));
         }
 
         // Kiểm tra mật khẩu PBKDF2
@@ -203,13 +203,13 @@ public class AuthService(
                 await context.SaveChangesAsync(ct);
                 logger.LogWarning("Tài khoản độc giả {Username} bị khóa 15 phút do nhập sai mật khẩu 5 lần", reader.Username);
                 return ServiceResult<LoginStepResult>.Failure(
-                    "Bạn đã nhập sai mật khẩu 5 lần liên tiếp. Tài khoản đã bị tạm khóa trong 15 phút.");
+                    ErrorMessages.Get(ErrorCode.AuthMaxAttemptsExceeded));
             }
 
             await context.SaveChangesAsync(ct);
             var remaining = MaxFailedLoginAttempts - reader.FailedLoginAttempts;
             return ServiceResult<LoginStepResult>.Failure(
-                $"Tên đăng nhập hoặc mật khẩu không chính xác. Bạn còn {remaining} lần thử.");
+                ErrorMessages.Format(ErrorCode.AuthAttemptsRemaining, remaining));
         }
 
         // Mật khẩu đúng -> Sinh OTP 2FA & Gửi về email của Reader
@@ -235,19 +235,19 @@ public class AuthService(
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure("Thông tin xác thực không đầy đủ.");
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.OtpInfoIncomplete));
         }
 
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure("Quá nhiều lượt thử xác thực từ IP của bạn. Vui lòng thử lại sau 1 phút.");
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var reader = await context.Readers.FirstOrDefaultAsync(x => x.Email == normalizedEmail, ct);
         if (reader == null)
         {
-            return ServiceResult<ClaimsPrincipal>.Failure("Không tìm thấy thông tin tài khoản độc giả.");
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.AuthInvalidCredentials));
         }
 
         var now = dateTimeProvider.UtcNow;
@@ -255,7 +255,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<ClaimsPrincipal>.Failure(
-                $"Tài khoản đang bị tạm khóa. Vui lòng thử lại sau {remainingMinutes} phút.");
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
         }
 
         // SEC-04: Xác thực OTP
@@ -304,7 +304,7 @@ public class AuthService(
 
         if (!rateLimiter.IsAllowed(clientIp, "LOGIN", 30))
         {
-            return ServiceResult<LoginStepResult>.Failure("Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 1 phút.");
+            return ServiceResult<LoginStepResult>.Failure(ErrorMessages.Get(ErrorCode.RateLimitLoginExceeded));
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
@@ -332,7 +332,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<LoginStepResult>.Failure(
-                $"Tài khoản cán bộ đang bị tạm khóa. Vui lòng thử lại sau {remainingMinutes} phút.");
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
         }
 
         // Sinh OTP & Gửi Gmail
@@ -358,19 +358,19 @@ public class AuthService(
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure("Thông tin xác thực không đầy đủ.");
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.OtpInfoIncomplete));
         }
 
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure("Quá nhiều lượt thử xác thực từ IP của bạn. Vui lòng thử lại sau 1 phút.");
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var staff = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail, ct);
         if (staff == null)
         {
-            return ServiceResult<ClaimsPrincipal>.Failure("Không tìm thấy thông tin cán bộ thư viện.");
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.AuthStaffNotFound));
         }
 
         var now = dateTimeProvider.UtcNow;
@@ -378,7 +378,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<ClaimsPrincipal>.Failure(
-                $"Tài khoản đang bị tạm khóa. Vui lòng thử lại sau {remainingMinutes} phút.");
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
         }
 
         // SEC-04 & SEC-12: Xác thực OTP với Purpose = STAFF_LOGIN
@@ -426,19 +426,19 @@ public class AuthService(
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(purpose))
         {
-            return ServiceResult.Failure("Thông tin yêu cầu không hợp lệ.");
+            return ServiceResult.Failure(ErrorMessages.Get(ErrorCode.CommonInvalidRequest));
         }
 
         if (!rateLimiter.IsAllowed(clientIp, "SEND_OTP", 5))
         {
-            return ServiceResult.Failure("Bạn đã yêu cầu gửi mã quá nhiều lần từ IP này. Vui lòng thử lại sau 1 phút.");
+            return ServiceResult.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var remainingCooldown = emailService.GetRemainingCooldownSeconds(normalizedEmail);
         if (remainingCooldown > 0)
         {
-            return ServiceResult.Failure($"Vui lòng chờ {remainingCooldown} giây trước khi yêu cầu gửi lại mã OTP.");
+            return ServiceResult.Failure(ErrorMessages.Format(ErrorCode.OtpCooldownActive, remainingCooldown));
         }
 
         var otpCode = await otpService.GenerateOtpAsync(normalizedEmail, purpose, cancellationToken: ct);
