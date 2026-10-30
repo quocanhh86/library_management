@@ -57,6 +57,11 @@ orleans.codegen.cs
 !**/[Pp]ackages/build/
 *.nuget.props
 *.nuget.targets
+# macOS / CLI artifacts
+[Ll]ibrary/
+**/[Ll]ibrary/
+.local/
+**/.local/
 
 # Build Tools
 *.msbuild.*.props
