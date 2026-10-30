@@ -85,6 +85,12 @@ public static class ServiceCollectionExtensions
                 options.AccessDeniedPath = AppConstants.Auth.AccessDeniedPath;
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
+
+                // SEC-05, SEC-21: Kiểm tra tính toàn vẹn của phiên qua Security Stamp
+                options.Events = new CookieAuthenticationEvents
+                {
+                    OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync
+                };
             });
 
         return services;
