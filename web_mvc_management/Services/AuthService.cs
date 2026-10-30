@@ -199,6 +199,7 @@ public class AuthService(
             if (reader.FailedLoginAttempts >= MaxFailedLoginAttempts)
             {
                 reader.LockedUntil = now.Add(LockoutDuration);
+                reader.SecurityStamp = Guid.NewGuid().ToString("N"); // NIST SP 800-63B: Thu hồi mọi phiên đang hoạt động khi bị khóa
                 await context.SaveChangesAsync(ct);
                 logger.LogWarning("Tài khoản độc giả {Username} bị khóa 15 phút do nhập sai mật khẩu 5 lần", reader.Username);
                 return ServiceResult<LoginStepResult>.Failure(
@@ -266,6 +267,7 @@ public class AuthService(
             if (reader.FailedLoginAttempts >= MaxFailedLoginAttempts)
             {
                 reader.LockedUntil = now.Add(LockoutDuration);
+                reader.SecurityStamp = Guid.NewGuid().ToString("N");
             }
             await context.SaveChangesAsync(ct);
             return ServiceResult<ClaimsPrincipal>.Failure(verifyResult.Message);
@@ -388,6 +390,7 @@ public class AuthService(
             if (staff.FailedLoginAttempts >= MaxFailedLoginAttempts)
             {
                 staff.LockedUntil = now.Add(LockoutDuration);
+                staff.SecurityStamp = Guid.NewGuid().ToString("N");
             }
             await context.SaveChangesAsync(ct);
             return ServiceResult<ClaimsPrincipal>.Failure(verifyResult.Message);

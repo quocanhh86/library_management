@@ -24,3 +24,4 @@ public static class SessionExtensions
         return value == null ? default : JsonSerializer.Deserialize<T>(value, JsonOptions);
     }
 }
+

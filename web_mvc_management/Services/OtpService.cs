@@ -21,6 +21,7 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
 {
     public const int MaxFailedAttempts = 5;
     public static readonly TimeSpan DefaultValidity = TimeSpan.FromMinutes(5);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> ConcurrencyLocks = new();
 
     public async Task<string> GenerateOtpAsync(string email, string purpose, TimeSpan? validity = null, CancellationToken cancellationToken = default)
     {
@@ -74,51 +75,62 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
         var normalizedCode = otpCode.Trim();
         var now = dateTimeProvider.UtcNow;
 
-        // Tìm bản ghi OTP mới nhất chưa sử dụng cho email và purpose
-        var entry = await context.Otps
-            .Where(x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed)
-            .OrderByDescending(x => x.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+        var lockKey = $"{normalizedEmail}:{purpose}";
+        var semaphore = ConcurrencyLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
+        await semaphore.WaitAsync(cancellationToken);
 
-        if (entry == null)
+        try
         {
-            return OtpVerificationResult.NotFound();
-        }
+            // Tìm bản ghi OTP mới nhất chưa sử dụng cho email và purpose
+            var entry = await context.Otps
+                .Where(x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
 
-        // Kiểm tra quá hạn
-        if (entry.ExpiresAt <= now)
-        {
-            entry.IsUsed = true;
+            if (entry == null)
+            {
+                return OtpVerificationResult.NotFound();
+            }
+
+            // Kiểm tra quá hạn
+            if (entry.ExpiresAt <= now)
+            {
+                entry.IsUsed = true;
+                await context.SaveChangesAsync(cancellationToken);
+                return OtpVerificationResult.Expired();
+            }
+
+            // Kiểm tra mã OTP đúng hay sai
+            if (CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(entry.OtpCode),
+                    System.Text.Encoding.UTF8.GetBytes(normalizedCode)))
+            {
+                // SEC-04: Đúng mã -> Đánh dấu đã dùng ngay lập tức chống tấn công phát lại (Replay Attack)
+                entry.IsUsed = true;
+                await context.SaveChangesAsync(cancellationToken);
+                return OtpVerificationResult.Success();
+            }
+
+            // Sai mã -> Tăng số lần thử sai
+            entry.FailedAttempts++;
+
+            // SEC-04: Đạt ngưỡng 5 lần sai -> ĐỐT HỦY MÃ (BURN OTP) NGAY LẬP TỨC
+            if (entry.FailedAttempts >= MaxFailedAttempts)
+            {
+                entry.IsUsed = true; // Vô hiệu hóa vĩnh viễn
+                await context.SaveChangesAsync(cancellationToken);
+                return OtpVerificationResult.Burned(
+                    $"Mã OTP đã bị tiêu hủy do nhập sai liên tiếp {MaxFailedAttempts} lần. Vui lòng yêu cầu mã mới.");
+            }
+
             await context.SaveChangesAsync(cancellationToken);
-            return OtpVerificationResult.Expired();
+            var remaining = MaxFailedAttempts - entry.FailedAttempts;
+            return OtpVerificationResult.Incorrect(remaining, $"Mã OTP không chính xác. Bạn còn {remaining} lần thử.");
         }
-
-        // Kiểm tra mã OTP đúng hay sai
-        if (CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.UTF8.GetBytes(entry.OtpCode),
-                System.Text.Encoding.UTF8.GetBytes(normalizedCode)))
+        finally
         {
-            // SEC-04: Đúng mã -> Đánh dấu đã dùng ngay lập tức chống tấn công phát lại (Replay Attack)
-            entry.IsUsed = true;
-            await context.SaveChangesAsync(cancellationToken);
-            return OtpVerificationResult.Success();
+            semaphore.Release();
         }
-
-        // Sai mã -> Tăng số lần thử sai
-        entry.FailedAttempts++;
-
-        // SEC-04: Đạt ngưỡng 5 lần sai -> ĐỐT HỦY MÃ (BURN OTP) NGAY LẬP TỨC
-        if (entry.FailedAttempts >= MaxFailedAttempts)
-        {
-            entry.IsUsed = true; // Vô hiệu hóa vĩnh viễn
-            await context.SaveChangesAsync(cancellationToken);
-            return OtpVerificationResult.Burned(
-                $"Mã OTP đã bị tiêu hủy do nhập sai liên tiếp {MaxFailedAttempts} lần. Vui lòng yêu cầu mã mới.");
-        }
-
-        await context.SaveChangesAsync(cancellationToken);
-        var remaining = MaxFailedAttempts - entry.FailedAttempts;
-        return OtpVerificationResult.Incorrect(remaining, $"Mã OTP không chính xác. Bạn còn {remaining} lần thử.");
     }
 
     public async Task InvalidateOtpAsync(string email, string purpose, CancellationToken cancellationToken = default)

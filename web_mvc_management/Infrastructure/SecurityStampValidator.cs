@@ -46,7 +46,7 @@ public static class SecurityStampValidator
         if (roleClaim == AppRoles.Reader)
         {
             var reader = await db.Readers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId);
-            if (reader == null || reader.Status != EntityStatus.Active || reader.SecurityStamp != stampClaim)
+            if (reader == null || reader.Status != EntityStatus.Active || reader.SecurityStamp != stampClaim || (reader.LockedUntil.HasValue && reader.LockedUntil.Value > DateTimeOffset.UtcNow))
             {
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -55,7 +55,7 @@ public static class SecurityStampValidator
         else if (roleClaim == AppRoles.Admin || roleClaim == AppRoles.Librarian)
         {
             var staff = await db.Staff.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId);
-            if (staff == null || staff.Status != EntityStatus.Active || staff.SecurityStamp != stampClaim)
+            if (staff == null || staff.Status != EntityStatus.Active || staff.SecurityStamp != stampClaim || (staff.LockedUntil.HasValue && staff.LockedUntil.Value > DateTimeOffset.UtcNow))
             {
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
