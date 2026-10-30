@@ -38,7 +38,7 @@ public class AuthService(
         // SEC-17: IP Rate Limiting (5 requests gửi OTP / phút)
         if (!rateLimiter.IsAllowed(clientIp, "SEND_OTP", 5))
         {
-            return ServiceResult.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
+            return ServiceResult.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
@@ -48,22 +48,22 @@ public class AuthService(
         // SEC-22: Kiểm tra trùng lặp CSDL
         if (await context.Readers.AnyAsync(x => x.Username.ToLower() == normalizedUsername, ct))
         {
-            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterDuplicateUsername));
+            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicateUsername);
         }
 
         if (await context.Readers.AnyAsync(x => x.Email.ToLower() == normalizedEmail, ct))
         {
-            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterDuplicateEmail));
+            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicateEmail);
         }
 
         if (await context.Readers.AnyAsync(x => x.Phone == normalizedPhone, ct))
         {
-            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterDuplicatePhone));
+            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicatePhone);
         }
 
         if (!await context.ReaderTypes.AnyAsync(x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active, ct))
         {
-            return ServiceResult.ValidationError(ErrorMessages.Get(ErrorCode.RegisterInvalidReaderType));
+            return ServiceResult.ValidationError(ErrorCode.RegisterInvalidReaderType);
         }
 
         // Kiểm tra Cooldown gửi OTP
@@ -92,7 +92,7 @@ public class AuthService(
         // SEC-17: IP Rate Limiting (15 lần verify / phút)
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<Reader>.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
+            return ServiceResult<Reader>.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
@@ -108,7 +108,7 @@ public class AuthService(
         var readerType = await context.ReaderTypes.FirstOrDefaultAsync(x => x.Id == model.ReaderTypeId, ct);
         if (readerType == null)
         {
-            return ServiceResult<Reader>.Failure(ErrorMessages.Get(ErrorCode.RegisterInvalidReaderType));
+            return ServiceResult<Reader>.Failure(ErrorCode.RegisterInvalidReaderType);
         }
 
         var today = dateTimeProvider.Today;
@@ -156,7 +156,7 @@ public class AuthService(
         // SEC-17: IP Rate Limiting (30 requests đăng nhập / phút)
         if (!rateLimiter.IsAllowed(clientIp, "LOGIN", 30))
         {
-            return ServiceResult<LoginStepResult>.Failure(ErrorMessages.Get(ErrorCode.RateLimitLoginExceeded));
+            return ServiceResult<LoginStepResult>.Failure(ErrorCode.RateLimitLoginExceeded);
         }
 
         var usernameOrEmail = model.UsernameOrEmail.Trim().ToLowerInvariant();
@@ -169,7 +169,7 @@ public class AuthService(
         if (reader == null)
         {
             PasswordHasher.VerifyDummyPassword(model.Password);
-            return ServiceResult<LoginStepResult>.Failure(ErrorMessages.Get(ErrorCode.AuthInvalidCredentials));
+            return ServiceResult<LoginStepResult>.Failure(ErrorCode.AuthInvalidCredentials);
         }
 
         // SEC-11: Kiểm tra khóa tài khoản do Brute-force
@@ -202,8 +202,7 @@ public class AuthService(
                 reader.SecurityStamp = Guid.NewGuid().ToString("N"); // NIST SP 800-63B: Thu hồi mọi phiên đang hoạt động khi bị khóa
                 await context.SaveChangesAsync(ct);
                 logger.LogWarning("Tài khoản độc giả {Username} bị khóa 15 phút do nhập sai mật khẩu 5 lần", reader.Username);
-                return ServiceResult<LoginStepResult>.Failure(
-                    ErrorMessages.Get(ErrorCode.AuthMaxAttemptsExceeded));
+                return ServiceResult<LoginStepResult>.Failure(ErrorCode.AuthMaxAttemptsExceeded);
             }
 
             await context.SaveChangesAsync(ct);
@@ -235,19 +234,19 @@ public class AuthService(
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.OtpInfoIncomplete));
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.OtpInfoIncomplete);
         }
 
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var reader = await context.Readers.FirstOrDefaultAsync(x => x.Email == normalizedEmail, ct);
         if (reader == null)
         {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.AuthInvalidCredentials));
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.AuthInvalidCredentials);
         }
 
         var now = dateTimeProvider.UtcNow;
@@ -304,7 +303,7 @@ public class AuthService(
 
         if (!rateLimiter.IsAllowed(clientIp, "LOGIN", 30))
         {
-            return ServiceResult<LoginStepResult>.Failure(ErrorMessages.Get(ErrorCode.RateLimitLoginExceeded));
+            return ServiceResult<LoginStepResult>.Failure(ErrorCode.RateLimitLoginExceeded);
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
@@ -358,19 +357,19 @@ public class AuthService(
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.OtpInfoIncomplete));
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.OtpInfoIncomplete);
         }
 
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var staff = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail, ct);
         if (staff == null)
         {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorMessages.Get(ErrorCode.AuthStaffNotFound));
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.AuthStaffNotFound);
         }
 
         var now = dateTimeProvider.UtcNow;
@@ -426,12 +425,12 @@ public class AuthService(
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(purpose))
         {
-            return ServiceResult.Failure(ErrorMessages.Get(ErrorCode.CommonInvalidRequest));
+            return ServiceResult.Failure(ErrorCode.CommonInvalidRequest);
         }
 
         if (!rateLimiter.IsAllowed(clientIp, "SEND_OTP", 5))
         {
-            return ServiceResult.Failure(ErrorMessages.Get(ErrorCode.RateLimitOtpExceeded));
+            return ServiceResult.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
@@ -443,5 +442,13 @@ public class AuthService(
 
         var otpCode = await otpService.GenerateOtpAsync(normalizedEmail, purpose, cancellationToken: ct);
         return await emailService.SendOtpEmailAsync(normalizedEmail, otpCode, purpose, ct);
+    }
+
+    public async Task<IReadOnlyList<ReaderType>> GetActiveReaderTypesAsync(CancellationToken ct = default)
+    {
+        return await context.ReaderTypes
+            .Where(x => x.Status == EntityStatus.Active)
+            .OrderBy(x => x.Name)
+            .ToListAsync(ct);
     }
 }

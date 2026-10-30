@@ -296,3 +296,4 @@ public static class Screens
     /// </summary>
     public static string GetCode(ScreenId id) => All[id].Code;
 }
+

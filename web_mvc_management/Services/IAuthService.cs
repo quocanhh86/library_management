@@ -55,4 +55,9 @@ public interface IAuthService
     /// Gửi lại mã OTP cho một email và purpose với kiểm tra Cooldown 60s và IP Rate Limit.
     /// </summary>
     Task<ServiceResult> ResendOtpAsync(string email, string purpose, string clientIp, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy danh sách các loại độc giả đang hoạt động để phục vụ form đăng ký mở thẻ.
+    /// </summary>
+    Task<IReadOnlyList<ReaderType>> GetActiveReaderTypesAsync(CancellationToken ct = default);
 }

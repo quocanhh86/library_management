@@ -5,10 +5,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
-using web_mvc_management.Data;
 using web_mvc_management.Extensions;
 using web_mvc_management.Models.ViewModels.Auth;
 using web_mvc_management.Services;
@@ -22,8 +20,7 @@ namespace web_mvc_management.Controllers;
 /// </summary>
 public class AccountController(
     IAuthService authService,
-    IIpRateLimiterService rateLimiter,
-    ApplicationDbContext dbContext) : BaseController
+    IIpRateLimiterService rateLimiter) : BaseController
 {
     private const string SessionPendingRegistration = "PendingRegistration";
     private const string SessionPendingLoginEmail = "PendingLoginEmail";
@@ -387,10 +384,7 @@ public class AccountController(
 
     private async Task LoadReaderTypesAsync()
     {
-        ViewBag.ReaderTypes = await dbContext.ReaderTypes
-            .Where(x => x.Status == EntityStatus.Active)
-            .OrderBy(x => x.Name)
-            .ToListAsync();
+        ViewBag.ReaderTypes = await authService.GetActiveReaderTypesAsync();
     }
 
     private IActionResult RedirectToLocal(string? returnUrl)

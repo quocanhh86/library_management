@@ -75,3 +75,4 @@ public enum ErrorCode
     CommonInvalidRequest,
     CommonRecordInUse
 }
+

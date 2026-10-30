@@ -1,7 +1,7 @@
 @model web_mvc_management.Models.ViewModels.Auth.ReaderRegisterViewModel
 @{
     ViewData["Title"] = "Đăng Ký Mở Thẻ Bạn Đọc";
-    var readerTypes = ViewBag.ReaderTypes as List<web_mvc_management.Entity.ReaderType> ?? new();
+    var readerTypes = (ViewBag.ReaderTypes as IEnumerable<web_mvc_management.Entity.ReaderType>) ?? [];
 }
 
 <div class="row justify-content-center py-4">
