@@ -120,6 +120,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IOtpService, OtpService>();
         services.AddSingleton<IEmailService, EmailService>();
+        services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
         return services;
     }
 }
