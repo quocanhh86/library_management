@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using web_mvc_management.Constant;
+
 namespace web_mvc_management.Entity;
 
 /// <summary>
@@ -15,6 +19,16 @@ public class Staff : BaseEntity
 
     public string? Phone { get; set; }
 
+    public string Role { get; set; } = AppRoles.Librarian;
+
+    public int FailedLoginAttempts { get; set; } = 0;
+
+    public DateTimeOffset? LastLoginAttempt { get; set; }
+
+    public DateTimeOffset? LockedUntil { get; set; }
+
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString();
+
     public DateTimeOffset? LastLoginAt { get; set; }
 
     // Navigation properties
@@ -22,4 +36,3 @@ public class Staff : BaseEntity
     public virtual ICollection<BorrowDetail> ReceivedBorrowDetails { get; set; } = [];
     public virtual ICollection<Fine> HandledFines { get; set; } = [];
 }
-

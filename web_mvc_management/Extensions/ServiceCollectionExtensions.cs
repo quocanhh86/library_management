@@ -1,14 +1,21 @@
+using System;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using web_mvc_management.Constant;
 using web_mvc_management.Data;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Repositories;
+using web_mvc_management.Services;
 
 namespace web_mvc_management.Extensions;
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Đăng ký DbContext với kết nối bảo mật (ưu tiên biến môi trường từ .env).
+    /// Đăng ký DbContext với kết nối bảo mật.
     /// </summary>
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
@@ -29,11 +36,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static string ResolveConnectionString(IConfiguration configuration)
     {
-        // 1. Kiểm tra ConnectionStrings:DefaultConnection từ Configuration (.env hoặc appsettings)
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 
-        // 2. Nếu chưa có hoặc là placeholder, thử ghép từ các biến môi trường rời rạc (DB_HOST, DB_USER...)
-        if (string.IsNullOrWhiteSpace(connectionString) || connectionString.Contains("YOUR_PASSWORD"))
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
             var host = configuration["DB_HOST"] ?? Environment.GetEnvironmentVariable("DB_HOST");
             var port = configuration["DB_PORT"] ?? Environment.GetEnvironmentVariable("DB_PORT") ?? "1433";
@@ -63,13 +69,53 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Đăng ký các hạ tầng dùng chung (Infrastructure).
+    /// Đăng ký Cookie Authentication với bảo mật cao (HttpOnly, Secure, SameSite, Sliding Expiration).
+    /// </summary>
+    public static IServiceCollection AddCookieAuthentication(this IServiceCollection services)
+    {
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(options =>
+            {
+                options.Cookie.Name = AppConstants.Auth.CookieScheme;
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                options.LoginPath = AppConstants.Auth.LoginPath;
+                options.LogoutPath = AppConstants.Auth.LogoutPath;
+                options.AccessDeniedPath = AppConstants.Auth.AccessDeniedPath;
+                options.ExpireTimeSpan = TimeSpan.FromHours(8);
+                options.SlidingExpiration = true;
+
+                // SEC-05, SEC-21: Kiểm tra tính toàn vẹn của phiên qua Security Stamp
+                options.Events = new CookieAuthenticationEvents
+                {
+                    OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync
+                };
+            });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Đăng ký các hạ tầng dùng chung (Infrastructure, Stateful Session, Caching).
     /// </summary>
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
         services.AddScoped<IUserContext, UserContext>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+
+        // Cấu hình Distributed Memory Cache & Stateful Session (MVC Server-Side State)
+        services.AddDistributedMemoryCache();
+        services.AddSession(options =>
+        {
+            options.IdleTimeout = TimeSpan.FromMinutes(30);
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.Cookie.Name = ".LibraryManagement.Session";
+        });
 
         return services;
     }
@@ -90,6 +136,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
+        services.AddScoped<IOtpService, OtpService>();
+        services.AddSingleton<IEmailService, EmailService>();
+        services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
+        services.AddScoped<IAuthService, AuthService>();
         return services;
     }
 }

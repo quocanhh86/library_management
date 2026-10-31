@@ -97,12 +97,12 @@ public static class DbInitializer
         await context.SaveChangesAsync();
 
         // 3. Nhân viên & Quản trị viên (Staff)
-        var defaultPasswordHash = PasswordHasher.HashPassword("Password123!");
+        var defaultPassword = Environment.GetEnvironmentVariable("DEFAULT_SEED_PASSWORD") ?? "123456";
+        var defaultPasswordHash = PasswordHasher.HashPassword(defaultPassword);
 
-        Staff adminStaff;
         if (!await context.Staff.AnyAsync())
         {
-            adminStaff = new Staff
+            var defaultAdmin = new Staff
             {
                 Id = Guid.NewGuid(),
                 Username = "admin",
@@ -110,7 +110,9 @@ public static class DbInitializer
                 FullName = "Quản trị viên Hệ thống",
                 PasswordHash = defaultPasswordHash,
                 Phone = "0901234567",
+                Role = AppRoles.Admin,
                 Status = EntityStatus.Active,
+                SecurityStamp = Guid.NewGuid().ToString("N"),
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
@@ -123,31 +125,65 @@ public static class DbInitializer
                 FullName = "Trần Thị Mai (Thủ thư)",
                 PasswordHash = defaultPasswordHash,
                 Phone = "0912345678",
+                Role = AppRoles.Librarian,
                 Status = EntityStatus.Active,
+                SecurityStamp = Guid.NewGuid().ToString("N"),
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            var librarian2 = new Staff
-            {
-                Id = Guid.NewGuid(),
-                Username = "librarian02",
-                Email = "thuthu02@library.utc.edu.vn",
-                FullName = "Nguyễn Văn Tuấn (Thủ thư)",
-                PasswordHash = defaultPasswordHash,
-                Phone = "0923456789",
-                Status = EntityStatus.Active,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-
-            await context.Staff.AddRangeAsync([adminStaff, librarian1, librarian2]);
+            await context.Staff.AddRangeAsync([defaultAdmin, librarian1]);
             await context.SaveChangesAsync();
         }
-        else
+
+        // Nạp cấu hình 3 tài khoản hạt giống từ biến môi trường .env (Email, Role, Mật khẩu tùy biến)
+        var seedUsers = new List<SeedUserSetting>
         {
-            adminStaff = await context.Staff.FirstAsync();
+            GetSeedUser(1, "anhnqth01267@fpt.edu.vn", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin FPT)", "anhnq_admin", "GV20268881", "GV8881"),
+            GetSeedUser(2, "quocanhn352@gmail.com", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin Tổng)", "quocanh_admin", "SV20268888", "SV8888"),
+            GetSeedUser(3, "attendancestudent86@gmail.com", AppRoles.Librarian, defaultPassword, "Cán Bộ Thủ Thư (Attendance)", "attendance_librarian", "SV20268889", "SV8889")
+        };
+
+        // Đồng bộ 3 tài khoản vào bảng Staff
+        foreach (var u in seedUsers)
+        {
+            var staffUser = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
+            var passHash = PasswordHasher.HashPassword(u.Password);
+
+            if (staffUser == null)
+            {
+                staffUser = new Staff
+                {
+                    Id = Guid.NewGuid(),
+                    Username = u.Username,
+                    Email = u.Email,
+                    FullName = u.FullName,
+                    PasswordHash = passHash,
+                    Phone = "0981112233",
+                    Role = u.Role,
+                    Status = EntityStatus.Active,
+                    SecurityStamp = Guid.NewGuid().ToString("N"),
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+                await context.Staff.AddAsync(staffUser);
+            }
+            else
+            {
+                staffUser.Role = u.Role;
+                staffUser.FullName = u.FullName;
+                staffUser.PasswordHash = passHash;
+                staffUser.Status = EntityStatus.Active;
+                if (string.IsNullOrWhiteSpace(staffUser.SecurityStamp))
+                {
+                    staffUser.SecurityStamp = Guid.NewGuid().ToString("N");
+                }
+            }
         }
+        await context.SaveChangesAsync();
+
+        Staff adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin)
+            ?? await context.Staff.FirstAsync();
 
         // 4. Kệ sách (Shelves)
         if (!await context.Shelves.AnyAsync())
@@ -308,6 +344,52 @@ public static class DbInitializer
             await context.Readers.AddRangeAsync(readers);
             await context.SaveChangesAsync();
         }
+
+        // Đồng bộ 3 tài khoản hạt giống vào bảng Readers để kiểm thử Cổng Độc giả (/Account/Login)
+        foreach (var u in seedUsers)
+        {
+            var readerUser = await context.Readers.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
+            var passHash = PasswordHasher.HashPassword(u.Password);
+            var targetTypeId = u.Role == AppRoles.Admin ? lecturerType.Id : studentType.Id;
+
+            if (readerUser == null)
+            {
+                readerUser = new Reader
+                {
+                    Id = Guid.NewGuid(),
+                    ReaderTypeId = targetTypeId,
+                    Username = u.Username.Replace("_admin", "_reader").Replace("_librarian", "_student"),
+                    Email = u.Email,
+                    PasswordHash = passHash,
+                    FullName = u.FullName,
+                    Phone = "0981112233",
+                    CardNo = u.CardNo,
+                    MemberCode = u.MemberCode,
+                    DateOfBirth = new DateOnly(2000, 1, 1),
+                    Address = "Hà Nội",
+                    CardIssuedDate = today,
+                    CardExpiryDate = today.AddYears(4),
+                    CardStatus = LibraryConstants.CardStatus.Active,
+                    Status = EntityStatus.Active,
+                    SecurityStamp = Guid.NewGuid().ToString("N"),
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = adminStaff.Id
+                };
+                await context.Readers.AddAsync(readerUser);
+            }
+            else
+            {
+                readerUser.PasswordHash = passHash;
+                readerUser.Status = EntityStatus.Active;
+                readerUser.CardStatus = LibraryConstants.CardStatus.Active;
+                if (string.IsNullOrWhiteSpace(readerUser.SecurityStamp))
+                {
+                    readerUser.SecurityStamp = Guid.NewGuid().ToString("N");
+                }
+            }
+        }
+        await context.SaveChangesAsync();
 
         // 9. Sách (Books), Tác giả sách (BookAuthors), và Bản sao (BookCopies)
         if (!await context.Books.AnyAsync())
@@ -632,5 +714,51 @@ public static class DbInitializer
             await context.Reservations.AddAsync(resReady);
             await context.SaveChangesAsync();
         }
+    }
+
+    private record SeedUserSetting(
+        string Email,
+        string Role,
+        string Password,
+        string FullName,
+        string Username,
+        string CardNo,
+        string MemberCode);
+
+    private static SeedUserSetting GetSeedUser(
+        int index,
+        string defaultEmail,
+        string defaultRole,
+        string defaultPassword,
+        string defaultFullName,
+        string defaultUsername,
+        string defaultCardNo,
+        string defaultMemberCode)
+    {
+        var email = Environment.GetEnvironmentVariable($"SEED_USER_{index}_EMAIL");
+        email = string.IsNullOrWhiteSpace(email) ? defaultEmail : email.Trim().ToLowerInvariant();
+
+        var role = Environment.GetEnvironmentVariable($"SEED_USER_{index}_ROLE");
+        role = string.IsNullOrWhiteSpace(role) ? defaultRole : role.Trim();
+        role = string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+            ? AppRoles.Admin
+            : AppRoles.Librarian;
+
+        var defaultPass = Environment.GetEnvironmentVariable("DEFAULT_SEED_PASSWORD") ?? "123456";
+        var password = Environment.GetEnvironmentVariable($"SEED_USER_{index}_PASSWORD");
+        password = string.IsNullOrWhiteSpace(password) ? defaultPass : password.Trim();
+
+        var fullName = Environment.GetEnvironmentVariable($"SEED_USER_{index}_NAME");
+        fullName = string.IsNullOrWhiteSpace(fullName) ? defaultFullName : fullName.Trim();
+
+        return new SeedUserSetting(
+            email,
+            role,
+            password,
+            fullName,
+            defaultUsername,
+            defaultCardNo,
+            defaultMemberCode
+        );
     }
 }

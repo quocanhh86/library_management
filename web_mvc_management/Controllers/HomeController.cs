@@ -4,7 +4,7 @@ using web_mvc_management.Models;
 
 namespace web_mvc_management.Controllers;
 
-public class HomeController : Controller
+public class HomeController : BaseController
 {
     public IActionResult Index()
     {

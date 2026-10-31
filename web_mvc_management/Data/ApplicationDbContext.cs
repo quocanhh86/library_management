@@ -35,6 +35,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Fine> Fines => Set<Fine>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<LibrarySetting> LibrarySettings => Set<LibrarySetting>();
+    public DbSet<OtpEntry> Otps => Set<OtpEntry>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -94,7 +95,7 @@ public class ApplicationDbContext : DbContext
         // 1. Staff
         modelBuilder.Entity<Staff>(b =>
         {
-            b.ToTable("staff");
+            b.ToTable("staff", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.Username).HasColumnName("username").HasMaxLength(50).IsUnicode(false);
@@ -102,6 +103,11 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(255).IsUnicode(false);
             b.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(150);
             b.Property(x => x.Phone).HasColumnName("phone").HasMaxLength(20).IsUnicode(false);
+            b.Property(x => x.Role).HasColumnName("role").HasMaxLength(20).IsUnicode(false);
+            b.Property(x => x.FailedLoginAttempts).HasColumnName("failed_login_attempts");
+            b.Property(x => x.LastLoginAttempt).HasColumnName("last_login_attempt");
+            b.Property(x => x.LockedUntil).HasColumnName("locked_until");
+            b.Property(x => x.SecurityStamp).HasColumnName("security_stamp").HasMaxLength(36).IsUnicode(false);
             b.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             b.Property(x => x.Status).HasColumnName("status").HasMaxLength(10).IsUnicode(false);
             b.Property(x => x.CreatedAt).HasColumnName("created_at");
@@ -113,7 +119,7 @@ public class ApplicationDbContext : DbContext
         // 2. ReaderType
         modelBuilder.Entity<ReaderType>(b =>
         {
-            b.ToTable("reader_types");
+            b.ToTable("reader_types", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.Code).HasColumnName("code").HasMaxLength(20).IsUnicode(false);
@@ -136,7 +142,7 @@ public class ApplicationDbContext : DbContext
         // 3. Reader
         modelBuilder.Entity<Reader>(b =>
         {
-            b.ToTable("readers");
+            b.ToTable("readers", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.ReaderTypeId).HasColumnName("reader_type_id");
@@ -145,6 +151,10 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(255).IsUnicode(false);
             b.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(150);
             b.Property(x => x.Phone).HasColumnName("phone").HasMaxLength(20).IsUnicode(false);
+            b.Property(x => x.FailedLoginAttempts).HasColumnName("failed_login_attempts");
+            b.Property(x => x.LastLoginAttempt).HasColumnName("last_login_attempt");
+            b.Property(x => x.LockedUntil).HasColumnName("locked_until");
+            b.Property(x => x.SecurityStamp).HasColumnName("security_stamp").HasMaxLength(36).IsUnicode(false);
             b.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             b.Property(x => x.CardNo).HasColumnName("card_no").HasMaxLength(20).IsUnicode(false);
             b.Property(x => x.MemberCode).HasColumnName("member_code").HasMaxLength(30).IsUnicode(false);
@@ -172,7 +182,7 @@ public class ApplicationDbContext : DbContext
         // 4. Category
         modelBuilder.Entity<Category>(b =>
         {
-            b.ToTable("categories");
+            b.ToTable("categories", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.Name).HasColumnName("name").HasMaxLength(100);
@@ -187,7 +197,7 @@ public class ApplicationDbContext : DbContext
         // 5. Publisher
         modelBuilder.Entity<Publisher>(b =>
         {
-            b.ToTable("publishers");
+            b.ToTable("publishers", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.Name).HasColumnName("name").HasMaxLength(150);
@@ -205,7 +215,7 @@ public class ApplicationDbContext : DbContext
         // 6. Author
         modelBuilder.Entity<Author>(b =>
         {
-            b.ToTable("authors");
+            b.ToTable("authors", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(150);
@@ -220,7 +230,7 @@ public class ApplicationDbContext : DbContext
         // 7. Shelf
         modelBuilder.Entity<Shelf>(b =>
         {
-            b.ToTable("shelves");
+            b.ToTable("shelves", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.Code).HasColumnName("code").HasMaxLength(30).IsUnicode(false);
@@ -237,7 +247,7 @@ public class ApplicationDbContext : DbContext
         // 8. Book
         modelBuilder.Entity<Book>(b =>
         {
-            b.ToTable("books");
+            b.ToTable("books", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.Title).HasColumnName("title").HasMaxLength(300);
@@ -270,7 +280,7 @@ public class ApplicationDbContext : DbContext
         // 9. BookAuthor (Composite Key)
         modelBuilder.Entity<BookAuthor>(b =>
         {
-            b.ToTable("book_authors");
+            b.ToTable("book_authors", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => new { x.BookId, x.AuthorId });
             b.Property(x => x.BookId).HasColumnName("book_id");
             b.Property(x => x.AuthorId).HasColumnName("author_id");
@@ -295,7 +305,7 @@ public class ApplicationDbContext : DbContext
         // 10. BookCopy
         modelBuilder.Entity<BookCopy>(b =>
         {
-            b.ToTable("book_copies");
+            b.ToTable("book_copies", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.BookId).HasColumnName("book_id");
@@ -329,7 +339,7 @@ public class ApplicationDbContext : DbContext
         // 11. BorrowSlip
         modelBuilder.Entity<BorrowSlip>(b =>
         {
-            b.ToTable("borrow_slips");
+            b.ToTable("borrow_slips", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.ReaderId).HasColumnName("reader_id");
@@ -356,7 +366,7 @@ public class ApplicationDbContext : DbContext
         // 12. BorrowDetail
         modelBuilder.Entity<BorrowDetail>(b =>
         {
-            b.ToTable("borrow_details");
+            b.ToTable("borrow_details", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.SlipId).HasColumnName("slip_id");
@@ -392,7 +402,7 @@ public class ApplicationDbContext : DbContext
         // 13. Fine
         modelBuilder.Entity<Fine>(b =>
         {
-            b.ToTable("fines");
+            b.ToTable("fines", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.BorrowDetailId).HasColumnName("borrow_detail_id");
@@ -424,7 +434,7 @@ public class ApplicationDbContext : DbContext
         // 14. Reservation
         modelBuilder.Entity<Reservation>(b =>
         {
-            b.ToTable("reservations");
+            b.ToTable("reservations", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.ReaderId).HasColumnName("reader_id");
@@ -460,7 +470,7 @@ public class ApplicationDbContext : DbContext
         // 15. LibrarySetting
         modelBuilder.Entity<LibrarySetting>(b =>
         {
-            b.ToTable("library_settings");
+            b.ToTable("library_settings", tb => tb.UseSqlOutputClause(false));
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasColumnName("id");
             b.Property(x => x.OverdueFinePerDay).HasColumnName("overdue_fine_per_day").HasPrecision(18, 2);
@@ -473,6 +483,23 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             b.Property(x => x.CreatedBy).HasColumnName("created_by");
             b.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+        });
+
+        // 16. OtpEntry (SEC-08, SEC-12)
+        modelBuilder.Entity<OtpEntry>(b =>
+        {
+            b.ToTable("otps", tb => tb.UseSqlOutputClause(false));
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("id");
+            b.Property(x => x.Email).HasColumnName("email").HasMaxLength(255).IsUnicode(false);
+            b.Property(x => x.OtpCode).HasColumnName("otp_code").HasMaxLength(10).IsUnicode(false);
+            b.Property(x => x.Purpose).HasColumnName("purpose").HasMaxLength(30).IsUnicode(false);
+            b.Property(x => x.FailedAttempts).HasColumnName("failed_attempts");
+            b.Property(x => x.IsUsed).HasColumnName("is_used");
+            b.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            b.Property(x => x.CreatedAt).HasColumnName("created_at");
+
+            b.HasIndex(x => new { x.Email, x.Purpose, x.IsUsed, x.ExpiresAt });
         });
     }
 }
