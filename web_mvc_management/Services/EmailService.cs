@@ -50,6 +50,15 @@ public class EmailService : IEmailService
         }
         _settings.Username = configuration["MAIL_USERNAME"] ?? _settings.Username;
         _settings.Password = configuration["MAIL_PASSWORD"] ?? _settings.Password;
+        _settings.SenderDisplayName = configuration["MAIL_SENDER_DISPLAY_NAME"] ?? _settings.SenderDisplayName;
+        if (bool.TryParse(configuration["MAIL_SMTP_STARTTLS"] ?? configuration["MAIL_STARTTLS"], out var startTls))
+        {
+            _settings.StartTls = startTls;
+        }
+        if (bool.TryParse(configuration["MAIL_SMTP_AUTH"] ?? configuration["MAIL_AUTH"], out var auth))
+        {
+            _settings.Auth = auth;
+        }
     }
 
     public int GetRemainingCooldownSeconds(string email)
