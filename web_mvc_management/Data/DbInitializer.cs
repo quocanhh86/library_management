@@ -97,9 +97,9 @@ public static class DbInitializer
         await context.SaveChangesAsync();
 
         // 3. Nhân viên & Quản trị viên (Staff)
-        var defaultPasswordHash = PasswordHasher.HashPassword("Password123!");
+        var defaultPassword = Environment.GetEnvironmentVariable("DEFAULT_SEED_PASSWORD") ?? "123456";
+        var defaultPasswordHash = PasswordHasher.HashPassword(defaultPassword);
 
-        Staff adminStaff;
         if (!await context.Staff.AnyAsync())
         {
             var defaultAdmin = new Staff
@@ -136,98 +136,54 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        // 3.1. Đảm bảo anhnqth01267@fpt.edu.vn có vai trò Admin (Quản trị viên - quản lý tất cả)
-        var fptAdminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == "anhnqth01267@fpt.edu.vn");
-        if (fptAdminStaff == null)
+        // Nạp cấu hình 3 tài khoản hạt giống từ biến môi trường .env (Email, Role, Mật khẩu tùy biến)
+        var seedUsers = new List<SeedUserSetting>
         {
-            fptAdminStaff = new Staff
-            {
-                Id = Guid.NewGuid(),
-                Username = "anhnq_admin",
-                Email = "anhnqth01267@fpt.edu.vn",
-                FullName = "Nguyễn Quốc Anh (Admin FPT)",
-                PasswordHash = defaultPasswordHash,
-                Phone = "0981112233",
-                Role = AppRoles.Admin,
-                Status = EntityStatus.Active,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-            await context.Staff.AddAsync(fptAdminStaff);
-        }
-        else
-        {
-            fptAdminStaff.Role = AppRoles.Admin;
-            fptAdminStaff.Status = EntityStatus.Active;
-            if (string.IsNullOrWhiteSpace(fptAdminStaff.SecurityStamp))
-            {
-                fptAdminStaff.SecurityStamp = Guid.NewGuid().ToString("N");
-            }
-        }
+            GetSeedUser(1, "anhnqth01267@fpt.edu.vn", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin FPT)", "anhnq_admin", "GV20268881", "GV8881"),
+            GetSeedUser(2, "quocanhn352@gmail.com", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin Tổng)", "quocanh_admin", "SV20268888", "SV8888"),
+            GetSeedUser(3, "attendancestudent86@gmail.com", AppRoles.Librarian, defaultPassword, "Cán Bộ Thủ Thư (Attendance)", "attendance_librarian", "SV20268889", "SV8889")
+        };
 
-        // 3.2. Đảm bảo quocanhn352@gmail.com có vai trò Admin (Quản trị viên - quản lý tất cả)
-        var quocanhStaff = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == "quocanhn352@gmail.com");
-        if (quocanhStaff == null)
+        // Đồng bộ 3 tài khoản vào bảng Staff
+        foreach (var u in seedUsers)
         {
-            quocanhStaff = new Staff
-            {
-                Id = Guid.NewGuid(),
-                Username = "quocanh_admin",
-                Email = "quocanhn352@gmail.com",
-                FullName = "Nguyễn Quốc Anh (Admin Tổng)",
-                PasswordHash = defaultPasswordHash,
-                Phone = "0988888888",
-                Role = AppRoles.Admin,
-                Status = EntityStatus.Active,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-            await context.Staff.AddAsync(quocanhStaff);
-        }
-        else
-        {
-            quocanhStaff.Role = AppRoles.Admin;
-            quocanhStaff.Status = EntityStatus.Active;
-            if (string.IsNullOrWhiteSpace(quocanhStaff.SecurityStamp))
-            {
-                quocanhStaff.SecurityStamp = Guid.NewGuid().ToString("N");
-            }
-        }
+            var staffUser = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
+            var passHash = PasswordHasher.HashPassword(u.Password);
 
-        // 3.3. Đảm bảo attendancestudent86@gmail.com có vai trò Librarian (Thủ thư quản lý nghiệp vụ)
-        var attendanceStaff = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == "attendancestudent86@gmail.com");
-        if (attendanceStaff == null)
-        {
-            attendanceStaff = new Staff
+            if (staffUser == null)
             {
-                Id = Guid.NewGuid(),
-                Username = "attendance_librarian",
-                Email = "attendancestudent86@gmail.com",
-                FullName = "Cán Bộ Thủ Thư (Attendance)",
-                PasswordHash = defaultPasswordHash,
-                Phone = "0977777777",
-                Role = AppRoles.Librarian,
-                Status = EntityStatus.Active,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-            await context.Staff.AddAsync(attendanceStaff);
-        }
-        else
-        {
-            attendanceStaff.Role = AppRoles.Librarian;
-            attendanceStaff.Status = EntityStatus.Active;
-            if (string.IsNullOrWhiteSpace(attendanceStaff.SecurityStamp))
+                staffUser = new Staff
+                {
+                    Id = Guid.NewGuid(),
+                    Username = u.Username,
+                    Email = u.Email,
+                    FullName = u.FullName,
+                    PasswordHash = passHash,
+                    Phone = "0981112233",
+                    Role = u.Role,
+                    Status = EntityStatus.Active,
+                    SecurityStamp = Guid.NewGuid().ToString("N"),
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+                await context.Staff.AddAsync(staffUser);
+            }
+            else
             {
-                attendanceStaff.SecurityStamp = Guid.NewGuid().ToString("N");
+                staffUser.Role = u.Role;
+                staffUser.FullName = u.FullName;
+                staffUser.PasswordHash = passHash;
+                staffUser.Status = EntityStatus.Active;
+                if (string.IsNullOrWhiteSpace(staffUser.SecurityStamp))
+                {
+                    staffUser.SecurityStamp = Guid.NewGuid().ToString("N");
+                }
             }
         }
         await context.SaveChangesAsync();
 
-        adminStaff = fptAdminStaff ?? quocanhStaff ?? await context.Staff.FirstAsync(x => x.Role == AppRoles.Admin);
+        Staff adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin)
+            ?? await context.Staff.FirstAsync();
 
         // 4. Kệ sách (Shelves)
         if (!await context.Shelves.AnyAsync())
@@ -389,117 +345,48 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        // 8.1. Độc giả anhnqth01267@fpt.edu.vn (Giảng viên)
-        var fptReader = await context.Readers.FirstOrDefaultAsync(x => x.Email.ToLower() == "anhnqth01267@fpt.edu.vn");
-        if (fptReader == null)
+        // Đồng bộ 3 tài khoản hạt giống vào bảng Readers để kiểm thử Cổng Độc giả (/Account/Login)
+        foreach (var u in seedUsers)
         {
-            fptReader = new Reader
-            {
-                Id = Guid.NewGuid(),
-                ReaderTypeId = lecturerType.Id,
-                Username = "anhnq_reader",
-                Email = "anhnqth01267@fpt.edu.vn",
-                PasswordHash = defaultPasswordHash,
-                FullName = "TS. Nguyễn Quốc Anh (FPT)",
-                Phone = "0981112233",
-                CardNo = "GV20268881",
-                MemberCode = "GV8881",
-                DateOfBirth = new DateOnly(1995, 1, 1),
-                Address = "Khu Công Nghệ Cao Hòa Lạc, Hà Nội",
-                CardIssuedDate = today,
-                CardExpiryDate = today.AddYears(5),
-                CardStatus = LibraryConstants.CardStatus.Active,
-                Status = EntityStatus.Active,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow,
-                CreatedBy = adminStaff.Id
-            };
-            await context.Readers.AddAsync(fptReader);
-        }
-        else
-        {
-            fptReader.Status = EntityStatus.Active;
-            fptReader.CardStatus = LibraryConstants.CardStatus.Active;
-            if (string.IsNullOrWhiteSpace(fptReader.SecurityStamp))
-            {
-                fptReader.SecurityStamp = Guid.NewGuid().ToString("N");
-            }
-        }
+            var readerUser = await context.Readers.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
+            var passHash = PasswordHasher.HashPassword(u.Password);
+            var targetTypeId = u.Role == AppRoles.Admin ? lecturerType.Id : studentType.Id;
 
-        // 8.2. Độc giả quocanhn352@gmail.com (Sinh viên / Bạn đọc)
-        var quocanhReader = await context.Readers.FirstOrDefaultAsync(x => x.Email.ToLower() == "quocanhn352@gmail.com");
-        if (quocanhReader == null)
-        {
-            quocanhReader = new Reader
+            if (readerUser == null)
             {
-                Id = Guid.NewGuid(),
-                ReaderTypeId = studentType.Id,
-                Username = "quocanh_reader",
-                Email = "quocanhn352@gmail.com",
-                PasswordHash = defaultPasswordHash,
-                FullName = "Nguyễn Quốc Anh (Độc giả)",
-                Phone = "0988888888",
-                CardNo = "SV20268888",
-                MemberCode = "20268888",
-                DateOfBirth = new DateOnly(2004, 1, 1),
-                Address = "Hà Nội",
-                CardIssuedDate = today,
-                CardExpiryDate = today.AddYears(4),
-                CardStatus = LibraryConstants.CardStatus.Active,
-                Status = EntityStatus.Active,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow,
-                CreatedBy = adminStaff.Id
-            };
-            await context.Readers.AddAsync(quocanhReader);
-        }
-        else
-        {
-            quocanhReader.Status = EntityStatus.Active;
-            quocanhReader.CardStatus = LibraryConstants.CardStatus.Active;
-            if (string.IsNullOrWhiteSpace(quocanhReader.SecurityStamp))
-            {
-                quocanhReader.SecurityStamp = Guid.NewGuid().ToString("N");
+                readerUser = new Reader
+                {
+                    Id = Guid.NewGuid(),
+                    ReaderTypeId = targetTypeId,
+                    Username = u.Username.Replace("_admin", "_reader").Replace("_librarian", "_student"),
+                    Email = u.Email,
+                    PasswordHash = passHash,
+                    FullName = u.FullName,
+                    Phone = "0981112233",
+                    CardNo = u.CardNo,
+                    MemberCode = u.MemberCode,
+                    DateOfBirth = new DateOnly(2000, 1, 1),
+                    Address = "Hà Nội",
+                    CardIssuedDate = today,
+                    CardExpiryDate = today.AddYears(4),
+                    CardStatus = LibraryConstants.CardStatus.Active,
+                    Status = EntityStatus.Active,
+                    SecurityStamp = Guid.NewGuid().ToString("N"),
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = adminStaff.Id
+                };
+                await context.Readers.AddAsync(readerUser);
             }
-        }
-
-        // 8.3. Độc giả attendancestudent86@gmail.com (Sinh viên Attendance)
-        var attendanceReader = await context.Readers.FirstOrDefaultAsync(x => x.Email.ToLower() == "attendancestudent86@gmail.com");
-        if (attendanceReader == null)
-        {
-            attendanceReader = new Reader
+            else
             {
-                Id = Guid.NewGuid(),
-                ReaderTypeId = studentType.Id,
-                Username = "attendance_student",
-                Email = "attendancestudent86@gmail.com",
-                PasswordHash = defaultPasswordHash,
-                FullName = "Sinh Viên Attendance",
-                Phone = "0977777777",
-                CardNo = "SV20268889",
-                MemberCode = "20268889",
-                DateOfBirth = new DateOnly(2004, 8, 15),
-                Address = "Ký túc xá ĐH Giao Thông Vận Tải, Cầu Giấy, Hà Nội",
-                CardIssuedDate = today,
-                CardExpiryDate = today.AddYears(4),
-                CardStatus = LibraryConstants.CardStatus.Active,
-                Status = EntityStatus.Active,
-                SecurityStamp = Guid.NewGuid().ToString("N"),
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow,
-                CreatedBy = adminStaff.Id
-            };
-            await context.Readers.AddAsync(attendanceReader);
-        }
-        else
-        {
-            attendanceReader.Status = EntityStatus.Active;
-            attendanceReader.CardStatus = LibraryConstants.CardStatus.Active;
-            if (string.IsNullOrWhiteSpace(attendanceReader.SecurityStamp))
-            {
-                attendanceReader.SecurityStamp = Guid.NewGuid().ToString("N");
+                readerUser.PasswordHash = passHash;
+                readerUser.Status = EntityStatus.Active;
+                readerUser.CardStatus = LibraryConstants.CardStatus.Active;
+                if (string.IsNullOrWhiteSpace(readerUser.SecurityStamp))
+                {
+                    readerUser.SecurityStamp = Guid.NewGuid().ToString("N");
+                }
             }
         }
         await context.SaveChangesAsync();
@@ -827,5 +714,51 @@ public static class DbInitializer
             await context.Reservations.AddAsync(resReady);
             await context.SaveChangesAsync();
         }
+    }
+
+    private record SeedUserSetting(
+        string Email,
+        string Role,
+        string Password,
+        string FullName,
+        string Username,
+        string CardNo,
+        string MemberCode);
+
+    private static SeedUserSetting GetSeedUser(
+        int index,
+        string defaultEmail,
+        string defaultRole,
+        string defaultPassword,
+        string defaultFullName,
+        string defaultUsername,
+        string defaultCardNo,
+        string defaultMemberCode)
+    {
+        var email = Environment.GetEnvironmentVariable($"SEED_USER_{index}_EMAIL");
+        email = string.IsNullOrWhiteSpace(email) ? defaultEmail : email.Trim().ToLowerInvariant();
+
+        var role = Environment.GetEnvironmentVariable($"SEED_USER_{index}_ROLE");
+        role = string.IsNullOrWhiteSpace(role) ? defaultRole : role.Trim();
+        role = string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+            ? AppRoles.Admin
+            : AppRoles.Librarian;
+
+        var defaultPass = Environment.GetEnvironmentVariable("DEFAULT_SEED_PASSWORD") ?? "123456";
+        var password = Environment.GetEnvironmentVariable($"SEED_USER_{index}_PASSWORD");
+        password = string.IsNullOrWhiteSpace(password) ? defaultPass : password.Trim();
+
+        var fullName = Environment.GetEnvironmentVariable($"SEED_USER_{index}_NAME");
+        fullName = string.IsNullOrWhiteSpace(fullName) ? defaultFullName : fullName.Trim();
+
+        return new SeedUserSetting(
+            email,
+            role,
+            password,
+            fullName,
+            defaultUsername,
+            defaultCardNo,
+            defaultMemberCode
+        );
     }
 }
