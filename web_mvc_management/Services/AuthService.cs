@@ -10,6 +10,7 @@ using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Data;
 using web_mvc_management.Entity;
+using web_mvc_management.Helper;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Auth;
 using web_mvc_management.Util;
@@ -82,7 +83,7 @@ public class AuthService(
             return sendResult;
         }
 
-        return ServiceResult.Success("Mã OTP đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư.");
+        return ServiceResult.Success("Đã gửi mã xác thực tới email của bạn.");
     }
 
     public async Task<ServiceResult<Reader>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default)
@@ -146,7 +147,7 @@ public class AuthService(
         await context.SaveChangesAsync(ct);
 
         logger.LogInformation("Độc giả mới đăng ký thành công: {Username} ({CardNo})", reader.Username, reader.CardNo);
-        return ServiceResult<Reader>.Success(reader, "Đăng ký thành công! Thẻ thư viện của bạn đã được kích hoạt.");
+        return ServiceResult<Reader>.Success(reader, "Đã mở thẻ thư viện.");
     }
 
     public async Task<ServiceResult<LoginStepResult>> InitiateReaderLoginAsync(ReaderLoginViewModel model, string clientIp, CancellationToken ct = default)
@@ -177,7 +178,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<LoginStepResult>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
         }
 
         // Kiểm tra trạng thái hoạt động của độc giả
@@ -202,7 +203,8 @@ public class AuthService(
                 reader.SecurityStamp = Guid.NewGuid().ToString("N"); // NIST SP 800-63B: Thu hồi mọi phiên đang hoạt động khi bị khóa
                 await context.SaveChangesAsync(ct);
                 logger.LogWarning("Tài khoản độc giả {Username} bị khóa 15 phút do nhập sai mật khẩu 5 lần", reader.Username);
-                return ServiceResult<LoginStepResult>.Failure(ErrorCode.AuthMaxAttemptsExceeded);
+                return ServiceResult<LoginStepResult>.Failure(
+                    ErrorMessages.Format(ErrorCode.AuthMaxAttemptsExceeded, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
             }
 
             await context.SaveChangesAsync(ct);
@@ -227,7 +229,7 @@ public class AuthService(
             MaskedEmail = StringUtil.MaskEmail(reader.Email),
             Purpose = PurposeReaderLogin,
             ReturnUrl = model.ReturnUrl
-        }, "Mã xác thực đăng nhập 2 bước (2FA) đã được gửi đến email của bạn.");
+        }, "Đã gửi mã xác thực tới email của bạn.");
     }
 
     public async Task<ServiceResult<ClaimsPrincipal>> CompleteReaderLoginOtpAsync(string email, string otpCode, string clientIp, CancellationToken ct = default)
@@ -254,7 +256,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<ClaimsPrincipal>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
         }
 
         // SEC-04: Xác thực OTP
@@ -294,7 +296,7 @@ public class AuthService(
         var principal = new ClaimsPrincipal(identity);
 
         logger.LogInformation("Độc giả đăng nhập thành công: {Username} ({CardNo})", reader.Username, reader.CardNo);
-        return ServiceResult<ClaimsPrincipal>.Success(principal, "Đăng nhập thành công!");
+        return ServiceResult<ClaimsPrincipal>.Success(principal, "Đã đăng nhập.");
     }
 
     public async Task<ServiceResult<LoginStepResult>> InitiateStaffLoginAsync(StaffLoginViewModel model, string clientIp, CancellationToken ct = default)
@@ -323,7 +325,7 @@ public class AuthService(
                 MaskedEmail = StringUtil.MaskEmail(normalizedEmail),
                 Purpose = PurposeStaffLogin,
                 ReturnUrl = model.ReturnUrl
-            }, "Mã xác thực OTP đã được gửi đến email của bạn nếu thông tin hợp lệ.");
+            }, "Đã gửi mã xác thực tới email của bạn.");
         }
 
         // SEC-11: Kiểm tra khóa tài khoản
@@ -331,7 +333,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<LoginStepResult>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
         }
 
         // Sinh OTP & Gửi Gmail
@@ -350,7 +352,7 @@ public class AuthService(
             MaskedEmail = StringUtil.MaskEmail(staff.Email),
             Purpose = PurposeStaffLogin,
             ReturnUrl = model.ReturnUrl
-        }, "Mã xác thực OTP đã được gửi về Gmail của bạn.");
+        }, "Đã gửi mã xác thực tới email của bạn.");
     }
 
     public async Task<ServiceResult<ClaimsPrincipal>> CompleteStaffLoginOtpAsync(string email, string otpCode, string clientIp, CancellationToken ct = default)
@@ -377,7 +379,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<ClaimsPrincipal>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
         }
 
         // SEC-04 & SEC-12: Xác thực OTP với Purpose = STAFF_LOGIN
@@ -418,7 +420,7 @@ public class AuthService(
         var principal = new ClaimsPrincipal(identity);
 
         logger.LogInformation("Cán bộ thư viện đăng nhập thành công: {Username} (Role: {Role})", staff.Username, assignedRole);
-        return ServiceResult<ClaimsPrincipal>.Success(principal, "Đăng nhập thành công!");
+        return ServiceResult<ClaimsPrincipal>.Success(principal, "Đã đăng nhập.");
     }
 
     public async Task<ServiceResult> ResendOtpAsync(string email, string purpose, string clientIp, CancellationToken ct = default)

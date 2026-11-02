@@ -79,113 +79,113 @@ public static class Screens
         [ScreenId.Home] = new(
             ScreenId.Home,
             "SCR_HOME",
-            "Trang Chủ Thư Viện",
+            "Trang chủ",
             "/"),
 
         [ScreenId.Login] = new(
             ScreenId.Login,
             "SCR_LOGIN",
-            "Đăng Nhập Độc Giả",
+            "Đăng nhập",
             "/Account/Login"),
 
         [ScreenId.StaffLogin] = new(
             ScreenId.StaffLogin,
             "SCR_STAFF_LOGIN",
-            "Đăng Nhập Cán Bộ & Quản Trị Viên",
+            "Đăng nhập cán bộ",
             "/Account/StaffLogin"),
 
         [ScreenId.Register] = new(
             ScreenId.Register,
             "SCR_REGISTER",
-            "Đăng Ký Mở Thẻ Bạn Đọc",
+            "Đăng ký thẻ thư viện",
             "/Account/Register"),
 
         [ScreenId.VerifyOtp] = new(
             ScreenId.VerifyOtp,
             "SCR_VERIFY_OTP",
-            "Xác Thực Mã OTP Bảo Mật",
+            "Nhập mã xác thực",
             "/Account/VerifyOtp"),
 
         [ScreenId.AccessDenied] = new(
             ScreenId.AccessDenied,
             "SCR_ACCESS_DENIED",
-            "Từ Chối Truy Cập (403)",
+            "Không có quyền mở trang",
             "/Account/AccessDenied"),
 
         // 2. Cổng Độc giả
         [ScreenId.ReaderProfile] = new(
             ScreenId.ReaderProfile,
             "SCR_READER_PROFILE",
-            "Hồ Sơ & Thẻ Thư Viện Cá Nhân",
+            "Thẻ thư viện của tôi",
             "/Reader/Profile",
             [AppRoles.Reader]),
 
         [ScreenId.ReaderBorrowHistory] = new(
             ScreenId.ReaderBorrowHistory,
             "SCR_READER_BORROW_HISTORY",
-            "Lịch Sử Mượn Trả Sách",
+            "Lịch sử mượn",
             "/Reader/BorrowHistory",
             [AppRoles.Reader]),
 
         [ScreenId.ReaderFines] = new(
             ScreenId.ReaderFines,
             "SCR_READER_FINES",
-            "Tra Cứu Tiền Phạt",
+            "Tiền phạt",
             "/Reader/Fines",
             [AppRoles.Reader]),
 
         [ScreenId.ReaderReservations] = new(
             ScreenId.ReaderReservations,
             "SCR_READER_RESERVATIONS",
-            "Danh Sách Sách Đặt Trước",
+            "Sách đặt trước",
             "/Reader/Reservations",
             [AppRoles.Reader]),
 
         [ScreenId.BookCatalog] = new(
             ScreenId.BookCatalog,
             "SCR_BOOK_CATALOG",
-            "Tra Cứu Danh Mục Sách",
+            "Tra cứu sách",
             "/Books"),
 
         [ScreenId.BookDetail] = new(
             ScreenId.BookDetail,
             "SCR_BOOK_DETAIL",
-            "Chi Tiết Đầu Sách & Bản Sao",
+            "Chi tiết sách",
             "/Books/Detail/{id}"),
 
         // 3. Nghiệp vụ Mượn Trả
         [ScreenId.CirculationBorrow] = new(
             ScreenId.CirculationBorrow,
             "SCR_CIRCULATION_BORROW",
-            "Lập Phiếu Mượn Sách Mới",
+            "Lập phiếu mượn",
             "/Circulation/Borrow",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.CirculationReturn] = new(
             ScreenId.CirculationReturn,
             "SCR_CIRCULATION_RETURN",
-            "Ghi Nhận Trả Sách & Xử Lý Vi Phạm",
+            "Trả sách",
             "/Circulation/Return",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.CirculationHistory] = new(
             ScreenId.CirculationHistory,
             "SCR_CIRCULATION_HISTORY",
-            "Quản Lý Lịch Sử Mượn Trả",
+            "Phiếu mượn",
             "/Circulation/History",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageFines] = new(
             ScreenId.ManageFines,
             "SCR_MANAGE_FINES",
-            "Xử Lý & Thu Tiền Phạt",
+            "Thu phạt",
             "/Fines",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageReservations] = new(
             ScreenId.ManageReservations,
             "SCR_MANAGE_RESERVATIONS",
-            "Quản Lý Đặt Giữ Sách",
+            "Đặt trước",
             "/Reservations",
             [AppRoles.Admin, AppRoles.Librarian]),
 
@@ -193,63 +193,63 @@ public static class Screens
         [ScreenId.AdminDashboard] = new(
             ScreenId.AdminDashboard,
             "SCR_ADMIN_DASHBOARD",
-            "Bảng Điều Khiển Tổng Quan",
+            "Việc cần làm hôm nay",
             "/Admin/Dashboard",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageBooks] = new(
             ScreenId.ManageBooks,
             "SCR_MANAGE_BOOKS",
-            "Quản Lý Đầu Sách",
+            "Đầu sách",
             "/Admin/Books",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageBookCopies] = new(
             ScreenId.ManageBookCopies,
             "SCR_MANAGE_BOOK_COPIES",
-            "Quản Lý Cuốn Sách (Bản Sao / Mã Vạch)",
+            "Bản sao",
             "/Admin/BookCopies",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageCategories] = new(
             ScreenId.ManageCategories,
             "SCR_MANAGE_CATEGORIES",
-            "Quản Lý Thể Loại Sách",
+            "Thể loại",
             "/Admin/Categories",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageAuthors] = new(
             ScreenId.ManageAuthors,
             "SCR_MANAGE_AUTHORS",
-            "Quản Lý Tác Giả",
+            "Tác giả",
             "/Admin/Authors",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManagePublishers] = new(
             ScreenId.ManagePublishers,
             "SCR_MANAGE_PUBLISHERS",
-            "Quản Lý Nhà Xuất Bản",
+            "Nhà xuất bản",
             "/Admin/Publishers",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageShelves] = new(
             ScreenId.ManageShelves,
             "SCR_MANAGE_SHELVES",
-            "Quản Lý Vị Trí Giá / Kệ Sách",
+            "Kệ sách",
             "/Admin/Shelves",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageReaders] = new(
             ScreenId.ManageReaders,
             "SCR_MANAGE_READERS",
-            "Quản Lý Hồ Sơ & Thẻ Độc Giả",
+            "Độc giả",
             "/Admin/Readers",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.ManageReaderTypes] = new(
             ScreenId.ManageReaderTypes,
             "SCR_MANAGE_READER_TYPES",
-            "Quản Lý Nhóm & Hạn Mức Loại Độc Giả",
+            "Loại độc giả",
             "/Admin/ReaderTypes",
             [AppRoles.Admin]),
 
@@ -257,21 +257,21 @@ public static class Screens
         [ScreenId.ReportsStatistics] = new(
             ScreenId.ReportsStatistics,
             "SCR_REPORTS_STATISTICS",
-            "Báo Cáo Thống Kê & Phân Tích Thư Viện",
+            "Báo cáo",
             "/Reports",
             [AppRoles.Admin, AppRoles.Librarian]),
 
         [ScreenId.SystemStaff] = new(
             ScreenId.SystemStaff,
             "SCR_SYSTEM_STAFF",
-            "Quản Lý Tài Khoản Cán Bộ & Phân Quyền",
+            "Người dùng",
             "/System/Staff",
             [AppRoles.Admin]),
 
         [ScreenId.SystemSettings] = new(
             ScreenId.SystemSettings,
             "SCR_SYSTEM_SETTINGS",
-            "Cấu Hình Thông Số & Quy Định Thư Viện",
+            "Quy định mượn trả",
             "/System/Settings",
             [AppRoles.Admin])
     };

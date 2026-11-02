@@ -35,7 +35,7 @@ public class ReaderRegisterViewModel
     [Display(Name = "Loại độc giả")]
     public Guid ReaderTypeId { get; set; }
 
-    [Display(Name = "Mã sinh viên / Mã học viên (nếu có)")]
+    [Display(Name = "Mã sinh viên (nếu có)")]
     public string? MemberCode { get; set; }
 
     [Display(Name = "Ngày sinh")]

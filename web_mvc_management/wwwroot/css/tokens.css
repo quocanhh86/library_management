@@ -1,0 +1,73 @@
+/* Token thiết kế — nguồn: docs/design-plan.md mục 1 (bản sửa 2).
+   Màu thương hiệu lấy mẫu điểm ảnh từ wwwroot/images/utc-logo.webp: chàm #271756, vàng #FACB01, vàng nhạt #FFFBA2.
+   Không thêm màu ngoài file này. */
+:root {
+    /* Logo */
+    --c-indigo: #271756;          /* nút chính, liên kết, tiêu đề, dải tìm kiếm, sidebar. 15,6:1 trên trắng */
+    --c-indigo-hover: #1B0F40;    /* chỉ cho hover/active của nút chàm */
+    --c-gold: #FACB01;            /* CHỈ trên nền chàm. Chàm trên vàng 10,1:1 */
+    --c-gold-soft: #FFFBA2;       /* hover nút vàng, bôi chọn, dòng vừa thêm */
+
+    /* Chữ trên nền chàm */
+    --c-on-indigo: #FFFFFF;
+    --c-on-indigo-muted: rgb(255 255 255 / 0.72);   /* 8,6:1 */
+    --c-on-indigo-active: rgb(255 255 255 / 0.08);  /* nền mục menu đang chọn */
+
+    /* Trung tính, không ám màu */
+    --c-surface: #FFFFFF;
+    --c-paper: #F5F6F8;
+    --c-ink: #1A1D24;             /* 15,6:1 trên paper */
+    --c-ink-muted: #585D69;       /* 6,1:1 trên paper */
+    --c-placeholder: #6B707C;     /* 5,0:1 trên trắng */
+    --c-rule: #E3E5E9;
+    --c-rule-strong: #868B96;     /* viền ô nhập, 3,4:1 */
+
+    /* Trạng thái: *-text cho chữ trên nền *-tint (đã kiểm AA) */
+    --c-stamp: #B3261E;
+    --c-stamp-tint: #FBEAEA;
+    --c-ok: #2E7D4F;
+    --c-ok-text: #1F6B44;
+    --c-ok-tint: #E6F4EC;
+    --c-warn: #D9701E;            /* viền, icon */
+    --c-warn-text: #9A3F06;
+    --c-warn-tint: #FDEEE3;
+
+    /* Chữ */
+    --ff-sans: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ff-serif: "Literata", Georgia, "Times New Roman", serif;
+
+    --fs-xs: 0.8125rem;   /* 13 */
+    --fs-sm: 0.9375rem;   /* 15 */
+    --fs-md: 1.0625rem;   /* 17 */
+    --fs-lg: 1.375rem;    /* 22 */
+    --fs-xl: 1.75rem;     /* 28 */
+    --lh-xs: 1.125rem;
+    --lh-sm: 1.375rem;
+    --lh-md: 1.625rem;
+    --lh-lg: 1.75rem;
+    --lh-xl: 2.125rem;
+    --tracking-tight: -0.02em;
+
+    /* Đúng hai cỡ bo góc */
+    --r-sm: 4px;   /* ô nhập, nút, badge, kbd, điều khiển phân đoạn, mục menu */
+    --r-lg: 8px;   /* panel, bảng, dropdown, modal, toast, offcanvas */
+
+    /* Khoảng cách, thang 4/8px */
+    --s-1: 0.25rem;
+    --s-2: 0.5rem;
+    --s-3: 0.75rem;
+    --s-4: 1rem;
+    --s-5: 1.5rem;
+    --s-6: 2rem;
+    --s-7: 3rem;
+
+    --control-h: 2.5rem;  /* 40px */
+
+    /* Bóng duy nhất, chỉ cho lớp nổi (dropdown, modal, toast, offcanvas) */
+    --shadow-float: 0 12px 32px rgb(26 29 36 / 0.14), 0 2px 6px rgb(26 29 36 / 0.08);
+
+    --focus-ring: 2px solid var(--c-indigo);
+    --focus-ring-dark: 2px solid var(--c-gold);
+    --staff-sidebar-w: 240px;
+    --content-max: 1160px;
+}

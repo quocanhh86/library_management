@@ -1,0 +1,34 @@
+@model web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel
+@* Một hàng sách: bìa nhỏ, tên sách (serif), tác giả, NXB, năm; bên phải là số bản còn và ký hiệu xếp giá. Cả hàng bấm được. *@
+<a class="book-row" href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", Model.Id.ToString())">
+    <span class="book-row__cover cover-tone--@Model.CategoryKey" aria-hidden="true">
+        @if (!string.IsNullOrWhiteSpace(Model.CoverUrl))
+        {
+            <img src="@Model.CoverUrl" alt="" loading="lazy" width="56" height="80" />
+        }
+        else
+        {
+            <span>@Model.CategoryName</span>
+        }
+    </span>
+    <span class="book-row__body">
+        <span class="book-row__title">@Model.Title</span>
+        <span class="book-row__meta">@Model.Authors</span>
+        <span class="book-row__meta">@Model.Publisher, @Model.PublicationYear</span>
+        @if (Model.AvailableCopies == 0 && Model.EarliestDueDate is { } due)
+        {
+            <span class="book-row__meta">Có thể có lại từ @due.ToString(AppConstants.DefaultDateFormat)</span>
+        }
+    </span>
+    <span class="book-row__aside">
+        @if (Model.AvailableCopies > 0)
+        {
+            <span class="status status--ok"><i class="bi bi-check-circle" aria-hidden="true"></i>Còn @Model.AvailableCopies/@Model.TotalCopies</span>
+        }
+        else
+        {
+            <span class="status status--neutral">Hết bản</span>
+        }
+        <span class="text-muted-ink" title="Ký hiệu xếp giá">@Model.CallNumber</span>
+    </span>
+</a>

@@ -1,0 +1,35 @@
+@* Vùng toast dùng chung. Flash message từ TempData (BaseController.Set*Message) render thành toast;
+   JS gọi App.toast(text, tone) để thêm toast mới. *@
+@{
+    var flashes = new (string Key, string Tone, string Icon)[]
+    {
+        (AppConstants.TempDataKeys.SuccessMessage, "success", "check-circle"),
+        (AppConstants.TempDataKeys.ErrorMessage, "error", "exclamation-octagon"),
+        (AppConstants.TempDataKeys.WarningMessage, "warning", "exclamation-triangle"),
+        (AppConstants.TempDataKeys.InfoMessage, "info", "info-circle"),
+    };
+}
+<div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false">
+    @foreach (var f in flashes)
+    {
+        if (TempData[f.Key] is string message && !string.IsNullOrWhiteSpace(message))
+        {
+            <div class="toast toast--@f.Tone" role="@(f.Tone == "error" ? "alert" : "status")" data-autoshow>
+                <div class="toast__body">
+                    <i class="bi bi-@f.Icon" aria-hidden="true"></i>
+                    <div class="toast__text">@message</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Đóng thông báo"></button>
+                </div>
+            </div>
+        }
+    }
+</div>
+<template id="toastTemplate">
+    <div class="toast" role="status">
+        <div class="toast__body">
+            <i class="bi" aria-hidden="true"></i>
+            <div class="toast__text"></div>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Đóng thông báo"></button>
+        </div>
+    </div>
+</template>

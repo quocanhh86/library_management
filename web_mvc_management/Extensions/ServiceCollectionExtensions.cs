@@ -140,6 +140,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEmailService, EmailService>();
         services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
         services.AddScoped<IAuthService, AuthService>();
+
+        // dữ liệu mock cho giai đoạn dựng UI, đổi sang bản EF Core khi nối DB
+        services.AddScoped<IBookService, Services.Mock.MockBookService>();
+        services.AddScoped<ILibraryInfoService, Services.Mock.MockLibraryInfoService>();
+        services.AddScoped<IBorrowService, Services.Mock.MockBorrowService>();
         return services;
     }
 }

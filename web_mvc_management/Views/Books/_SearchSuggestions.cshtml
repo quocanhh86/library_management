@@ -1,0 +1,15 @@
+@model IReadOnlyList<web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel>
+@if (Model.Count == 0)
+{
+    <li class="search-suggest__empty" role="option" aria-disabled="true">Không có sách khớp. Thử tên tác giả hoặc bỏ bớt từ.</li>
+}
+@foreach (var b in Model)
+{
+    <li role="presentation">
+        <a class="search-suggest__item" role="option" id="sg-@b.Id" aria-selected="false"
+           href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", b.Id.ToString())">
+            <span class="search-suggest__title">@b.Title</span>
+            <span class="search-suggest__meta">@b.Authors, @b.PublicationYear. @(b.AvailableCopies > 0 ? $"Còn {b.AvailableCopies}/{b.TotalCopies} bản" : "Hết bản")</span>
+        </a>
+    </li>
+}

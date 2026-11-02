@@ -1,0 +1,225 @@
+@model web_mvc_management.Common.PagedResult<web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel>
+@{
+    ViewData["Title"] = "Styleguide";
+    var today = new DateOnly(2026, 11, 2);
+    var swatches = new (string Var, string Hex, string Use)[]
+    {
+        ("--c-indigo", "#271756", "Chàm logo: nút chính, liên kết, dải tìm, sidebar"),
+        ("--c-gold", "#FACB01", "Vàng logo: chỉ trên nền chàm"),
+        ("--c-gold-soft", "#FFFBA2", "Vàng nhạt logo: hover nút vàng, bôi chọn"),
+        ("--c-paper", "#F5F6F8", "Nền trang"),
+        ("--c-ink", "#1A1D24", "Chữ chính"),
+        ("--c-ink-muted", "#585D69", "Chữ phụ"),
+        ("--c-rule", "#E3E5E9", "Đường kẻ"),
+        ("--c-stamp", "#B3261E", "Quá hạn, lỗi"),
+        ("--c-ok", "#2E7D4F", "Sẵn sàng"),
+        ("--c-warn", "#D9701E", "Sắp đến hạn (viền)"),
+        ("--c-warn-text", "#9A3F06", "Sắp đến hạn (chữ)"),
+    };
+    var badgeGroups = new (string Name, StatusKind Kind, string[] Codes)[]
+    {
+        ("Bản sao", StatusKind.Copy, [LibraryConstants.CopyStatus.Available, LibraryConstants.CopyStatus.Borrowed, LibraryConstants.CopyStatus.Damaged, LibraryConstants.CopyStatus.Lost, LibraryConstants.CopyStatus.Disposed]),
+        ("Thẻ độc giả", StatusKind.Card, [LibraryConstants.CardStatus.Active, StatusBadge.CardExpiringSoon, LibraryConstants.CardStatus.Expired, LibraryConstants.CardStatus.Locked]),
+        ("Phiếu mượn", StatusKind.Loan, [StatusBadge.Loan.Active, StatusBadge.Loan.DueSoon, StatusBadge.Loan.Overdue, StatusBadge.Loan.Returned]),
+        ("Phạt", StatusKind.Fine, [LibraryConstants.FineStatus.Unpaid, LibraryConstants.FineStatus.Paid, LibraryConstants.FineStatus.Waived]),
+    };
+}
+@section Head {
+    <style>
+        .sg-section { padding-block: var(--s-6); border-top: 1px solid var(--c-rule); }
+        .sg-section:first-of-type { border-top: 0; padding-top: 0; }
+        .sg-note { font-size: var(--fs-xs); color: var(--c-ink-muted); }
+        .sg-grid { display: grid; gap: var(--s-4); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+        .sg-swatch { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-xs); line-height: var(--lh-xs); }
+        .sg-swatch__chip { height: 48px; border: 1px solid var(--c-rule); border-radius: var(--r-sm); }
+        .sg-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+        .sg-type > * { margin-bottom: var(--s-2); }
+        .sg-badges th { font-weight: 500; padding-right: var(--s-4); vertical-align: top; white-space: nowrap; }
+        .sg-badges td { padding-bottom: var(--s-3); }
+    </style>
+}
+
+<h1 class="page-title">Styleguide</h1>
+<p class="text-muted-ink">Toàn bộ thành phần giao diện và mọi trạng thái, dùng để duyệt hình thức. Chỉ có ở môi trường Development.
+    <a href="/dev/styleguide/staff">Xem khu vực Staff</a>.</p>
+
+<section class="sg-section" aria-labelledby="sg-color">
+    <h2 id="sg-color" class="section-title">Màu</h2>
+    <div class="sg-grid">
+        @foreach (var s in swatches)
+        {
+            <div class="sg-swatch">
+                <span class="sg-swatch__chip" style="background: var(@s.Var)"></span>
+                <strong>@s.Use</strong>
+                <span class="num">@s.Hex</span>
+                <code>@s.Var</code>
+            </div>
+        }
+    </div>
+</section>
+
+<section class="sg-section sg-type" aria-labelledby="sg-type">
+    <h2 id="sg-type" class="section-title">Chữ</h2>
+    <p class="sg-note">Be Vietnam Pro cho giao diện và tiêu đề, Literata chỉ cho tên sách. Câu mẫu có dấu chồng để kiểm tra không đè dòng.</p>
+    <div class="serif" style="font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: 600">Kết cấu bê tông cốt thép: phần cấu kiện cơ bản</div>
+    <div class="serif" style="font-size: var(--fs-lg); line-height: var(--lh-lg); font-weight: 500">Định vị vệ tinh GNSS trong khảo sát công trình</div>
+    <div class="serif" style="font-size: var(--fs-md); font-style: italic">Nền và móng công trình giao thông, tái bản lần thứ hai</div>
+    <div style="font-weight: 600">Đậm 600: Ứng dụng kỹ thuật đo đạc ở xưởng Đặng Hưởng, quỹ Nguyễn Thị Hằng</div>
+    <div style="font-weight: 500">Vừa 500: Ứng dụng kỹ thuật đo đạc ở xưởng Đặng Hưởng, quỹ Nguyễn Thị Hằng</div>
+    <div style="font-weight: 400">Thường 400: Ứng dụng kỹ thuật đo đạc ở xưởng Đặng Hưởng, quỹ Nguyễn Thị Hằng</div>
+    <div class="fs-xs">Thẻ hết hạn ngày 30/06/2026. Gia hạn thẻ trước khi cho mượn.</div>
+    <div class="overflow-x-auto"><table class="num" style="font-size: var(--fs-sm)"><tr><td class="pe-4">2026510001</td><td class="pe-4">BC-000231</td><td class="num pe-4">1.250.000 ₫</td><td>16/11/2026</td></tr><tr><td class="pe-4">2026510099</td><td class="pe-4">BC-001877</td><td class="num pe-4">85.000 ₫</td><td>01/12/2026</td></tr></table></div>
+</section>
+
+<section class="sg-section" aria-labelledby="sg-btn">
+    <h2 id="sg-btn" class="section-title">Nút</h2>
+    <div class="sg-row mb-3">
+        <button class="btn btn-primary" type="button">Lưu phiếu mượn</button>
+        <button class="btn btn-quiet" type="button">Hủy phiếu</button>
+        <button class="btn btn-danger" type="button">Khóa thẻ</button>
+        <button class="btn btn-link" type="button">Xem lịch sử mượn</button>
+        <button class="btn btn-primary" type="button" disabled>Lưu phiếu mượn</button>
+    </div>
+    <div class="sg-row">
+        <button class="btn btn-primary btn-sm" type="button">Thêm bản sao</button>
+        <button class="btn btn-quiet btn-sm" type="button">Sửa</button>
+        <button class="btn btn-primary btn-lg" type="button">Xác nhận trả sách</button>
+    </div>
+</section>
+
+<section class="sg-section" aria-labelledby="sg-form">
+    <h2 id="sg-form" class="section-title">Ô nhập</h2>
+    <div class="row g-4" style="max-width: 760px">
+        <div class="col-md-6">
+            <label class="form-label" for="sgCard">Mã thẻ độc giả</label>
+            <input class="form-control num" id="sgCard" value="2026510001" />
+            <div class="form-text">Quét thẻ hoặc gõ 10 chữ số rồi bấm <kbd>Enter</kbd>.</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="sgIsbn">Mã ISBN</label>
+            <input class="form-control input-validation-error" id="sgIsbn" value="978-604-76" aria-describedby="sgIsbnErr" aria-invalid="true" />
+            <span class="field-validation-error" id="sgIsbnErr">ISBN phải có 10 hoặc 13 chữ số. Kiểm tra lại mã in ở bìa sau.</span>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="sgType">Loại độc giả</label>
+            <select class="form-select" id="sgType">
+                <option>Sinh viên (5 cuốn, 14 ngày)</option>
+                <option>Giảng viên (10 cuốn, 30 ngày)</option>
+                <option>Khách ngoài (2 cuốn, 7 ngày)</option>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="sgBarcode">Mã vạch bản sao</label>
+            <input class="form-control" id="sgBarcode" disabled placeholder="Xử lý các vấn đề của thẻ để quét sách" />
+        </div>
+        <div class="col-12">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="sgAvail" checked />
+                <label class="form-check-label" for="sgAvail">Chỉ hiện sách còn bản sẵn sàng</label>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="sg-section" aria-labelledby="sg-badge">
+    <h2 id="sg-badge" class="section-title">Trạng thái</h2>
+    <p class="sg-note">Một partial duy nhất <code>_StatusBadge</code>. Mọi badge có chữ; trạng thái cần chú ý có thêm icon và viền.</p>
+    <table class="sg-badges">
+        @foreach (var g in badgeGroups)
+        {
+            <tr>
+                <th scope="row">@g.Name</th>
+                <td><div class="sg-row">@foreach (var c in g.Codes){<partial name="_StatusBadge" model="new StatusBadge(g.Kind, c)" />}</div></td>
+            </tr>
+        }
+    </table>
+</section>
+
+<section class="sg-section" aria-labelledby="sg-due">
+    <h2 id="sg-due" class="section-title">Con dấu hạn trả</h2>
+    <p class="sg-note">Chỉ dùng cho hạn trả. Hôm nay giả định là @today.ToString(AppConstants.DefaultDateFormat).</p>
+    <div class="sg-row" style="gap: var(--s-6)">
+        <partial name="_DueStamp" model="new DueStamp(new DateOnly(2026, 11, 16), today)" />
+        <partial name="_DueStamp" model="new DueStamp(new DateOnly(2026, 11, 4), today)" />
+        <partial name="_DueStamp" model="new DueStamp(today, today)" />
+        <partial name="_DueStamp" model="new DueStamp(new DateOnly(2026, 10, 30), today)" />
+        <partial name="_DueStamp" model="new DueStamp(new DateOnly(2026, 10, 20), today, Returned: true)" />
+    </div>
+</section>
+
+<section class="sg-section" aria-labelledby="sg-cover">
+    <h2 id="sg-cover" class="section-title">Bìa chữ</h2>
+    <p class="sg-note">Một màu chàm cho mọi thể loại. Cỡ lớn cho chi tiết sách; cỡ nhỏ trong hàng sách chỉ in tên thể loại.</p>
+    <div class="d-flex gap-4 align-items-start">
+        <div style="width: 200px">
+            <partial name="_TextCover" model="(Model.Items[0].Title, Model.Items[0].Authors, Model.Items[0].CategoryName, false)" />
+        </div>
+        <partial name="_TextCover" model="(Model.Items[0].Title, Model.Items[0].Authors, Model.Items[0].CategoryName, true)" />
+    </div>
+</section>
+
+<section class="sg-section" aria-labelledby="sg-catalog">
+    <h2 id="sg-catalog" class="section-title">Hàng sách</h2>
+    <p class="sg-note">Partial <code>_BookRow</code>, dùng ở trang chủ và trang tra cứu. Ký hiệu xếp giá là dữ liệu mẫu, TODO(xác nhận).</p>
+    <ul class="book-list">
+        @foreach (var b in Model.Items.Take(4))
+        {
+            <li><partial name="_BookRow" model="b" /></li>
+        }
+    </ul>
+    <partial name="_Pagination" model="Model" />
+</section>
+
+<section class="sg-section" aria-labelledby="sg-search">
+    <h2 id="sg-search" class="section-title">Ô tìm kiếm</h2>
+    <p class="sg-note">Gõ "cau", "ket cau" hoặc "logistics" để thấy gợi ý (không cần dấu). Phím <kbd>/</kbd> focus ô ở header.</p>
+    <div style="max-width: 640px">
+        <vc:search-bar hero="true" />
+    </div>
+</section>
+
+<section class="sg-section" aria-labelledby="sg-feedback">
+    <h2 id="sg-feedback" class="section-title">Phản hồi</h2>
+    <div class="sg-row mb-4">
+        <button class="btn btn-quiet btn-sm" type="button" onclick="App.toast('Đã lưu phiếu mượn PM-2026-01843.', 'success')">Toast thành công</button>
+        <button class="btn btn-quiet btn-sm" type="button" onclick="App.toast('Đã gửi email nhắc hạn cho 7 độc giả.', 'info')">Toast thông tin</button>
+        <button class="btn btn-quiet btn-sm" type="button" onclick="App.toast('Thẻ 2026510044 hết hạn sau 5 ngày.', 'warning')">Toast cảnh báo</button>
+        <button class="btn btn-quiet btn-sm" type="button" onclick="App.toast('Không lưu được phiếu mượn: mất kết nối máy chủ. Kiểm tra mạng rồi bấm Lưu phiếu mượn lần nữa.', 'error')">Toast lỗi</button>
+        <button class="btn btn-quiet btn-sm" type="button" data-confirm="Hủy phiếu mượn này?" data-confirm-detail="2 cuốn đã quét sẽ bị bỏ khỏi phiếu. Bản sao vẫn ở trạng thái Sẵn sàng."
+                data-confirm-ok="Hủy phiếu mượn" data-confirm-cancel="Giữ lại" data-confirm-danger>Modal xác nhận</button>
+    </div>
+
+    <div class="inline-error mb-4" role="alert" style="max-width: 560px">
+        <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+        <span><strong class="num">BC-001204</strong> đang được mượn bởi 2026510044, hạn trả 20/11/2026. Quét bản khác.</span>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="panel panel--flush">
+                <div class="state-block">
+                    <div class="state-block__title">Chưa có phiếu mượn nào</div>
+                    <p class="state-block__text">Phiếu mượn sẽ hiện ở đây sau khi lập.</p>
+                    <a class="btn btn-primary btn-sm" href="@Screens.GetPath(ScreenId.CirculationBorrow)">Lập phiếu mượn</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="panel panel--flush" aria-busy="true">
+                <div class="state-block state-block--loading">
+                    <span class="spinner-border" aria-hidden="true"></span>
+                    <span>Đang tải kết quả…</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="panel panel--flush">
+                <div class="state-block">
+                    <div class="state-block__title">Không tải được danh sách</div>
+                    <p class="state-block__text">Máy chủ không phản hồi. Thử lại sau vài giây.</p>
+                    <button class="btn btn-quiet btn-sm" type="button">Tải lại danh sách</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

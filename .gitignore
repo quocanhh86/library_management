@@ -118,3 +118,5 @@ CLAUDE.md
 scripts/
 .claude/
 .gemini/
+.playwright-mcp/
+docs/

@@ -1,0 +1,30 @@
+@model (string Title, int Step, string? Mode)
+@* Đầu trang xác thực: tiêu đề, chỉ báo bước (chuỗi bước thật nên được đánh số), và chọn Độc giả / Cán bộ.
+   Mode: "reader" | "staff" | null (không hiện điều khiển phân đoạn). *@
+<h1 class="page-title">@Model.Title</h1>
+<ol class="steps" aria-label="Các bước">
+    <li class="steps__item @(Model.Step > 1 ? "steps__item--done" : "")" aria-current="@(Model.Step == 1 ? "step" : null)">
+        <span class="steps__num" aria-hidden="true">
+            @if (Model.Step > 1)
+            {
+                <i class="bi bi-check-lg"></i>
+            }
+            else
+            {
+                <text>1</text>
+            }
+        </span>
+        <span><span class="steps__count">Bước 1/2: </span>Nhập thông tin</span>
+    </li>
+    <li class="steps__item" aria-current="@(Model.Step == 2 ? "step" : null)">
+        <span class="steps__num" aria-hidden="true">2</span>
+        <span><span class="steps__count">Bước 2/2: </span>Nhập mã xác thực</span>
+    </li>
+</ol>
+@if (Model.Mode != null)
+{
+    <nav class="segmented" aria-label="Loại tài khoản">
+        <a class="segmented__item" href="@Screens.GetPath(ScreenId.Login)" aria-current="@(Model.Mode == "reader" ? "page" : null)">Độc giả</a>
+        <a class="segmented__item" href="@Screens.GetPath(ScreenId.StaffLogin)" aria-current="@(Model.Mode == "staff" ? "page" : null)">Cán bộ</a>
+    </nav>
+}

@@ -69,7 +69,7 @@ public class AccountController(
         HttpContext.Session.SetObject(SessionPendingRegistration, model);
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeRegister);
 
-        SetSuccessMessage($"Mã OTP xác thực mở thẻ đã được gửi tới {StringUtil.MaskEmail(model.Email)}. Vui lòng nhập mã để hoàn tất cấp thẻ.");
+        // Trang nhập mã đã ghi rõ mã gửi tới đâu, không cần toast lặp lại
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeRegister });
     }
 
@@ -111,7 +111,6 @@ public class AccountController(
         HttpContext.Session.SetString(SessionPendingReturnUrl, model.ReturnUrl ?? string.Empty);
         HttpContext.Session.SetString(SessionPendingRememberMe, model.RememberMe.ToString());
 
-        SetInfoMessage($"Tài khoản yêu cầu xác thực 2 lớp (2FA). Mã OTP đã gửi tới {result.Data.MaskedEmail}.");
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeReaderLogin });
     }
 
@@ -152,7 +151,6 @@ public class AccountController(
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeStaffLogin);
         HttpContext.Session.SetString(SessionPendingReturnUrl, model.ReturnUrl ?? string.Empty);
 
-        SetInfoMessage("Mã xác thực danh tính Cán bộ đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư.");
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeStaffLogin });
     }
 
@@ -230,7 +228,7 @@ public class AccountController(
             HttpContext.Session.Remove(SessionPendingRegistration);
             HttpContext.Session.Remove(SessionPendingOtpPurpose);
 
-            SetSuccessMessage($"Đăng ký thành công! Số thẻ thư viện điện tử của bạn là: {result.Data?.CardNo}. Bạn có thể đăng nhập ngay.");
+            SetSuccessMessage($"Đã mở thẻ thư viện số {result.Data?.CardNo}. Đăng nhập để bắt đầu mượn sách.");
             return RedirectToAction(nameof(Login));
         }
 
@@ -272,7 +270,7 @@ public class AccountController(
             HttpContext.Session.Remove(SessionPendingReturnUrl);
             HttpContext.Session.Remove(SessionPendingRememberMe);
 
-            SetSuccessMessage("Đăng nhập thành công! Chào mừng bạn quay trở lại thư viện UTC.");
+            SetSuccessMessage("Đã đăng nhập.");
             return RedirectToLocal(returnUrl);
         }
 
@@ -312,7 +310,7 @@ public class AccountController(
             HttpContext.Session.Remove(SessionPendingOtpPurpose);
             HttpContext.Session.Remove(SessionPendingReturnUrl);
 
-            SetSuccessMessage("Đăng nhập thành công! Chào mừng Cán bộ Quản trị / Thủ thư.");
+            SetSuccessMessage("Đã đăng nhập.");
             return RedirectToLocal(returnUrl);
         }
 
@@ -368,7 +366,7 @@ public class AccountController(
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         HttpContext.Session.Clear();
-        SetSuccessMessage("Bạn đã đăng xuất khỏi hệ thống thành công.");
+        SetSuccessMessage("Đã đăng xuất.");
         return RedirectToAction("Index", "Home");
     }
 

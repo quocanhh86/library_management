@@ -1,0 +1,16 @@
+@model (string Title, string Authors, string Category, bool Small)
+@* Bìa chữ thay cho ảnh bìa: khối chàm, vạch vàng ở đỉnh.
+   Cỡ nhỏ (hàng sách) chỉ in tên thể loại vì tên sách ở cỡ đó không đọc được; tên sách đã nằm ngay bên cạnh. *@
+@if (Model.Small)
+{
+    <div class="text-cover text-cover--sm" aria-hidden="true">
+        <span class="text-cover__category">@Model.Category</span>
+    </div>
+}
+else
+{
+    <div class="text-cover" aria-hidden="true">
+        <span class="text-cover__title">@Model.Title</span>
+        <span class="text-cover__author">@Model.Authors</span>
+    </div>
+}
