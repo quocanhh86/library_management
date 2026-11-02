@@ -1,0 +1,138 @@
+@model IReadOnlyList<web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel>
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Styleguide Staff";
+    ViewData["Screen"] = ScreenId.CirculationBorrow;
+    var isAdmin = User.IsInRole(AppRoles.Admin);
+    var today = new DateOnly(2026, 11, 2);
+    var copies = new (string Barcode, int Book, string Shelf, string Status, decimal Price, DateOnly Acquired)[]
+    {
+        ("BC-000231", 3, "KE-GT-01", LibraryConstants.CopyStatus.Available, 85000m, new DateOnly(2024, 9, 12)),
+        ("BC-000232", 3, "KE-GT-01", LibraryConstants.CopyStatus.Borrowed, 85000m, new DateOnly(2024, 9, 12)),
+        ("BC-000877", 5, "KE-GT-02", LibraryConstants.CopyStatus.Damaged, 120000m, new DateOnly(2023, 3, 2)),
+        ("BC-001204", 10, "KE-IT-01", LibraryConstants.CopyStatus.Lost, 1250000m, new DateOnly(2025, 1, 20)),
+        ("BC-000412", 7, "KE-KT-01", LibraryConstants.CopyStatus.Disposed, 64000m, new DateOnly(2019, 8, 5)),
+    };
+}
+
+<div class="staff-page-head">
+    <h1>Styleguide khu vực Staff</h1>
+    <div class="staff-page-head__keys">
+        <span class="shortcut-hint"><kbd>F2</kbd> ô mã thẻ</span>
+        <span class="shortcut-hint"><kbd>F4</kbd> ô mã vạch</span>
+        <span class="shortcut-hint"><kbd>F9</kbd> lưu</span>
+    </div>
+</div>
+
+<p class="text-muted-ink">
+    Đang xem với vai trò <strong>@(isAdmin ? "Quản trị viên" : "Thủ thư")</strong>.
+    @if (isAdmin)
+    {
+        <a href="?role=Librarian">Xem với vai trò Thủ thư</a>
+    }
+    else
+    {
+        <a href="?role=Admin">Xem với vai trò Quản trị viên</a>
+    }
+    (menu Admin chỉ hiện với Quản trị viên). <a href="/dev/styleguide">Về styleguide độc giả</a>.
+</p>
+
+<h2 class="mt-4">Phím tắt</h2>
+<div class="row g-3 mb-4" style="max-width: 760px">
+    <div class="col-md-6">
+        <label class="form-label d-flex justify-content-between" for="sgCard">Mã thẻ độc giả <kbd>F2</kbd></label>
+        <input class="form-control num" id="sgCard" data-shortcut-focus="F2" placeholder="Quét hoặc gõ mã thẻ" />
+    </div>
+    <div class="col-md-6">
+        <label class="form-label d-flex justify-content-between" for="sgBarcode">Mã vạch bản sao <kbd>F4</kbd></label>
+        <input class="form-control num" id="sgBarcode" data-shortcut-focus="F4" placeholder="Quét mã vạch" />
+    </div>
+</div>
+
+<h2>Bảng dữ liệu</h2>
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Mã vạch</th>
+                <th scope="col">Đầu sách</th>
+                <th scope="col">Kệ</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="num">Giá</th>
+                <th scope="col" class="num">Ngày nhập</th>
+                <th scope="col"><span class="visually-hidden">Thao tác</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var c in copies)
+            {
+                var book = Model.First(b => b.Id == new Guid($"00000000-0000-0000-0000-{c.Book:D12}"));
+                <tr>
+                    <td class="num fw-medium">@c.Barcode</td>
+                    <td>@book.Title</td>
+                    <td class="num">@c.Shelf</td>
+                    <td><partial name="_StatusBadge" model="new StatusBadge(StatusKind.Copy, c.Status)" /></td>
+                    <td class="num">@CurrencyHelper.ToVnd(c.Price)</td>
+                    <td class="num">@c.Acquired.ToString(AppConstants.DefaultDateFormat)</td>
+                    <td class="text-end"><a href="#" class="btn btn-quiet btn-sm">Sửa</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+<partial name="_Pagination" model="new web_mvc_management.Common.PagedResult<int>([], 47, 1, 10)" />
+
+<h2 class="mt-5">Hạn trả trong bảng</h2>
+<div class="table-frame mb-4">
+    <table class="table data-table">
+        <thead>
+            <tr>
+                <th scope="col">Đầu sách / mã vạch</th>
+                <th scope="col">Hạn trả</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="num">Phạt</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="is-just-added">
+                <td>@Model[3].Title<div class="fs-xs text-muted-ink num">BC-000231</div></td>
+                <td><partial name="_DueStamp" model="new DueStamp(new DateOnly(2026, 10, 30), today)" /></td>
+                <td><partial name="_StatusBadge" model="new StatusBadge(StatusKind.Loan, StatusBadge.Loan.Overdue)" /></td>
+                <td class="num">6.000 ₫</td>
+            </tr>
+            <tr>
+                <td>@Model[5].Title<div class="fs-xs text-muted-ink num">BC-000877</div></td>
+                <td><partial name="_DueStamp" model="new DueStamp(new DateOnly(2026, 11, 4), today)" /></td>
+                <td><partial name="_StatusBadge" model="new StatusBadge(StatusKind.Loan, StatusBadge.Loan.DueSoon)" /></td>
+                <td class="num">0 ₫</td>
+            </tr>
+            <tr>
+                <td>@Model[10].Title<div class="fs-xs text-muted-ink num">BC-001877</div></td>
+                <td><partial name="_DueStamp" model="new DueStamp(new DateOnly(2026, 11, 16), today)" /></td>
+                <td><partial name="_StatusBadge" model="new StatusBadge(StatusKind.Loan, StatusBadge.Loan.Active)" /></td>
+                <td class="num">0 ₫</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<h2>Trạng thái rỗng</h2>
+<div class="panel panel--flush mb-4" style="max-width: 560px">
+    <div class="state-block">
+        <div class="state-block__title">Không có việc tồn đọng</div>
+        <p class="state-block__text">Không có sách quá hạn, thẻ sắp hết hạn hay phiếu phạt chưa thu.</p>
+    </div>
+</div>
+
+@section ActionBar {
+    <div class="action-bar">
+        <div class="action-bar__summary">
+            <span class="text-muted-ink">Trả 2/3 cuốn.</span>
+            Tổng phạt <span class="action-bar__total">66.000 ₫</span>
+        </div>
+        <div class="action-bar__actions">
+            <button class="btn btn-quiet" type="button" data-confirm="Hủy phiếu trả này?" data-confirm-detail="Các sách đã chọn sẽ không được ghi nhận trả." data-confirm-ok="Hủy phiếu trả" data-confirm-cancel="Giữ lại" data-confirm-danger>Hủy</button>
+            <button class="btn btn-primary" type="button" data-shortcut-click="F9" onclick="App.toast('Đã xác nhận trả 2 cuốn. Tổng phạt 66.000 ₫ chưa thu.', 'success')">Xác nhận trả sách <kbd>F9</kbd></button>
+        </div>
+    </div>
+}
