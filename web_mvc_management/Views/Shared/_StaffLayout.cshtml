@@ -4,10 +4,15 @@
     var title = ViewData["Title"] as string;
     // Màn hình hiện tại: View đặt ViewData["Screen"] = ScreenId.X để tô sáng mục menu.
     var current = ViewData["Screen"] as ScreenId?;
+    var adminPortal = ViewData["AdminPortal"] is true;
+    var preview = ViewData["AdminPreview"] is true;
+    var role = isAdmin ? AppRoles.Admin : AppRoles.Librarian;
+    string StaffPath(ScreenId screen) => web_mvc_management.Models.ViewModels.Admin.AdminNavigation.Path(screen, preview, role);
 
     // Nhóm 1 là việc hằng ngày ở quầy, đặt trên cùng. "Soon" = mở rộng, chỉ chừa chỗ.
     var groups = new List<(ScreenId? Id, string Label, string Icon, bool Soon)[]>
     {
+        new (ScreenId?, string, string, bool)[] { (ScreenId.AdminDashboard, "Tổng quan", "grid-1x2", false) },
         new (ScreenId?, string, string, bool)[]
         {
             (ScreenId.CirculationBorrow, "Mượn sách", "box-arrow-up-right", false),
@@ -46,7 +51,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@(string.IsNullOrEmpty(title) ? "Quầy thủ thư" : $"{title} – Quầy thủ thư")</title>
+    <title>@(string.IsNullOrEmpty(title) ? (isAdmin ? "Quản trị thư viện" : "Quầy thủ thư") : $"{title} – {(isAdmin ? "Quản trị thư viện" : "Quầy thủ thư")}")</title>
     <link rel="icon" type="image/png" sizes="32x32" href="~/images/favicon-32.png" />
     <link rel="preload" href="~/fonts/be-vietnam-pro-vietnamese-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -56,9 +61,13 @@
     <link rel="stylesheet" href="~/css/base.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/components.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/areas/staff.css" asp-append-version="true" />
+    @if (adminPortal)
+    {
+        <link rel="stylesheet" href="~/css/areas/admin.css" asp-append-version="true" />
+    }
     @await RenderSectionAsync("Head", required: false)
 </head>
-<body class="staff-area">
+<body class="staff-area @(adminPortal ? "admin-portal" : "")">
     <a class="visually-hidden-focusable" href="#main">Bỏ qua đến nội dung chính</a>
 
     <div class="staff-shell">
@@ -69,17 +78,19 @@
             </div>
             <div class="offcanvas-body">
               <div class="staff-sidebar__inner">
-                <a class="staff-sidebar__brand" href="@Screens.GetPath(ScreenId.CirculationBorrow)">
-                    <img src="~/images/utc-logo-128.webp" width="40" height="40" alt="" />
+                <a class="staff-sidebar__brand" href="@StaffPath(ScreenId.AdminDashboard)">
+                    <img src="~/images/utc-logo-128.webp" width="40" height="40" alt="Logo UTC" />
                     <span class="d-block">
                         <strong>Thư viện UTC</strong>
-                        <span>Quầy thủ thư</span>
+                        <span>@(isAdmin ? "Quản trị thư viện" : "Quầy thủ thư")</span>
                     </span>
                 </a>
 
                 <nav>
+                    @{ var groupIndex = 0; var groupLabels = new[] { "Không gian làm việc", "Nghiệp vụ hằng ngày", "Kho tài liệu & bạn đọc", "Phân tích", "Quản trị hệ thống" }; }
                     @foreach (var group in groups)
                     {
+                        <span class="staff-nav__heading">@groupLabels[groupIndex++]</span>
                         <ul class="staff-nav">
                             @foreach (var item in group)
                             {
@@ -94,7 +105,7 @@
                                     else
                                     {
                                         var active = item.Id == current;
-                                        <a class="staff-nav__link @(active ? "is-active" : "")" href="@Screens.GetPath(item.Id!.Value)"
+                                        <a class="staff-nav__link @(active ? "is-active" : "")" href="@StaffPath(item.Id!.Value)"
                                            aria-current="@(active ? "page" : null)">
                                             <i class="bi bi-@item.Icon" aria-hidden="true"></i>@item.Label
                                         </a>
@@ -106,17 +117,29 @@
                 </nav>
 
                 <div class="staff-sidebar__user">
+                    <a class="staff-sidebar__public" href="/">Về cổng bạn đọc <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
                     <strong>@fullName</strong>
                     @(isAdmin ? "Quản trị viên" : "Thủ thư")
-                    <form asp-controller="Account" asp-action="Logout" method="post">
-                        <button type="submit" class="staff-sidebar__logout">Đăng xuất</button>
-                    </form>
+                    @if (preview)
+                    {
+                        <a class="staff-sidebar__logout" href="/">Thoát xem thử</a>
+                    }
+                    else
+                    {
+                        <form asp-controller="Account" asp-action="Logout" method="post">
+                            <button type="submit" class="staff-sidebar__logout">Đăng xuất</button>
+                        </form>
+                    }
                 </div>
               </div>
             </div>
         </aside>
 
         <div class="staff-main">
+            @if (adminPortal)
+            {
+                <partial name="~/Views/Admin/_Topbar.cshtml" />
+            }
             <div class="staff-topbar d-lg-none">
                 <button class="btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#staffSidebar" aria-controls="staffSidebar">
                     <i class="bi bi-list fs-4" aria-hidden="true"></i><span class="visually-hidden">Mở menu</span>
@@ -125,6 +148,10 @@
             </div>
 
             <main id="main" class="staff-content">
+                @if (adminPortal)
+                {
+                    <div class="admin-demo" role="note"><i class="bi bi-info-circle" aria-hidden="true"></i><span><strong>Bản xem thử giao diện.</strong> Dữ liệu minh họa; thao tác không cập nhật dữ liệu thật.</span></div>
+                }
                 @RenderBody()
             </main>
 
@@ -138,6 +165,10 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @if (adminPortal)
+    {
+        <script src="~/js/admin.js" asp-append-version="true"></script>
+    }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

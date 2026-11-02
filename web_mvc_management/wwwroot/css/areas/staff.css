@@ -60,6 +60,20 @@
     list-style: none;
     border-top: 1px solid rgb(255 255 255 / 0.12);
 }
+.staff-nav__heading {
+    display: block;
+    padding: 16px 20px 5px;
+    font-size: 10px;
+    color: var(--c-on-indigo-muted);
+}
+.staff-sidebar__public {
+    display: block;
+    margin-bottom: 14px;
+    color: var(--c-on-indigo-muted);
+    text-decoration: none;
+    font-size: 11px;
+}
+.staff-sidebar__public:hover { color: var(--c-on-indigo); }
 .staff-nav__link {
     display: flex;
     align-items: center;
