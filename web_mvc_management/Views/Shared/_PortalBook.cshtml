@@ -1,0 +1,15 @@
+@model web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel
+@{
+    var icon = Model.CategoryKey switch { "civil" => "buildings", "it" => "code-slash", "survey" => "compass", "logistics" => "graph-up-arrow", "science" => "calculator", _ => "mortarboard" };
+}
+<article class="portal-book">
+    <a class="portal-book__link" href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", Model.Id.ToString())" title="@Model.Title">
+        <div class="portal-book__cover portal-cover--@Model.CategoryKey">
+            <div class="portal-book__cover-top"><span>DDC @Model.CallNumber.Split(' ')[0]</span><i class="bi bi-@icon" aria-hidden="true"></i></div>
+            <div class="portal-book__cover-text"><span>@Model.CategoryName</span><strong>@Model.Title</strong></div>
+            @if (!string.IsNullOrWhiteSpace(Model.CoverUrl)){<img src="@Model.CoverUrl" alt="Bìa sách @Model.Title" loading="lazy" width="240" height="320" />}
+        </div>
+        <div class="portal-book__details"><span class="portal-book__category">@Model.CategoryName</span><h3>@Model.Title</h3><p class="portal-book__author">@Model.Authors</p><p class="portal-book__publisher">@Model.Publisher, @Model.PublicationYear</p></div>
+    </a>
+    <p class="portal-book__stock @(Model.AvailableCopies == 0 ? "portal-book__stock--out" : "")"><i class="bi @(Model.AvailableCopies > 0 ? "bi-check-circle" : "bi-clock")" aria-hidden="true"></i><span>@(Model.AvailableCopies > 0 ? "Sẵn sàng" : "Đang được mượn") (@Model.AvailableCopies/@Model.TotalCopies bản)</span></p>
+</article>
