@@ -145,6 +145,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBookService, Services.Mock.MockBookService>();
         services.AddScoped<ILibraryInfoService, Services.Mock.MockLibraryInfoService>();
         services.AddScoped<IBorrowService, Services.Mock.MockBorrowService>();
+        services.AddScoped<IAdminPortalService, Services.Mock.MockAdminPortalService>();
         return services;
     }
 }
