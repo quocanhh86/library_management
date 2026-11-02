@@ -7,7 +7,8 @@ public enum StatusKind
     Copy,
     Card,
     Loan,
-    Fine
+    Fine,
+    Record
 }
 
 /// <summary>
@@ -29,6 +30,9 @@ public record StatusBadge(StatusKind Kind, string Code)
 
     public (string Label, string Tone, string? Icon) Resolve() => (Kind, Code) switch
     {
+        (StatusKind.Record, "ACTIVE") => ("Hoạt động", "ok", "check-circle"),
+        (StatusKind.Record, "INACTIVE") => ("Ngừng hoạt động", "neutral", null),
+        (StatusKind.Record, "LOCKED") => ("Tạm khóa", "stamp", "lock"),
         (StatusKind.Copy, LibraryConstants.CopyStatus.Available) => ("Sẵn sàng", "ok", "check-circle"),
         (StatusKind.Copy, LibraryConstants.CopyStatus.Borrowed) => ("Đang mượn", "brand", null),
         (StatusKind.Copy, LibraryConstants.CopyStatus.Reserved) => ("Đang giữ chỗ", "brand", null),
