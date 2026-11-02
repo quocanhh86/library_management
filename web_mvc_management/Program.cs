@@ -23,6 +23,7 @@ builder.Services.AddDatabase(builder.Configuration);
 
 // Common Infrastructure & Repositories
 builder.Services.AddInfrastructureServices();
+builder.Services.AddCookieAuthentication();
 builder.Services.AddRepositories();
 builder.Services.AddApplicationServices();
 
