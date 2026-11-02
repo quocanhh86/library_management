@@ -1,0 +1,32 @@
+@model AdminListViewModel
+@{
+    var preview = ViewData["AdminPreview"] is true;
+    var role = User.IsInRole(AppRoles.Admin) ? AppRoles.Admin : AppRoles.Librarian;
+    var path = AdminNavigation.Path(Model.Screen, preview, role);
+}
+<div class="admin-page-head"><div><p class="admin-eyebrow">@(Model.Module == "staff" || Model.Module == "readertypes" ? "Quản trị hệ thống" : "Quản lý thư viện")</p><h1>@Model.Title</h1><p>@Model.Description</p></div>@if (Model.Fields.Count > 0){<button class="btn btn-primary" type="button" data-admin-create data-bs-toggle="modal" data-bs-target="#adminEditor"><i class="bi bi-plus-lg" aria-hidden="true"></i>@Model.CreateLabel</button>}</div>
+<section class="admin-panel admin-directory" aria-label="@Model.Title">
+    <form class="admin-filter" action="@Context.Request.Path" method="get" data-admin-filter>
+        @if (preview){<input type="hidden" name="role" value="@role" />}
+        <div class="admin-filter__search"><label for="adminKeyword" class="form-label">Tìm kiếm</label><div class="admin-search-field"><i class="bi bi-search" aria-hidden="true"></i><input class="form-control" id="adminKeyword" type="search" name="keyword" value="@Model.Keyword" placeholder="Nhập tên, mã hoặc thông tin cần tìm" data-shortcut-focus="F2" /></div></div>
+        @if (Model.Groups.Count > 0){<div><label for="adminGroup" class="form-label">Nhóm danh mục</label><select class="form-select" name="group" id="adminGroup"><option value="">Tất cả nhóm</option>@foreach (var group in Model.Groups){<option value="@group.Value" selected="@(group.Value == Model.Group)">@group.Label</option>}</select></div>}
+        <div><label for="adminStatus" class="form-label">Trạng thái</label><select class="form-select" name="status" id="adminStatus"><option value="">Tất cả trạng thái</option>@foreach (var status in Model.Statuses){<option value="@status.Value" selected="@(status.Value == Model.Status)">@status.Label</option>}</select></div>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel" aria-hidden="true"></i>Lọc dữ liệu</button><a class="btn btn-quiet" href="@path" aria-label="Xóa tất cả bộ lọc">Đặt lại</a>
+    </form>
+    <div class="admin-ajax-error" role="alert" hidden data-admin-list-error>Chưa tải được danh sách. Kiểm tra kết nối rồi thử lọc lại.</div>
+    <p class="visually-hidden" role="status" aria-live="polite" data-admin-list-status></p>
+    <div id="adminListResults" data-admin-results><partial name="~/Views/Admin/_ListResults.cshtml" model="Model" /></div>
+</section>
+<div class="modal fade" id="adminDetails" tabindex="-1" aria-labelledby="adminDetailsTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="adminDetailsTitle">Thông tin chi tiết</h2><button class="btn-close" data-bs-dismiss="modal" type="button" aria-label="Đóng chi tiết"></button></div><div class="modal-body"><span class="admin-detail-status" data-detail-status></span><dl class="admin-detail-grid" data-admin-detail></dl></div><div class="modal-footer"><button class="btn btn-quiet" data-bs-dismiss="modal" type="button">Đóng</button></div></div></div></div>
+@if (Model.Fields.Count > 0)
+{
+    <div class="modal fade" id="adminEditor" tabindex="-1" aria-labelledby="adminEditorTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><form data-admin-editor novalidate><div class="modal-header"><div><p class="admin-eyebrow">Biểu mẫu xem thử</p><h2 class="modal-title fs-5" id="adminEditorTitle" data-create-title="@Model.CreateLabel" data-edit-title="@(Model.Module == "fines" ? "Lập phiếu thu" : "Chỉnh sửa thông tin")">@Model.CreateLabel</h2></div><button class="btn-close" data-bs-dismiss="modal" type="button" aria-label="Đóng biểu mẫu"></button></div><div class="modal-body"><p class="admin-form-note">Kiểm tra bố cục và thông tin nhập. Biểu mẫu này chưa lưu dữ liệu.</p><div class="admin-form-grid">
+        @foreach (var field in Model.Fields)
+        {
+            <div><label class="form-label" for="field_@field.Key">@field.Label @if(field.Required){<span class="admin-required" aria-hidden="true">*</span><span class="visually-hidden">(bắt buộc)</span>}</label>
+            @if (field.Type == "select"){<select id="field_@field.Key" class="form-select" name="Fields[@field.Key]" data-record-field="@field.Key" required="@field.Required"><option value="">Chọn @field.Label.ToLowerInvariant()</option>@foreach(var option in field.Options ?? []){<option value="@option.Value">@option.Label</option>}</select>}
+            else{<input id="field_@field.Key" class="form-control" type="@field.Type" name="Fields[@field.Key]" data-record-field="@field.Key" required="@field.Required" maxlength="500" min="@(field.Type == "number" ? (field.Key == "renewals" ? "0" : "1") : null)" max="@(field.Type == "number" && field.Key != "amount" ? "9999" : null)" />}
+            <div class="invalid-feedback">Nhập @field.Label.ToLowerInvariant() hợp lệ.</div></div>
+        }
+        </div><p class="admin-validation-result" role="status" hidden data-admin-validation>Thông tin hợp lệ. Đây là bản xem thử; dữ liệu chưa được lưu.</p></div><div class="modal-footer"><button class="btn btn-quiet" type="button" data-bs-dismiss="modal">Đóng</button><button class="btn btn-primary" type="submit">Kiểm tra thông tin</button></div></form></div></div></div>
+}
