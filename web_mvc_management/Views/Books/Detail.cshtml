@@ -1,0 +1,17 @@
+@model web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel
+@{
+    ViewData["Title"] = Model.Title;
+}
+<a href="@Screens.GetPath(ScreenId.BookCatalog)"><i class="bi bi-arrow-left" aria-hidden="true"></i> Trở về danh mục sách</a>
+<article class="book-detail">
+    <partial name="_BookShelfItem" model="Model" />
+    <div>
+        <p class="section-caption">@Model.CategoryName</p><h1 class="page-title serif">@Model.Title</h1><p class="text-muted-ink">@Model.Authors</p>
+        <div class="book-detail__availability">
+            @if (Model.AvailableCopies > 0){<span class="status status--ok"><i class="bi bi-check-circle" aria-hidden="true"></i>Còn @Model.AvailableCopies/@Model.TotalCopies bản sẵn sàng</span>}else{<span class="status status--neutral">Tất cả @Model.TotalCopies bản đang được mượn</span>}
+            @if (Model.AvailableCopies == 0 && Model.EarliestDueDate is { } due){<p class="mt-3 mb-0 fs-xs">Có thể có lại từ @due.ToString(AppConstants.DefaultDateFormat). Ngày trả thực tế có thể thay đổi.</p>}
+        </div>
+        <dl><dt>Nhà xuất bản</dt><dd>@Model.Publisher</dd><dt>Năm xuất bản</dt><dd>@Model.PublicationYear</dd><dt>Chuyên ngành</dt><dd><a href="@Screens.GetPath(ScreenId.BookCatalog)?category=@Model.CategoryKey">@Model.CategoryName</a></dd><dt>Ký hiệu xếp giá</dt><dd>@Model.CallNumber</dd><dt>ISBN</dt><dd>@(Model.Isbn ?? "Chưa được cập nhật")</dd><dt>Tổng số bản</dt><dd>@Model.TotalCopies bản</dd></dl>
+        <p class="fs-xs text-muted-ink mt-4">Mang theo thẻ thư viện và cung cấp ký hiệu xếp giá tại quầy thủ thư để được hỗ trợ mượn tài liệu.</p>
+    </div>
+</article>

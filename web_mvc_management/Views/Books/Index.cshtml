@@ -1,0 +1,29 @@
+@model web_mvc_management.Models.ViewModels.Catalog.CatalogViewModel
+@{
+    ViewData["Title"] = "Tra cứu sách";
+}
+<div class="catalog-heading"><a href="/">Trang chủ</a><h1 class="page-title mt-3">Tra cứu sách</h1><p class="text-muted-ink">Tìm tài liệu và kiểm tra số bản có thể mượn trước khi đến thư viện.</p></div>
+<form method="get" action="@Screens.GetPath(ScreenId.BookCatalog)" class="catalog-filters">
+    <div><label class="form-label" for="catalogKeyword">Tên sách, tác giả hoặc ISBN</label><input class="form-control" type="search" id="catalogKeyword" name="keyword" value="@Model.Keyword" /></div>
+    <div><label class="form-label" for="catalogCategory">Chuyên ngành</label><select class="form-select" id="catalogCategory" name="category"><option value="">Tất cả chuyên ngành</option>@foreach (var topic in Model.Topics){<option value="@topic.Key" selected="@(topic.Key == Model.Category)">@topic.Name</option>}</select></div>
+    <div><label class="form-label" for="catalogYear">Năm xuất bản</label><input class="form-control" type="number" id="catalogYear" name="year" min="1000" max="9999" value="@Model.Year" /></div>
+    <button class="btn btn-primary" type="submit"><i class="bi bi-search" aria-hidden="true"></i>Tìm sách</button>
+    <div class="catalog-filters__bottom"><label class="catalog-filter-check"><input class="form-check-input" type="checkbox" name="available" value="true" checked="@Model.Available" />Chỉ sách còn bản</label><a href="@Screens.GetPath(ScreenId.BookCatalog)">Xóa bộ lọc</a></div>
+</form>
+<p role="status" class="catalog-count">Tìm thấy @Model.TotalCount đầu sách</p>
+@if (Model.Books.Count == 0)
+{
+    <div class="library-empty"><i class="bi bi-search" aria-hidden="true"></i><h2>Chưa tìm thấy tài liệu phù hợp</h2><p>Thử rút gọn từ khóa, kiểm tra chính tả hoặc bỏ bớt bộ lọc.</p><a href="@Screens.GetPath(ScreenId.BookCatalog)">Xem toàn bộ danh mục</a></div>
+}
+else
+{
+    <ul class="book-list">@foreach (var book in Model.Books){<li><partial name="_BookRow" model="book" /></li>}</ul>
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="d-flex justify-content-between align-items-center mt-4" aria-label="Phân trang danh mục">
+            @if (Model.Page > 1){<a class="btn btn-quiet" asp-action="Index" asp-route-keyword="@Model.Keyword" asp-route-category="@Model.Category" asp-route-year="@Model.Year" asp-route-available="@Model.Available" asp-route-page="@(Model.Page - 1)">Trang trước</a>}else{<span></span>}
+            <span class="catalog-count">Trang @Model.Page / @Model.TotalPages</span>
+            @if (Model.Page < Model.TotalPages){<a class="btn btn-quiet" asp-action="Index" asp-route-keyword="@Model.Keyword" asp-route-category="@Model.Category" asp-route-year="@Model.Year" asp-route-available="@Model.Available" asp-route-page="@(Model.Page + 1)">Trang sau</a>}else{<span></span>}
+        </nav>
+    }
+}

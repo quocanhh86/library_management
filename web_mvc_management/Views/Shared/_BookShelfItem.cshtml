@@ -1,0 +1,29 @@
+@model web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel
+<article class="shelf-book">
+    <a class="shelf-book__link" href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", Model.Id.ToString())">
+        <div class="shelf-book__cover cover-tone--@Model.CategoryKey">
+            @if (!string.IsNullOrWhiteSpace(Model.CoverUrl))
+            {
+                <img src="@Model.CoverUrl" alt="Bìa sách @Model.Title" loading="lazy" width="240" height="320" />
+            }
+            else
+            {
+                <span class="shelf-book__category">@Model.CategoryName</span>
+                <span class="shelf-book__cover-title">@Model.Title</span>
+                <span class="shelf-book__cover-author">@Model.Authors</span>
+                <span class="shelf-book__imprint">@Model.Publisher</span>
+            }
+        </div>
+        <h3 class="shelf-book__title">@Model.Title</h3>
+    </a>
+    <p class="shelf-book__author">@Model.Authors</p>
+    <p class="shelf-book__publisher">@Model.Publisher, @Model.PublicationYear</p>
+    @if (Model.AvailableCopies > 0)
+    {
+        <p class="shelf-book__availability"><i class="bi bi-check-circle" aria-hidden="true"></i> Sẵn sàng <span>@Model.AvailableCopies/@Model.TotalCopies bản</span></p>
+    }
+    else
+    {
+        <p class="shelf-book__availability shelf-book__availability--out"><i class="bi bi-clock" aria-hidden="true"></i> Đang được mượn <span>0/@Model.TotalCopies bản</span></p>
+    }
+</article>
