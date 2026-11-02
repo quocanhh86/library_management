@@ -6,7 +6,7 @@ namespace web_mvc_management.Models.ViewModels.Auth;
 public class ReaderLoginViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập hoặc email")]
-    [Display(Name = "Tên đăng nhập hoặc Email")]
+    [Display(Name = "Tên đăng nhập hoặc email")]
     public string UsernameOrEmail { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu")]

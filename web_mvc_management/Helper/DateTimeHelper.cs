@@ -17,6 +17,13 @@ public static class DateTimeHelper
         dateTime?.ToString(AppConstants.DefaultDateTimeFormat) ?? "-";
 
     /// <summary>
+    /// Giờ:phút theo giờ Việt Nam, ví dụ "14:35". Dùng cho thông báo "thử lại lúc ...".
+    /// </summary>
+    // UTC+7 cố định (Việt Nam không có giờ mùa hè); dùng TimeZoneInfo nếu cần múi giờ khác
+    public static string ToVietnamTimeString(DateTimeOffset dateTime) =>
+        dateTime.ToOffset(TimeSpan.FromHours(7)).ToString("HH:mm");
+
+    /// <summary>
     /// Hiển thị thời gian tương đối (ví dụ: "vừa xong", "10 phút trước", "3 ngày trước").
     /// </summary>
     public static string ToRelativeTime(DateTimeOffset dateTime)

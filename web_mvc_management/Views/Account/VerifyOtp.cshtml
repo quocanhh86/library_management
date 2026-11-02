@@ -1,106 +1,66 @@
 @model web_mvc_management.Models.ViewModels.Auth.VerifyOtpViewModel
+@using web_mvc_management.Services
 @{
-    ViewData["Title"] = "Xác Thực Mã OTP";
-    var purposeTitle = Model.Purpose switch
+    ViewData["Title"] = "Nhập mã xác thực";
+    ViewData["IsAuthPage"] = true;
+    var isRegister = Model.Purpose == AuthService.PurposeRegister;
+    var backAction = Model.Purpose switch
     {
-        web_mvc_management.Services.AuthService.PurposeRegister => "Xác Thực Mở Thẻ Độc Giả",
-        web_mvc_management.Services.AuthService.PurposeStaffLogin => "Xác Thực Đăng Nhập Cán Bộ",
-        _ => "Xác Thực Đăng Nhập 2FA"
-    };
-
-    var returnAction = Model.Purpose switch
-    {
-        web_mvc_management.Services.AuthService.PurposeRegister => "Register",
-        web_mvc_management.Services.AuthService.PurposeStaffLogin => "StaffLogin",
+        AuthService.PurposeRegister => "Register",
+        AuthService.PurposeStaffLogin => "StaffLogin",
         _ => "Login"
     };
+    var hasCodeError = ViewData.ModelState[nameof(Model.OtpCode)]?.Errors.Count > 0;
+    var validitySeconds = (int)OtpService.DefaultValidity.TotalSeconds;
 }
 
-<div class="row justify-content-center py-4">
-    <div class="col-12 col-md-8 col-lg-5">
-        <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
-            <div class="card-header bg-primary text-white text-center py-4">
-                <div class="d-inline-flex align-items-center justify-content-center bg-white text-primary rounded-circle p-3 mb-2 shadow-sm">
-                    <i class="bi bi-shield-check fs-2"></i>
+<div class="auth-wrap">
+    <div class="auth-panel">
+        <partial name="~/Views/Account/_AuthHead.cshtml" model='("Nhập mã xác thực", 2, (string?)null)' />
+
+        @* data-otp-*: thời hạn mã và thời gian chờ gửi lại, lấy từ OtpService / EmailService *@
+        <div data-otp-timer data-validity="@validitySeconds" data-cooldown="@EmailService.CooldownSeconds"
+             data-key="otp:@Model.Purpose:@Model.Email">
+            <p class="mb-4">
+                Mã gồm 6 số, đã gửi tới <strong>@(Model.MaskedEmail ?? Model.Email)</strong>.
+                <span data-otp-expiry-text>Mã hết hạn sau <span class="num" data-otp-expiry>@(validitySeconds / 60):00</span>.</span>
+            </p>
+
+            <form asp-action="VerifyOtp" method="post" id="otpForm" novalidate>
+                <input type="hidden" asp-for="Email" />
+                <input type="hidden" asp-for="Purpose" />
+                <input type="hidden" asp-for="ReturnUrl" />
+                <input type="hidden" asp-for="OtpCode" data-otp-value />
+
+                <span id="otpLabel" class="form-label d-block">Mã xác thực</span>
+                <div class="otp @(hasCodeError ? "otp--invalid" : "")" role="group" aria-labelledby="otpLabel" data-otp-boxes>
+                    @for (var i = 0; i < 6; i++)
+                    {
+                        <input class="form-control otp__box" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]"
+                               aria-label="Số thứ @(i + 1)" autocomplete="@(i == 0 ? "one-time-code" : "off")" @(i == 0 ? "autofocus" : "") />
+                    }
                 </div>
-                <h4 class="fw-bold mb-1">@purposeTitle</h4>
-                <p class="text-white-50 small mb-0">Hệ thống bảo mật Stateful MVC với mã xác minh 6 chữ số</p>
-            </div>
-
-            <div class="card-body p-4 p-md-5">
-                <div class="text-center mb-4">
-                    <p class="text-muted small mb-1">Mã xác thực đã được gửi tới địa chỉ email:</p>
-                    <p class="fw-bold text-dark fs-5 mb-0">@(Model.MaskedEmail ?? Model.Email)</p>
-                    <span class="badge bg-light text-secondary border mt-1">
-                        <i class="bi bi-clock-history me-1"></i>Thời hạn hiệu lực: 5 phút
-                    </span>
+                <div class="inline-error mb-3 @(hasCodeError ? "" : "d-none")" role="alert" data-otp-error>
+                    <span asp-validation-for="OtpCode"></span>
                 </div>
+                <div asp-validation-summary="ModelOnly" class="inline-error mb-3" role="alert"></div>
 
-                <form asp-action="VerifyOtp" method="post" id="otpForm" novalidate>
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" asp-for="Email" />
-                    <input type="hidden" asp-for="Purpose" />
-                    <input type="hidden" asp-for="ReturnUrl" />
+                <button type="submit" class="btn btn-primary w-100 mt-2">Xác nhận mã</button>
+            </form>
 
-                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small mb-3" role="alert"></div>
-
-                    <div class="mb-3 text-center">
-                        <label asp-for="OtpCode" class="form-label fw-semibold text-secondary small text-uppercase">
-                            Nhập 6 chữ số mã OTP
-                        </label>
-                        <div class="mx-auto" style="max-width: 280px;">
-                            <input asp-for="OtpCode"
-                                   id="otpInput"
-                                   class="form-control text-center fw-bold fs-2 rounded-3 shadow-sm"
-                                   style="letter-spacing: 0.6rem; height: 58px;"
-                                   maxlength="6"
-                                   inputmode="numeric"
-                                   autocomplete="one-time-code"
-                                   placeholder="------"
-                                   autofocus
-                                   required />
-                        </div>
-                        <span asp-validation-for="OtpCode" class="text-danger small mt-1 d-block"></span>
-                    </div>
-
-                    <div class="d-grid mb-3 mt-4">
-                        <button type="submit" class="btn btn-primary py-2 fw-semibold rounded-3 shadow-sm">
-                            <i class="bi bi-check-circle-fill me-1"></i>
-                            Xác Nhận Mã OTP &rarr;
-                        </button>
-                    </div>
-                </form>
-
-                <div class="d-flex justify-content-between align-items-center pt-3 border-top mt-4">
-                    <a asp-action="@returnAction" class="btn btn-link btn-sm text-decoration-none text-muted p-0">
-                        <i class="bi bi-arrow-left me-1"></i>Quay lại
-                    </a>
-
-                    <form asp-action="ResendOtp" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="purpose" value="@Model.Purpose" />
-                        <button type="submit" id="btnResend" class="btn btn-link btn-sm text-decoration-none text-primary fw-semibold p-0">
-                            <i class="bi bi-arrow-clockwise me-1"></i>Gửi lại mã OTP
-                        </button>
-                    </form>
-                </div>
-            </div>
+            <form asp-action="ResendOtp" method="post" class="auth-alt" data-otp-resend-form>
+                <input type="hidden" name="purpose" value="@Model.Purpose" />
+                Không nhận được mã?
+                <button type="submit" class="btn btn-link p-0 align-baseline otp-resend" data-otp-resend>
+                    Gửi lại mã <span class="num" data-otp-cooldown></span>
+                </button>
+                <br />
+                <a asp-action="@backAction">@(isRegister ? "Sửa thông tin đăng ký" : "Đổi tài khoản")</a>
+            </form>
         </div>
     </div>
 </div>
 
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-    <script>
-        // Minimal JavaScript: Tự động submit khi nhập đủ 6 số và chỉ cho phép nhập số
-        $(function () {
-            const $input = $('#otpInput');
-            $input.on('input', function () {
-                this.value = this.value.replace(/[^0-9]/g, '');
-                if (this.value.length === 6) {
-                    $('#otpForm').submit();
-                }
-            });
-        });
-    </script>
+    <script src="~/js/otp.js" asp-append-version="true"></script>
 }

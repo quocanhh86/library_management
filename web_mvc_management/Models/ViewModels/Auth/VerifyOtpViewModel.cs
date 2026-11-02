@@ -11,10 +11,10 @@ public class VerifyOtpViewModel
 
     public string? MaskedEmail { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập mã OTP")]
-    [StringLength(6, MinimumLength = 6, ErrorMessage = "Mã OTP gồm đúng 6 chữ số")]
-    [RegularExpression(@"^\d{6}$", ErrorMessage = "Mã OTP chỉ bao gồm 6 chữ số")]
-    [Display(Name = "Mã xác thực OTP")]
+    [Required(ErrorMessage = "Nhập đủ 6 số của mã xác thực")]
+    [StringLength(6, MinimumLength = 6, ErrorMessage = "Mã gồm đúng 6 số")]
+    [RegularExpression(@"^\d{6}$", ErrorMessage = "Mã chỉ gồm chữ số")]
+    [Display(Name = "Mã xác thực")]
     public string OtpCode { get; set; } = string.Empty;
 
     [Required]
