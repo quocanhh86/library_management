@@ -1,0 +1,9 @@
+@model DueStamp
+@* Con dấu hạn trả: ngày lớn, tháng/năm nhỏ, kèm chữ trạng thái để không chỉ dựa vào màu. *@
+<span class="due">
+    <span class="due-stamp due-stamp--@Model.State" role="img" aria-label="Hạn trả @Model.DueDate.ToString(AppConstants.DefaultDateFormat)">
+        <span class="due-stamp__day" aria-hidden="true">@Model.DueDate.ToString("dd")</span>
+        <span class="due-stamp__month" aria-hidden="true">@Model.DueDate.ToString("MM/yyyy")</span>
+    </span>
+    <span class="due__note due__note--@Model.State">@Model.Note</span>
+</span>

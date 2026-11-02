@@ -1,0 +1,19 @@
+@* Modal xác nhận dùng chung thay cho confirm(). Kích hoạt bằng thuộc tính trên nút/form:
+   data-confirm="Câu hỏi" data-confirm-detail="Giải thích hậu quả"
+   data-confirm-ok="Nhãn nút làm việc đó" data-confirm-cancel="Nhãn nút giữ nguyên" data-confirm-danger *@
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="confirmModalTitle"></h2>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0 text-muted-ink" id="confirmModalDetail"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-quiet" data-bs-dismiss="modal" id="confirmModalCancel"></button>
+                <button type="button" class="btn btn-primary" id="confirmModalOk"></button>
+            </div>
+        </div>
+    </div>
+</div>
