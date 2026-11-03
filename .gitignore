@@ -118,3 +118,4 @@ scripts/
 .gemini/
 .playwright-mcp/
 docs/
+MODULE_STATUS.md

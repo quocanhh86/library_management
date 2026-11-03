@@ -4,7 +4,6 @@ using web_mvc_management.Constant;
 using web_mvc_management.Entity;
 using web_mvc_management.Extensions;
 using web_mvc_management.Infrastructure;
-using web_mvc_management.Models.ViewModels.Catalog;
 using web_mvc_management.Models.ViewModels.SystemAdmin;
 using web_mvc_management.Repositories;
 using web_mvc_management.Util;
@@ -13,8 +12,7 @@ namespace web_mvc_management.Services;
 
 public class SystemAdminService(
     IUnitOfWork unitOfWork,
-    IUserContext userContext,
-    IDateTimeProvider dateTimeProvider) : ISystemAdminService
+    IUserContext userContext) : ISystemAdminService
 {
     // =========================================================================
     // 1. QUẢN LÝ TÀI KHOẢN CÁN BỘ & PHÂN QUYỀN (/System/Staff)
@@ -268,227 +266,7 @@ public class SystemAdminService(
     }
 
     // =========================================================================
-    // 2. QUẢN LÝ TÀI KHOẢN & THẺ ĐỘC GIẢ (/Admin/Readers)
-    // =========================================================================
-    public async Task<PagedResult<ReaderListItemViewModel>> GetReadersPagedAsync(ReaderFilter filter, CancellationToken ct = default)
-    {
-        var query = unitOfWork.Readers.GetQueryable(asNoTracking: true);
-
-        if (filter.Status == EntityStatus.Deleted)
-        {
-            query = query.Where(r => r.Status == EntityStatus.Deleted);
-        }
-        else
-        {
-            query = query.Where(r => r.Status != EntityStatus.Deleted);
-            if (!string.IsNullOrWhiteSpace(filter.Status))
-            {
-                query = query.Where(r => r.Status == filter.Status);
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(filter.Keyword))
-        {
-            var kw = filter.Keyword.ToLower();
-            query = query.Where(r =>
-                r.FullName.ToLower().Contains(kw) ||
-                r.CardNo.ToLower().Contains(kw) ||
-                r.Email.ToLower().Contains(kw) ||
-                r.Username.ToLower().Contains(kw) ||
-                (r.MemberCode != null && r.MemberCode.ToLower().Contains(kw)));
-        }
-
-        if (filter.ReaderTypeId.HasValue)
-        {
-            query = query.Where(r => r.ReaderTypeId == filter.ReaderTypeId.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(filter.CardStatus))
-        {
-            query = query.Where(r => r.CardStatus == filter.CardStatus);
-        }
-
-        return await query
-            .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new ReaderListItemViewModel
-            {
-                Id = r.Id,
-                CardNo = r.CardNo,
-                MemberCode = r.MemberCode,
-                Username = r.Username,
-                Email = r.Email,
-                FullName = r.FullName,
-                Phone = r.Phone,
-                ReaderTypeId = r.ReaderTypeId,
-                ReaderTypeName = r.ReaderType.Name,
-                MaxBorrowBooks = r.ReaderType.MaxBorrowBooks,
-                LoanDays = r.ReaderType.LoanDays,
-                CardIssuedDate = r.CardIssuedDate,
-                CardExpiryDate = r.CardExpiryDate,
-                CardStatus = r.CardStatus,
-                LockReason = r.LockReason,
-                Status = r.Status,
-                ActiveBorrowCount = r.BorrowSlips
-                    .Where(s => s.Status != EntityStatus.Deleted)
-                    .SelectMany(s => s.BorrowDetails)
-                    .Count(d => d.ReturnedAt == null && d.Status != EntityStatus.Deleted)
-            })
-            .ToPagedResultAsync(filter, ct);
-    }
-
-    public async Task<IReadOnlyList<SelectOptionViewModel>> GetReaderTypesSelectAsync(CancellationToken ct = default)
-    {
-        return await unitOfWork.ReaderTypes.GetQueryable(asNoTracking: true)
-            .Where(rt => rt.Status == EntityStatus.Active)
-            .OrderBy(rt => rt.Name)
-            .Select(rt => new SelectOptionViewModel(
-                rt.Id,
-                $"{rt.Name} (Tối đa {rt.MaxBorrowBooks} cuốn / {rt.LoanDays} ngày)"))
-            .ToListAsync(ct);
-    }
-
-    public async Task<ServiceResult> UpdateReaderAccountAsync(ReaderManageViewModel model, CancellationToken ct = default)
-    {
-        var reader = await unitOfWork.Readers.FirstOrDefaultAsync(
-            r => r.Id == model.Id && r.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (reader == null)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderNotFound);
-        }
-
-        var typeExists = await unitOfWork.ReaderTypes.ExistsAsync(
-            rt => rt.Id == model.ReaderTypeId && rt.Status != EntityStatus.Deleted,
-            ct);
-
-        if (!typeExists)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
-        }
-
-        var wasLockedOrInactive = reader.CardStatus != model.CardStatus || reader.Status != model.Status;
-
-        reader.FullName = model.FullName.Trim();
-        reader.Phone = model.Phone?.Trim();
-        reader.ReaderTypeId = model.ReaderTypeId;
-        reader.CardExpiryDate = model.CardExpiryDate;
-        reader.CardStatus = model.CardStatus;
-        reader.Status = model.Status;
-
-        if (model.CardStatus == LibraryConstants.CardStatus.Locked)
-        {
-            reader.LockedAt = dateTimeProvider.UtcNow;
-            reader.LockReason = string.IsNullOrWhiteSpace(model.LockReason)
-                ? "Khóa thẻ theo quyết định của thủ thư/quản trị viên"
-                : model.LockReason.Trim();
-        }
-        else if (model.CardStatus == LibraryConstants.CardStatus.Active)
-        {
-            reader.LockedAt = null;
-            reader.LockReason = null;
-            reader.FailedLoginAttempts = 0;
-            reader.LockedUntil = null;
-        }
-
-        if (wasLockedOrInactive)
-        {
-            reader.SecurityStamp = Guid.NewGuid().ToString("N");
-        }
-
-        unitOfWork.Readers.Update(reader);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã cập nhật thẻ độc giả {reader.CardNo} – {reader.FullName}.");
-    }
-
-    public async Task<ServiceResult> SoftDeleteReaderAsync(Guid id, CancellationToken ct = default)
-    {
-        var reader = await unitOfWork.Readers.FirstOrDefaultAsync(
-            r => r.Id == id && r.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (reader == null)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderNotFound);
-        }
-
-        var hasActiveBorrow = await unitOfWork.BorrowDetails.ExistsAsync(
-            bd => bd.BorrowSlip.ReaderId == id &&
-                  bd.ReturnedAt == null &&
-                  bd.Status != EntityStatus.Deleted,
-            ct);
-
-        if (hasActiveBorrow)
-        {
-            return ServiceResult.Failure(
-                ErrorCode.CommonRecordInUse,
-                "Không thể xóa mềm độc giả đang giữ sách mượn chưa trả.");
-        }
-
-        reader.Status = EntityStatus.Deleted;
-        reader.SecurityStamp = Guid.NewGuid().ToString("N");
-        unitOfWork.Readers.Update(reader);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm thẻ độc giả {reader.CardNo} – {reader.FullName} (chuyển sang DELETED).");
-    }
-
-    public async Task<ServiceResult> RestoreReaderAsync(Guid id, CancellationToken ct = default)
-    {
-        var reader = await unitOfWork.Readers.FirstOrDefaultAsync(
-            r => r.Id == id && r.Status == EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (reader == null)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderNotFound);
-        }
-
-        reader.Status = EntityStatus.Active;
-        reader.SecurityStamp = Guid.NewGuid().ToString("N");
-        unitOfWork.Readers.Update(reader);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục tài khoản độc giả {reader.CardNo} – {reader.FullName}.");
-    }
-
-    public async Task<ServiceResult> HardDeleteReaderAsync(Guid id, string? confirmCode, CancellationToken ct = default)
-    {
-        var reader = await unitOfWork.Readers.GetByIdAsync(id, ct);
-        if (reader == null)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderNotFound);
-        }
-
-        if (reader.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
-        if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
-        }
-
-        var hasHistory =
-            await unitOfWork.BorrowSlips.ExistsAsync(bs => bs.ReaderId == id, ct) ||
-            await unitOfWork.Reservations.ExistsAsync(res => res.ReaderId == id, ct);
-
-        if (hasHistory)
-        {
-            return ServiceResult.Failure(
-                ErrorCode.CommonRecordInUse,
-                "Không thể xóa vĩnh viễn độc giả đã phát sinh lịch sử phiếu mượn hoặc đặt trước sách.");
-        }
-
-        unitOfWork.Readers.Delete(reader);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn độc giả {reader.CardNo} – {reader.FullName} khỏi cơ sở dữ liệu.");
-    }
-
-    // =========================================================================
-    // 3. CẤU HÌNH LOẠI ĐỘC GIẢ (/Admin/ReaderTypes)
+    // 2. CẤU HÌNH LOẠI ĐỘC GIẢ (/Admin/ReaderTypes)
     // =========================================================================
     public async Task<IReadOnlyList<ReaderTypeItemViewModel>> GetReaderTypesAsync(CancellationToken ct = default)
     {
@@ -647,7 +425,7 @@ public class SystemAdminService(
     }
 
     // =========================================================================
-    // 4. CẤU HÌNH QUY ĐỊNH MƯỢN TRẢ & MỨC PHẠT (/System/Settings)
+    // 3. CẤU HÌNH QUY ĐỊNH MƯỢN TRẢ & MỨC PHẠT (/System/Settings)
     // =========================================================================
     public async Task<LibrarySettingFormViewModel> GetLibrarySettingAsync(CancellationToken ct = default)
     {

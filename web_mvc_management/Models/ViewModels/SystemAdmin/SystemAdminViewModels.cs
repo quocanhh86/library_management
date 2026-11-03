@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
-using web_mvc_management.Models.ViewModels.Catalog;
 
 namespace web_mvc_management.Models.ViewModels.SystemAdmin;
 
@@ -101,80 +100,7 @@ public class StaffPageViewModel
 }
 
 // =============================================================================
-// 2. QUẢN LÝ TÀI KHOẢN & THẺ ĐỘC GIẢ (/Admin/Readers)
-// =============================================================================
-public class ReaderFilter : BaseFilter
-{
-    public Guid? ReaderTypeId { get; set; }
-    public string? CardStatus { get; set; }
-}
-
-public class ReaderListItemViewModel
-{
-    public Guid Id { get; init; }
-    public string CardNo { get; init; } = string.Empty;
-    public string? MemberCode { get; init; }
-    public string Username { get; init; } = string.Empty;
-    public string Email { get; init; } = string.Empty;
-    public string FullName { get; init; } = string.Empty;
-    public string? Phone { get; init; }
-    public Guid ReaderTypeId { get; init; }
-    public string ReaderTypeName { get; init; } = string.Empty;
-    public short MaxBorrowBooks { get; init; }
-    public short LoanDays { get; init; }
-    public DateOnly CardIssuedDate { get; init; }
-    public DateOnly CardExpiryDate { get; init; }
-    public string CardStatus { get; init; } = LibraryConstants.CardStatus.Active;
-    public string? LockReason { get; init; }
-    public string Status { get; init; } = EntityStatus.Active;
-    public int ActiveBorrowCount { get; init; }
-}
-
-public class ReaderManageViewModel
-{
-    [Required]
-    public Guid Id { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng nhập họ tên độc giả.")]
-    [StringLength(150)]
-    [Display(Name = "Họ và tên")]
-    public string FullName { get; set; } = string.Empty;
-
-    [StringLength(20)]
-    [Display(Name = "Số điện thoại")]
-    public string? Phone { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng chọn loại độc giả.")]
-    [Display(Name = "Loại độc giả (Phân quyền hạn mức)")]
-    public Guid ReaderTypeId { get; set; }
-
-    [Required]
-    [Display(Name = "Ngày hết hạn thẻ")]
-    public DateOnly CardExpiryDate { get; set; }
-
-    [Required]
-    [Display(Name = "Trạng thái thẻ")]
-    public string CardStatus { get; set; } = LibraryConstants.CardStatus.Active;
-
-    [StringLength(255)]
-    [Display(Name = "Lý do khóa thẻ (nếu khóa)")]
-    public string? LockReason { get; set; }
-
-    [Required]
-    [Display(Name = "Trạng thái tài khoản")]
-    public string Status { get; set; } = EntityStatus.Active;
-}
-
-public class AdminReadersPageViewModel
-{
-    public PagedResult<ReaderListItemViewModel> PagedReaders { get; init; } = PagedResult<ReaderListItemViewModel>.Empty();
-    public ReaderFilter Filter { get; init; } = new();
-    public IReadOnlyList<SelectOptionViewModel> ReaderTypes { get; init; } = [];
-    public DateOnly Today { get; init; }
-}
-
-// =============================================================================
-// 3. CẤU HÌNH LOẠI ĐỘC GIẢ & QUY ĐỊNH MƯỢN TRẢ (/Admin/ReaderTypes & /System/Settings)
+// 2. CẤU HÌNH LOẠI ĐỘC GIẢ & QUY ĐỊNH MƯỢN TRẢ (/Admin/ReaderTypes & /System/Settings)
 // =============================================================================
 public class ReaderTypeItemViewModel
 {
