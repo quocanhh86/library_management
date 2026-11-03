@@ -1,0 +1,202 @@
+@model web_mvc_management.Models.ViewModels.SystemAdmin.ReaderTypesPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Cấu hình loại độc giả";
+    ViewData["Screen"] = ScreenId.ManageReaderTypes;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Cấu hình loại độc giả & định mức mượn</h1>
+        <p class="text-muted-ink mb-0">Quy định số sách mượn tối đa, số ngày mượn, số lần gia hạn và thời hạn thẻ cho từng nhóm đối tượng bạn đọc.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-quiet" href="@Screens.GetPath(ScreenId.SystemSettings)">
+            <i class="bi bi-sliders" aria-hidden="true"></i>Cấu hình mức phạt
+        </a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#readerTypeModal" onclick="openReaderTypeModal()">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Thêm loại độc giả
+        </button>
+    </div>
+</div>
+
+<div class="table-frame mb-4">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Mã loại</th>
+                <th scope="col">Tên đối tượng</th>
+                <th scope="col" class="num">Số sách tối đa</th>
+                <th scope="col" class="num">Số ngày mượn</th>
+                <th scope="col" class="num">Gia hạn</th>
+                <th scope="col" class="num">Thời hạn thẻ</th>
+                <th scope="col" class="num">Số độc giả</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td class="num fw-medium" style="text-align:left">@item.Code</td>
+                    <td>
+                        <div class="fw-medium">@item.Name</div>
+                        @if (!string.IsNullOrWhiteSpace(item.Description))
+                        {
+                            <div class="fs-xs text-muted-ink">@item.Description</div>
+                        }
+                    </td>
+                    <td class="num fw-medium">@item.MaxBorrowBooks cuốn</td>
+                    <td class="num fw-medium">@item.LoanDays ngày</td>
+                    <td class="num">@item.MaxRenewals lần (@item.RenewDays ngày/lần)</td>
+                    <td class="num">@item.CardValidMonths tháng</td>
+                    <td class="num">
+                        <a href="@Screens.GetPath(ScreenId.ManageReaders)?ReaderTypeId=@item.Id" class="text-decoration-none">@item.ReaderCount thẻ</a>
+                    </td>
+                    <td>
+                        @if (item.Status == EntityStatus.Deleted)
+                        {
+                            <span class="status status--danger">Đã xóa mềm (DELETED)</span>
+                        }
+                        else
+                        {
+                            <span class="status @(item.Status == EntityStatus.Active ? "status--ok" : "status--neutral")">
+                                @(item.Status == EntityStatus.Active ? "Đang áp dụng" : "Tạm ngưng")
+                            </span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        <div class="d-inline-flex gap-1">
+                            @if (item.Status == EntityStatus.Deleted)
+                            {
+                                <form method="post" action="@Screens.GetPath(ScreenId.ManageReaderTypes)/Restore/@item.Id" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-quiet btn-sm">Khôi phục</button>
+                                </form>
+                                <form method="post" action="@Screens.GetPath(ScreenId.ManageReaderTypes)/HardDelete/@item.Id" class="d-inline"
+                                      data-hard-delete="Loại độc giả '@item.Name (@item.Code)'">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-danger btn-sm">Xóa vĩnh viễn</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-quiet btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#readerTypeModal"
+                                        data-id="@item.Id"
+                                        data-code="@item.Code"
+                                        data-name="@item.Name"
+                                        data-maxbooks="@item.MaxBorrowBooks"
+                                        data-loandays="@item.LoanDays"
+                                        data-renewals="@item.MaxRenewals"
+                                        data-renewdays="@item.RenewDays"
+                                        data-validmonths="@item.CardValidMonths"
+                                        data-desc="@item.Description"
+                                        data-status="@item.Status"
+                                        onclick="openReaderTypeModal(this)">
+                                    Sửa định mức
+                                </button>
+                                <form method="post" action="@Screens.GetPath(ScreenId.ManageReaderTypes)/Delete/@item.Id" class="d-inline"
+                                      data-confirm="Bước 1: Xóa mềm loại độc giả '@item.Name'?"
+                                      data-confirm-detail="Loại độc giả sẽ chuyển sang trạng thái DELETED (xóa mềm). Chỉ xóa mềm được khi chưa có độc giả đang hoạt động thuộc loại này."
+                                      data-confirm-ok="Xóa mềm (DELETED)"
+                                      data-confirm-cancel="Giữ lại"
+                                      data-confirm-danger>
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-quiet btn-sm text-danger">Xóa mềm</button>
+                                </form>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<div class="modal fade" id="readerTypeModal" tabindex="-1" aria-labelledby="readerTypeModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.ManageReaderTypes)/Save">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="rtId" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="readerTypeModalTitle">Cấu hình loại độc giả</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label" for="rtCode">Mã loại (Code)</label>
+                            <input type="text" class="form-control num" id="rtCode" name="Code" required maxlength="20" placeholder="STUDENT" />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label" for="rtName">Tên loại độc giả</label>
+                            <input type="text" class="form-control" id="rtName" name="Name" required maxlength="100" placeholder="Sinh viên" />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="rtMaxBooks">Số sách mượn tối đa (cuốn)</label>
+                            <input type="number" class="form-control num" id="rtMaxBooks" name="MaxBorrowBooks" min="1" max="50" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="rtLoanDays">Số ngày mượn tối đa (ngày)</label>
+                            <input type="number" class="form-control num" id="rtLoanDays" name="LoanDays" min="1" max="180" required />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="rtRenewals">Số lần gia hạn</label>
+                            <input type="number" class="form-control num" id="rtRenewals" name="MaxRenewals" min="0" max="10" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="rtRenewDays">Ngày / lần gia hạn</label>
+                            <input type="number" class="form-control num" id="rtRenewDays" name="RenewDays" min="0" max="60" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="rtValidMonths">Hạn thẻ (tháng)</label>
+                            <input type="number" class="form-control num" id="rtValidMonths" name="CardValidMonths" min="1" max="120" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="rtDesc">Mô tả</label>
+                        <input type="text" class="form-control" id="rtDesc" name="Description" maxlength="255" />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="rtStatus">Trạng thái</label>
+                        <select class="form-select" id="rtStatus" name="Status">
+                            <option value="@EntityStatus.Active">Đang áp dụng (ACTIVE)</option>
+                            <option value="@EntityStatus.Inactive">Tạm ngưng (INACTIVE)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu cấu hình</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openReaderTypeModal(btn) {
+            document.getElementById('readerTypeModalTitle').textContent = btn ? 'Cập nhật định mức loại độc giả' : 'Thêm loại độc giả mới';
+            document.getElementById('rtId').value = btn ? (btn.dataset.id || '') : '';
+            document.getElementById('rtCode').value = btn ? (btn.dataset.code || '') : '';
+            document.getElementById('rtName').value = btn ? (btn.dataset.name || '') : '';
+            document.getElementById('rtMaxBooks').value = btn ? (btn.dataset.maxbooks || '5') : '5';
+            document.getElementById('rtLoanDays').value = btn ? (btn.dataset.loandays || '14') : '14';
+            document.getElementById('rtRenewals').value = btn ? (btn.dataset.renewals || '1') : '1';
+            document.getElementById('rtRenewDays').value = btn ? (btn.dataset.renewdays || '7') : '7';
+            document.getElementById('rtValidMonths').value = btn ? (btn.dataset.validmonths || '48') : '48';
+            document.getElementById('rtDesc').value = btn ? (btn.dataset.desc || '') : '';
+            document.getElementById('rtStatus').value = btn ? (btn.dataset.status || 'ACTIVE') : 'ACTIVE';
+        }
+    </script>
+}
+

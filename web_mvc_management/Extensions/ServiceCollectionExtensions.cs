@@ -157,9 +157,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
         services.AddScoped<IAuthService, AuthService>();
 
-        // Dữ liệu mock cho giai đoạn dựng UI, đổi sang bản EF Core khi nối DB
-        services.AddScoped<IBookService, Services.Mock.MockBookService>();
-        services.AddScoped<ILibraryInfoService, Services.Mock.MockLibraryInfoService>();
+        // Nghiệp vụ Danh mục sách, Quy định thư viện & Quản trị hệ thống kết nối SQL Server qua UnitOfWork
+        services.AddScoped<IBookService, BookService>();
+        services.AddScoped<ILibraryInfoService, LibraryInfoService>();
+        services.AddScoped<ICatalogMasterService, CatalogMasterService>();
+        services.AddScoped<ISystemAdminService, SystemAdminService>();
         services.AddScoped<IBorrowService, Services.Mock.MockBorrowService>();
 
         return services;
