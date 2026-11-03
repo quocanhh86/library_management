@@ -1,0 +1,16 @@
+<footer class="portal-footer" id="about-library">
+    <div class="portal-container">
+        <div class="portal-footer__grid">
+            <div class="portal-footer__identity">
+                <a class="portal-brand" href="/"><img src="~/images/utc-logo-128.webp" width="44" height="44" alt="Logo UTC" /><span><strong>Thư viện UTC</strong><small>Trường Đại học Giao thông Vận tải</small></span></a>
+                <p>Nguồn học liệu phục vụ học tập, giảng dạy và nghiên cứu trong lĩnh vực kỹ thuật giao thông vận tải.</p>
+                <p><i class="bi bi-geo-alt" aria-hidden="true"></i> Trường Đại học Giao thông Vận tải</p>
+                <p><i class="bi bi-chat-square-text" aria-hidden="true"></i> Liên hệ quầy thủ thư để được hỗ trợ.</p>
+            </div>
+            <nav aria-labelledby="footerCatalog"><h2 id="footerCatalog">Tra cứu</h2><a href="@Screens.GetPath(ScreenId.BookCatalog)">Mục lục trực tuyến</a><a href="@Screens.GetPath(ScreenId.BookCatalog)?category=civil">Công trình giao thông</a><a href="@Screens.GetPath(ScreenId.BookCatalog)?category=it">Công nghệ thông tin</a><a href="@Screens.GetPath(ScreenId.BookCatalog)?category=logistics">Vận tải &amp; Logistics</a></nav>
+            <nav aria-labelledby="footerServices"><h2 id="footerServices">Dịch vụ</h2><a href="#borrowing-rules">Mượn – trả tài liệu</a><a href="@Screens.GetPath(ScreenId.Register)">Đăng ký thẻ thư viện</a><a href="#opening-hours">Lịch phục vụ</a>@if (User.Identity?.IsAuthenticated != true){<a href="@Screens.GetPath(ScreenId.StaffLogin)">Đăng nhập cán bộ</a>}</nav>
+            <nav aria-labelledby="footerGuide"><h2 id="footerGuide">Hướng dẫn</h2><a href="#borrowing-rules">Quy định mượn sách</a><a href="#library-location">Hướng dẫn &amp; địa điểm</a><a href="#reader-support">Hỗ trợ bạn đọc</a><a href="#main">Về đầu trang</a></nav>
+        </div>
+        <div class="portal-footer__bottom"><p>© @DateTime.Now.Year Thư viện Trường Đại học Giao thông Vận tải.</p><a href="#main">Cổng thông tin thư viện UTC</a></div>
+    </div>
+</footer>

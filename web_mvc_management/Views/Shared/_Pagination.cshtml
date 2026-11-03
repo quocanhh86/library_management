@@ -1,6 +1,6 @@
 @model web_mvc_management.Common.IPagedResult
 @{
-    if (Model == null) return;
+    if (Model == null || Model.TotalCount == 0) return;
 
     string BuildPageUrl(int pageNo, int? pageSize = null)
     {
@@ -18,119 +18,84 @@
         return Url.Action(null, null, routeValues) ?? $"?pageNo={pageNo}&pageItemSize={pageSize ?? Model.PageItemSize}";
     }
 
-    var availablePageSizes = new[] { 10, 20, 50, 100 };
+    var pageNumbers = Model.GetPageNumbers(5);
+    var showSizePicker = ViewData["ShowPageSize"] as bool? ?? true;
 }
 
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 pt-3 mt-3 border-top">
-    <!-- 1. THỐNG KÊ BẢN GHI & CHỌN PAGE ITEM SIZE -->
-    <div class="d-flex align-items-center gap-3 small text-muted">
-        <div>
-            @if (Model.TotalCount > 0)
-            {
-                <span>
-                    Hiển thị <strong class="text-dark">@Model.StartItemIndex</strong> - <strong class="text-dark">@Model.EndItemIndex</strong>
-                    trong tổng số <strong class="text-primary">@Model.TotalCount</strong> bản ghi
-                </span>
-            }
-            else
-            {
-                <span>Không có bản ghi nào</span>
-            }
-        </div>
-
-        @if (Model.TotalCount > 0)
-        {
-            <div class="d-flex align-items-center gap-1 border-start ps-3">
-                <label for="paginationPageSizeSelect" class="form-label mb-0 text-nowrap">Hiển thị:</label>
-                <select id="paginationPageSizeSelect" class="form-select form-select-sm py-0 ps-2 pe-4" style="width: auto;" onchange="location.href=this.value;">
-                    @foreach (var size in availablePageSizes)
-                    {
-                        if (Model.PageItemSize == size)
-                        {
-                            <option value="@BuildPageUrl(1, size)" selected>@size</option>
-                        }
-                        else
-                        {
-                            <option value="@BuildPageUrl(1, size)">@size</option>
-                        }
-                    }
-                </select>
-                <span class="text-nowrap">/ trang</span>
-            </div>
-        }
+<div class="pager">
+    <div class="pager__info num">
+        @Model.StartItemIndex–@Model.EndItemIndex trong @Model.TotalCount.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))
     </div>
 
-    <!-- 2. THANH ĐIỀU HƯỚNG TRANG (BOOTSTRAP 5 PAGINATION) -->
     @if (Model.TotalPages > 1)
     {
-        <nav aria-label="Page navigation">
-            <ul class="pagination pagination-sm mb-0">
-                <!-- Nút Về Trang Đầu (First) -->
+        <nav aria-label="Phân trang">
+            <ul class="pagination pagination-sm">
                 <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
-                    <a class="page-link" href="@(Model.HasPreviousPage ? BuildPageUrl(1) : "#")" title="Trang đầu" aria-label="First">
-                        <span aria-hidden="true">&laquo;</span>
-                    </a>
+                    @if (Model.HasPreviousPage)
+                    {
+                        <a class="page-link" href="@BuildPageUrl(Model.PageNo - 1)" rel="prev">‹ Trước</a>
+                    }
+                    else
+                    {
+                        <span class="page-link">‹ Trước</span>
+                    }
                 </li>
 
-                <!-- Nút Trang Trước (Previous) -->
-                <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
-                    <a class="page-link" href="@(Model.HasPreviousPage ? BuildPageUrl(Model.PageNo - 1) : "#")" title="Trang trước" aria-label="Previous">
-                        <span aria-hidden="true">&lsaquo;</span>
-                    </a>
-                </li>
-
-                <!-- Các Số Trang Lân Cận -->
-                @{
-                    var pageNumbers = Model.GetPageNumbers(5);
-                    var firstPageInList = pageNumbers.FirstOrDefault();
-                    var lastPageInList = pageNumbers.LastOrDefault();
-                }
-
-                @if (firstPageInList > 1)
+                @if (pageNumbers.FirstOrDefault() > 1)
                 {
-                    <li class="page-item disabled">
-                        <span class="page-link">...</span>
-                    </li>
+                    <li class="page-item"><a class="page-link" href="@BuildPageUrl(1)">1</a></li>
+                    if (pageNumbers.FirstOrDefault() > 2)
+                    {
+                        <li class="page-item disabled d-none d-sm-block"><span class="page-link">…</span></li>
+                    }
                 }
 
                 @foreach (var p in pageNumbers)
                 {
                     if (p == Model.PageNo)
                     {
-                        <li class="page-item active" aria-current="page">
-                            <span class="page-link fw-bold">@p</span>
-                        </li>
+                        <li class="page-item active" aria-current="page"><span class="page-link">@p</span></li>
                     }
                     else
                     {
-                        <li class="page-item">
-                            <a class="page-link" href="@BuildPageUrl(p)">@p</a>
-                        </li>
+                        <li class="page-item d-none d-sm-block"><a class="page-link" href="@BuildPageUrl(p)">@p</a></li>
                     }
                 }
 
-                @if (lastPageInList < Model.TotalPages)
+                @if (pageNumbers.LastOrDefault() < Model.TotalPages)
                 {
-                    <li class="page-item disabled">
-                        <span class="page-link">...</span>
-                    </li>
+                    if (pageNumbers.LastOrDefault() < Model.TotalPages - 1)
+                    {
+                        <li class="page-item disabled d-none d-sm-block"><span class="page-link">…</span></li>
+                    }
+                    <li class="page-item"><a class="page-link" href="@BuildPageUrl(Model.TotalPages)">@Model.TotalPages</a></li>
                 }
 
-                <!-- Nút Trang Sau (Next) -->
                 <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
-                    <a class="page-link" href="@(Model.HasNextPage ? BuildPageUrl(Model.PageNo + 1) : "#")" title="Trang sau" aria-label="Next">
-                        <span aria-hidden="true">&rsaquo;</span>
-                    </a>
-                </li>
-
-                <!-- Nút Về Trang Cuối (Last) -->
-                <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
-                    <a class="page-link" href="@(Model.HasNextPage ? BuildPageUrl(Model.TotalPages) : "#")" title="Trang cuối" aria-label="Last">
-                        <span aria-hidden="true">&raquo;</span>
-                    </a>
+                    @if (Model.HasNextPage)
+                    {
+                        <a class="page-link" href="@BuildPageUrl(Model.PageNo + 1)" rel="next">Sau ›</a>
+                    }
+                    else
+                    {
+                        <span class="page-link">Sau ›</span>
+                    }
                 </li>
             </ul>
         </nav>
     }
-</div>
 
+    @if (showSizePicker)
+    {
+        <label class="pager__size">
+            <span>Mỗi trang</span>
+            <select class="form-select" data-pager-size>
+                @foreach (var size in AppConstants.AllowedPageSizes)
+                {
+                    <option value="@BuildPageUrl(1, size)" selected="@(Model.PageItemSize == size)">@size</option>
+                }
+            </select>
+        </label>
+    }
+</div>

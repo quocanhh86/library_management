@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Entity;
+using web_mvc_management.Helper;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Auth;
 using web_mvc_management.Repositories;
@@ -83,17 +84,17 @@ public class AuthService(
             return sendResult;
         }
 
-        return ServiceResult.Success("Mã OTP đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư.");
+        return ServiceResult.Success("Đã gửi mã xác thực tới email của bạn.");
     }
 
-    public async Task<ServiceResult<RegisteredReaderViewModel>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default)
+    public async Task<ServiceResult<Reader>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(model);
 
         // SEC-17: IP Rate Limiting (15 lần verify / phút)
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<RegisteredReaderViewModel>.Failure(ErrorCode.RateLimitOtpExceeded);
+            return ServiceResult<Reader>.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
@@ -102,10 +103,10 @@ public class AuthService(
         var verifyResult = await otpService.VerifyOtpAsync(normalizedEmail, PurposeRegister, otpCode, ct);
         if (!verifyResult.IsSuccess)
         {
-            return ServiceResult<RegisteredReaderViewModel>.Failure(verifyResult.Message);
+            return ServiceResult<Reader>.Failure(verifyResult.Message);
         }
 
-        // Lấy thông tin loại độc giả (Read-only AsNoTracking) để tính hạn thẻ
+        // Lấy thông tin loại độc giả để tính hạn thẻ
         var readerType = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
             x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active,
             asNoTracking: true,
@@ -113,14 +114,14 @@ public class AuthService(
 
         if (readerType == null)
         {
-            return ServiceResult<RegisteredReaderViewModel>.Failure(ErrorCode.RegisterInvalidReaderType);
+            return ServiceResult<Reader>.Failure(ErrorCode.RegisterInvalidReaderType);
         }
 
         var today = dateTimeProvider.Today;
         var validMonths = readerType.CardValidMonths > 0 ? readerType.CardValidMonths : 48;
         var cardExpiry = today.AddMonths(validMonths);
 
-        // Sinh số thẻ thư viện duy nhất theo tiền tố nhóm độc giả (SV / GV / DG)
+        // Sinh số thẻ thư viện duy nhất
         var cardPrefix = readerType.Code.ToUpperInvariant() switch
         {
             "LECTURER" => "GV",
@@ -162,17 +163,7 @@ public class AuthService(
         await unitOfWork.SaveChangesAsync(ct);
 
         logger.LogInformation("Độc giả mới đăng ký thành công: {Username} ({CardNo})", reader.Username, reader.CardNo);
-
-        var vm = new RegisteredReaderViewModel
-        {
-            Id = reader.Id,
-            Username = reader.Username,
-            Email = reader.Email,
-            FullName = reader.FullName,
-            CardNo = reader.CardNo
-        };
-
-        return ServiceResult<RegisteredReaderViewModel>.Success(vm, "Đăng ký thành công! Thẻ thư viện của bạn đã được kích hoạt.");
+        return ServiceResult<Reader>.Success(reader, "Đã mở thẻ thư viện.");
     }
 
     public async Task<ServiceResult<LoginStepResult>> InitiateReaderLoginAsync(ReaderLoginViewModel model, string clientIp, CancellationToken ct = default)
@@ -205,7 +196,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<LoginStepResult>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
         }
 
         // Kiểm tra trạng thái hoạt động của độc giả
@@ -230,7 +221,8 @@ public class AuthService(
                 reader.SecurityStamp = Guid.NewGuid().ToString("N"); // NIST SP 800-63B: Thu hồi mọi phiên đang hoạt động khi bị khóa
                 await unitOfWork.SaveChangesAsync(ct);
                 logger.LogWarning("Tài khoản độc giả {Username} bị khóa 15 phút do nhập sai mật khẩu 5 lần", reader.Username);
-                return ServiceResult<LoginStepResult>.Failure(ErrorCode.AuthMaxAttemptsExceeded);
+                return ServiceResult<LoginStepResult>.Failure(
+                    ErrorMessages.Format(ErrorCode.AuthMaxAttemptsExceeded, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
             }
 
             await unitOfWork.SaveChangesAsync(ct);
@@ -286,7 +278,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<ClaimsPrincipal>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
         }
 
         // SEC-04: Xác thực OTP
@@ -366,7 +358,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<LoginStepResult>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
         }
 
         // Sinh OTP & Gửi Gmail
@@ -416,7 +408,7 @@ public class AuthService(
         {
             var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<ClaimsPrincipal>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes));
+                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
         }
 
         // SEC-04 & SEC-12: Xác thực OTP với Purpose = STAFF_LOGIN
@@ -483,20 +475,12 @@ public class AuthService(
         return await emailService.SendOtpEmailAsync(normalizedEmail, otpCode, purpose, ct);
     }
 
-    public async Task<IReadOnlyList<ReaderTypeOptionViewModel>> GetActiveReaderTypesAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<ReaderType>> GetActiveReaderTypesAsync(CancellationToken ct = default)
     {
         return await unitOfWork.ReaderTypes
             .GetQueryable(asNoTracking: true)
             .Where(x => x.Status == EntityStatus.Active)
             .OrderBy(x => x.Name)
-            .Select(x => new ReaderTypeOptionViewModel
-            {
-                Id = x.Id,
-                Code = x.Code,
-                Name = x.Name,
-                MaxBorrowBooks = x.MaxBorrowBooks,
-                LoanDays = x.LoanDays
-            })
             .ToListAsync(ct);
     }
 }

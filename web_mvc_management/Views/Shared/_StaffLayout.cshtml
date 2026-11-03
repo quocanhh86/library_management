@@ -1,0 +1,143 @@
+@{
+    var isAdmin = User.IsInRole(AppRoles.Admin);
+    var fullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity?.Name;
+    var title = ViewData["Title"] as string;
+    // Màn hình hiện tại: View đặt ViewData["Screen"] = ScreenId.X để tô sáng mục menu.
+    var current = ViewData["Screen"] as ScreenId?;
+
+    // Nhóm 1 là việc hằng ngày ở quầy, đặt trên cùng. "Soon" = mở rộng, chỉ chừa chỗ.
+    var groups = new List<(ScreenId? Id, string Label, string Icon, bool Soon)[]>
+    {
+        new (ScreenId?, string, string, bool)[]
+        {
+            (ScreenId.CirculationBorrow, "Mượn sách", "box-arrow-up-right", false),
+            (ScreenId.CirculationReturn, "Trả sách", "box-arrow-in-down-left", false),
+            (ScreenId.ManageFines, "Thu phạt", "cash-coin", false),
+            (ScreenId.CirculationHistory, "Phiếu mượn", "journal-text", false),
+        },
+        new (ScreenId?, string, string, bool)[]
+        {
+            (ScreenId.ManageBooks, "Đầu sách", "book", false),
+            (ScreenId.ManageBookCopies, "Bản sao", "upc-scan", false),
+            (ScreenId.ManageReaders, "Độc giả", "person-vcard", false),
+            (ScreenId.ManageAuthors, "Tác giả", "pen", false),
+            (ScreenId.ManageCategories, "Thể loại", "tags", false),
+            (ScreenId.ManagePublishers, "Nhà xuất bản", "building", false),
+            (ScreenId.ManageShelves, "Kệ sách", "bookshelf", false),
+        },
+        new (ScreenId?, string, string, bool)[]
+        {
+            (ScreenId.ReportsStatistics, "Báo cáo", "bar-chart", false),
+            (ScreenId.ManageReservations, "Đặt trước", "bookmark", true),
+        },
+    };
+    if (isAdmin)
+    {
+        groups.Add(new (ScreenId?, string, string, bool)[]
+        {
+            (ScreenId.SystemStaff, "Người dùng", "people", false),
+            (ScreenId.ManageReaderTypes, "Loại độc giả", "person-badge", false),
+            (ScreenId.SystemSettings, "Quy định mượn trả", "sliders", false),
+        });
+    }
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(string.IsNullOrEmpty(title) ? "Quầy thủ thư" : $"{title} – Quầy thủ thư")</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="~/images/favicon-32.png" />
+    <link rel="preload" href="~/fonts/be-vietnam-pro-vietnamese-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/fonts.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/base.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/areas/staff.css" asp-append-version="true" />
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body class="staff-area">
+    <a class="visually-hidden-focusable" href="#main">Bỏ qua đến nội dung chính</a>
+
+    <div class="staff-shell">
+        <aside class="offcanvas-lg offcanvas-start staff-sidebar" tabindex="-1" id="staffSidebar" aria-label="Menu quầy thủ thư">
+            <div class="offcanvas-header d-lg-none">
+                <span class="text-white fw-medium">Menu</span>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#staffSidebar" aria-label="Đóng menu"></button>
+            </div>
+            <div class="offcanvas-body">
+              <div class="staff-sidebar__inner">
+                <a class="staff-sidebar__brand" href="@Screens.GetPath(ScreenId.CirculationBorrow)">
+                    <img src="~/images/utc-logo-128.webp" width="40" height="40" alt="" />
+                    <span class="d-block">
+                        <strong>Thư viện UTC</strong>
+                        <span>Quầy thủ thư</span>
+                    </span>
+                </a>
+
+                <nav>
+                    @foreach (var group in groups)
+                    {
+                        <ul class="staff-nav">
+                            @foreach (var item in group)
+                            {
+                                <li>
+                                    @if (item.Soon)
+                                    {
+                                        <span class="staff-nav__link staff-nav__link--soon" aria-disabled="true">
+                                            <i class="bi bi-@item.Icon" aria-hidden="true"></i>@item.Label
+                                            <span class="staff-nav__soon">sắp có</span>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        var active = item.Id == current;
+                                        <a class="staff-nav__link @(active ? "is-active" : "")" href="@Screens.GetPath(item.Id!.Value)"
+                                           aria-current="@(active ? "page" : null)">
+                                            <i class="bi bi-@item.Icon" aria-hidden="true"></i>@item.Label
+                                        </a>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </nav>
+
+                <div class="staff-sidebar__user">
+                    <strong>@fullName</strong>
+                    @(isAdmin ? "Quản trị viên" : "Thủ thư")
+                    <form asp-controller="Account" asp-action="Logout" method="post">
+                        <button type="submit" class="staff-sidebar__logout">Đăng xuất</button>
+                    </form>
+                </div>
+              </div>
+            </div>
+        </aside>
+
+        <div class="staff-main">
+            <div class="staff-topbar d-lg-none">
+                <button class="btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#staffSidebar" aria-controls="staffSidebar">
+                    <i class="bi bi-list fs-4" aria-hidden="true"></i><span class="visually-hidden">Mở menu</span>
+                </button>
+                <span class="staff-topbar__title">@title</span>
+            </div>
+
+            <main id="main" class="staff-content">
+                @RenderBody()
+            </main>
+
+            @await RenderSectionAsync("ActionBar", required: false)
+        </div>
+    </div>
+
+    <partial name="_Toast" />
+    <partial name="_ConfirmModal" />
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

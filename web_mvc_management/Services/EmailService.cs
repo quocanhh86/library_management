@@ -100,7 +100,7 @@ public class EmailService(
 
             // Cập nhật mốc thời gian Cooldown
             CooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
-            return ServiceResult.Success("Mã OTP đã được gửi đến email của bạn.");
+            return ServiceResult.Success("Đã gửi mã mới tới email của bạn.");
         }
         catch (Exception ex)
         {
@@ -111,10 +111,10 @@ public class EmailService(
             {
                 logger.LogWarning("[DEV FALLBACK] Mã OTP cho {Email} [{Purpose}]: {Code}", normalizedEmail, purpose, otpCode);
                 CooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
-                return ServiceResult.Success("Mã OTP đã được gửi (Dev mode: kiểm tra console logger).");
+                return ServiceResult.Success("Đã gửi mã mới (môi trường Development: xem mã trong log của server).");
             }
 
-            return ServiceResult.Failure("Không thể kết nối đến máy chủ gửi email. Vui lòng thử lại sau.");
+            return ServiceResult.Failure("Chưa gửi được email vì không kết nối được máy chủ thư. Thử lại sau ít phút.");
         }
     }
 

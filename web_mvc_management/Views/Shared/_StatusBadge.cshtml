@@ -1,0 +1,5 @@
+@model StatusBadge
+@{
+    var (label, tone, icon) = Model.Resolve();
+}
+<span class="status status--@tone">@if (icon != null){<i class="bi bi-@icon" aria-hidden="true"></i>}@label</span>

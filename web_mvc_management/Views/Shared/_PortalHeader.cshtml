@@ -1,0 +1,41 @@
+@{
+    var authenticated = User.Identity?.IsAuthenticated == true;
+    var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Librarian);
+    var fullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity?.Name;
+}
+<header class="portal-header">
+    <div class="portal-container portal-header__inner">
+        <a class="portal-brand" href="/">
+            <img src="~/images/utc-logo-128.webp" width="44" height="44" alt="Logo UTC" />
+            <span><strong>Thư viện UTC</strong><small>Trường Đại học Giao thông Vận tải</small></span>
+        </a>
+        <nav class="portal-nav" aria-label="Điều hướng chính">
+            <a href="/" aria-current="page">Trang chủ</a><a href="@Screens.GetPath(ScreenId.BookCatalog)">Tra cứu tài liệu</a><a href="#library-services">Dịch vụ thư viện</a><a href="#about-library">Giới thiệu</a>
+        </nav>
+        <div class="portal-header__actions">
+            @if (authenticated)
+            {
+                <div class="dropdown">
+                    <button class="account-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-person" aria-hidden="true"></i><span class="account-toggle__name">@fullName</span><span class="visually-hidden">Mở menu tài khoản</span></button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        @if (staff)
+                        {
+                            <li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.CirculationBorrow)">Vào quầy thủ thư</a></li>
+                        }
+                        else
+                        {
+                            <li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.ReaderProfile)">Sách đang mượn</a></li><li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.ReaderBorrowHistory)">Lịch sử mượn</a></li><li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.ReaderFines)">Tiền phạt</a></li>
+                        }
+                        <li><hr class="dropdown-divider" /></li><li><form asp-controller="Account" asp-action="Logout" method="post"><button class="dropdown-item" type="submit">Đăng xuất</button></form></li>
+                    </ul>
+                </div>
+            }
+            else
+            {
+                <a class="portal-login" href="@Screens.GetPath(ScreenId.Login)">Đăng nhập</a><a class="btn portal-button portal-header__register" href="@Screens.GetPath(ScreenId.Register)">Đăng ký thẻ</a>
+            }
+            <button class="portal-menu" type="button" data-bs-toggle="collapse" data-bs-target="#portalMobileNav" aria-expanded="false" aria-controls="portalMobileNav"><i class="bi bi-list" aria-hidden="true"></i><span class="visually-hidden">Mở điều hướng</span></button>
+        </div>
+    </div>
+    <nav class="collapse portal-mobile-nav portal-container" id="portalMobileNav" aria-label="Điều hướng trên điện thoại"><a href="/" aria-current="page">Trang chủ</a><a href="@Screens.GetPath(ScreenId.BookCatalog)">Tra cứu tài liệu</a><a href="#library-services">Dịch vụ thư viện</a><a href="#about-library">Giới thiệu</a>@if (!authenticated){<a href="@Screens.GetPath(ScreenId.Register)">Đăng ký thẻ</a>}</nav>
+</header>

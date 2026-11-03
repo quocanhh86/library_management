@@ -145,14 +145,22 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Đăng ký các application services và cấu hình IOptions.
     /// </summary>
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration? configuration = null)
     {
-        services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+        if (configuration != null)
+        {
+            services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+        }
 
         services.AddScoped<IOtpService, OtpService>();
         services.AddSingleton<IEmailService, EmailService>();
         services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
         services.AddScoped<IAuthService, AuthService>();
+
+        // Dữ liệu mock cho giai đoạn dựng UI, đổi sang bản EF Core khi nối DB
+        services.AddScoped<IBookService, Services.Mock.MockBookService>();
+        services.AddScoped<ILibraryInfoService, Services.Mock.MockLibraryInfoService>();
+        services.AddScoped<IBorrowService, Services.Mock.MockBorrowService>();
 
         return services;
     }

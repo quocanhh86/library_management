@@ -1,0 +1,109 @@
+/* Nền: ghi đè biến gốc của Bootstrap 5.3 bằng token, kiểu chữ, focus, chuyển động. */
+:root {
+    --bs-font-sans-serif: var(--ff-sans);
+    --bs-body-font-family: var(--ff-sans);
+    --bs-body-font-size: var(--fs-sm);
+    --bs-body-line-height: 1.4667;
+    --bs-body-color: var(--c-ink);
+    --bs-body-bg: var(--c-paper);
+    --bs-emphasis-color: var(--c-ink);
+    --bs-secondary-color: var(--c-ink-muted);
+    --bs-border-color: var(--c-rule);
+    --bs-border-radius: var(--r-sm);
+    --bs-border-radius-sm: var(--r-sm);
+    --bs-border-radius-lg: var(--r-lg);
+    --bs-border-radius-xl: var(--r-lg);
+    --bs-border-radius-xxl: var(--r-lg);
+    --bs-primary: var(--c-indigo);
+    --bs-primary-rgb: 39, 23, 86;
+    --bs-danger: var(--c-stamp);
+    --bs-danger-rgb: 179, 38, 30;
+    --bs-success: var(--c-ok);
+    --bs-success-rgb: 46, 125, 79;
+    --bs-warning: var(--c-warn);
+    --bs-warning-rgb: 217, 112, 30;
+    --bs-link-color: var(--c-indigo);
+    --bs-link-color-rgb: 39, 23, 86;
+    --bs-link-hover-color: var(--c-indigo-hover);
+    --bs-link-hover-color-rgb: 27, 15, 64;
+    --bs-heading-color: var(--c-ink);
+    --bs-box-shadow: none;
+    --bs-box-shadow-sm: none;
+    --bs-box-shadow-lg: none;
+}
+
+::selection { background: var(--c-gold-soft); color: var(--c-ink); }
+
+body {
+    min-height: 100vh;
+    background: var(--c-paper);
+    color: var(--c-ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    margin-bottom: var(--s-3);
+}
+h1 { font-size: var(--fs-lg); line-height: var(--lh-lg); color: var(--c-indigo); }
+h2 { font-size: var(--fs-md); line-height: var(--lh-md); }
+h3 { font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+p { max-width: 68ch; }
+
+a { text-underline-offset: 0.18em; }
+a:not(.btn):hover { text-decoration-thickness: 2px; }
+
+/* Focus bàn phím luôn nhìn thấy; không dùng box-shadow */
+:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* Số liệu: mã thẻ, mã vạch, tiền, ngày */
+.num,
+td.num,
+th.num {
+    font-variant-numeric: tabular-nums;
+}
+td.num, th.num { text-align: right; }
+
+.serif { font-family: var(--ff-serif); }
+.text-muted-ink { color: var(--c-ink-muted); }
+.fs-xs { font-size: var(--fs-xs); line-height: var(--lh-xs); }
+
+kbd {
+    display: inline-block;
+    padding: 0 0.375em;
+    font-family: var(--ff-sans);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--c-ink);
+    background: var(--c-surface);
+    border: 1px solid var(--c-rule-strong);
+    border-bottom-width: 2px;
+    border-radius: var(--r-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden-focusable:focus-visible {
+    position: fixed !important; /* ghi đè utility visually-hidden của Bootstrap, vốn cũng dùng !important */
+    top: var(--s-2);
+    left: var(--s-2);
+    z-index: 2000;
+    padding: var(--s-2) var(--s-3);
+    background: var(--c-surface);
+    border-radius: var(--r-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

@@ -1,87 +1,79 @@
+﻿@model web_mvc_management.Models.ViewModels.Home.HomeViewModel
 @{
-    ViewData["Title"] = "Trang Chủ - Thư Viện Đại Học Giao Thông Vận Tải";
+    ViewData["Title"] = "Trang chủ";
+    ViewData["IsHome"] = true;
+    var catalogPath = Screens.GetPath(ScreenId.BookCatalog);
+    var studentRule = Model.Info.LoanRules.FirstOrDefault(r => r.ReaderTypeName == "Sinh viên");
+    string TopicIcon(string key) => key switch { "civil" => "buildings", "it" => "terminal", "logistics" => "graph-up-arrow", "science" => "calculator", "survey" => "compass", _ => "lightbulb" };
 }
-
-<div class="py-5">
-    <!-- Hero Banner -->
-    <div class="row align-items-center g-5 py-4">
-        <div class="col-12 col-lg-7">
-            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill fw-semibold mb-3">
-                <i class="bi bi-shield-check me-1"></i>Hệ Thống Thư Viện Số Chuẩn An Toàn OWASP &amp; NIST
-            </span>
-            <h1 class="display-5 fw-bold text-dark lh-sm mb-3">
-                Thư Viện Số Trường Đại Học <span class="text-primary">Giao Thông Vận Tải</span>
-            </h1>
-            <p class="lead text-secondary mb-4">
-                Chào mừng bạn đến với cổng thông tin thư viện UTC. Hệ thống phục vụ tra cứu hàng chục nghìn đầu sách, tài liệu nghiên cứu, hỗ trợ sinh viên, giảng viên mượn trả tài liệu nhanh chóng với công nghệ bảo mật 2 lớp OTP an toàn tối đa.
-            </p>
-
-            <div class="d-flex flex-wrap gap-3">
-                @if (User.Identity?.IsAuthenticated != true)
-                {
-                    <a asp-controller="Account" asp-action="Register" class="btn btn-primary btn-lg px-4 py-2 rounded-3 shadow-sm">
-                        <i class="bi bi-person-plus me-2"></i>Đăng Ký Mở Thẻ Ngay
-                    </a>
-                    <a asp-controller="Account" asp-action="Login" class="btn btn-outline-primary btn-lg px-4 py-2 rounded-3">
-                        <i class="bi bi-box-arrow-in-right me-2"></i>Đăng Nhập Độc Giả
-                    </a>
-                    <a asp-controller="Account" asp-action="StaffLogin" class="btn btn-outline-dark btn-lg px-4 py-2 rounded-3">
-                        <i class="bi bi-shield-lock me-2 text-warning"></i>Cổng Cán Bộ
-                    </a>
-                }
-                else
-                {
-                    var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Reader";
-                    var fullName = User.FindFirst("FullName")?.Value
-                        ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
-                        ?? User.Identity.Name;
-
-                    <div class="alert alert-success d-flex align-items-center w-100 p-3 rounded-4 shadow-sm">
-                        <i class="bi bi-person-check-fill fs-2 me-3 text-success"></i>
-                        <div>
-                            <div class="fw-bold fs-5">Xin chào, @fullName!</div>
-                            <div class="small text-muted">Bạn đang đăng nhập với tư cách: <span class="badge bg-success">@role</span>. Chúc bạn có trải nghiệm đọc sách hiệu quả!</div>
-                        </div>
-                    </div>
-                }
+<div class="portal-notice">
+    <div class="portal-container"><p><span class="portal-notice__dot"></span><strong>Thông tin bạn đọc:</strong> Mang theo thẻ thư viện khi sử dụng dịch vụ mượn – trả tài liệu.</p><a href="#opening-hours">Lịch phục vụ <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
+</div>
+<section class="portal-hero" aria-labelledby="searchTitle">
+    <div class="portal-container">
+        <p class="portal-hero__eyebrow"><i class="bi bi-bank" aria-hidden="true"></i> Cổng thông tin thư viện khoa học &amp; công nghệ GTVT</p>
+        <h1 id="searchTitle">Khám phá tri thức, mở rộng tương lai.</h1>
+        <p class="portal-hero__intro">Tra cứu và khám phá tài liệu phục vụ học tập, nghiên cứu và giảng dạy tại UTC.</p>
+        <div class="portal-search">
+            <div class="portal-search__toolbar">
+                <div class="portal-search__scopes" aria-label="Phạm vi tài liệu"><span aria-current="true">Tất cả tài liệu</span><button type="button" disabled title="Danh mục riêng đang được bổ sung">Giáo trình</button><button type="button" disabled title="Danh mục đang được bổ sung">Luận văn &amp; Đồ án</button><button type="button" disabled title="Danh mục đang được bổ sung">Tạp chí khoa học</button></div>
+                <button class="portal-advanced-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#advancedSearch" aria-expanded="false" aria-controls="advancedSearch">Tìm kiếm nâng cao <i class="bi bi-sliders2" aria-hidden="true"></i></button>
+            </div>
+            <vc:search-bar hero="true" autofocus="false" />
+            <div class="collapse" id="advancedSearch">
+                <form class="portal-advanced" action="@catalogPath" method="get">
+                    <div><label class="form-label" for="advancedKeyword">Từ khóa</label><input class="form-control" id="advancedKeyword" name="keyword" type="search" /></div>
+                    <div><label class="form-label" for="advancedCategory">Chuyên ngành</label><select class="form-select" id="advancedCategory" name="category"><option value="">Tất cả chuyên ngành</option>@foreach (var topic in Model.Topics){<option value="@topic.Key">@topic.Name</option>}</select></div>
+                    <div><label class="form-label" for="advancedYear">Năm xuất bản</label><input class="form-control" id="advancedYear" name="year" type="number" min="1000" max="9999" /></div>
+                    <label class="portal-advanced__available"><input class="form-check-input" type="checkbox" name="available" value="true" /> Chỉ sách còn bản</label><button class="btn portal-button" type="submit">Tra cứu tài liệu</button>
+                </form>
             </div>
         </div>
-
-        <div class="col-12 col-lg-5">
-            <div class="card border-0 shadow-lg rounded-4 overflow-hidden bg-primary text-white p-4 p-md-5" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%) !important;">
-                <h4 class="fw-bold mb-3 d-flex align-items-center gap-2">
-                    <i class="bi bi-lightning-charge-fill text-warning"></i>Tính Năng Nổi Bật
-                </h4>
-                <ul class="list-unstyled mb-0 d-flex flex-column gap-3">
-                    <li class="d-flex align-items-start gap-3">
-                        <div class="bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 36px; height: 36px;">
-                            <i class="bi bi-shield-lock-fill"></i>
-                        </div>
-                        <div>
-                            <div class="fw-bold">Xác thực 2 lớp OTP qua Gmail</div>
-                            <small class="text-white-50">Mọi thao tác đăng ký thẻ, đăng nhập độc giả và cán bộ đều được bảo vệ bởi mã OTP động thời hạn 5 phút.</small>
-                        </div>
-                    </li>
-                    <li class="d-flex align-items-start gap-3">
-                        <div class="bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 36px; height: 36px;">
-                            <i class="bi bi-credit-card-2-front"></i>
-                        </div>
-                        <div>
-                            <div class="fw-bold">Cấp thẻ điện tử tự động</div>
-                            <small class="text-white-50">Mã thẻ thư viện được phát hành tức thì ngay sau khi hoàn tất xác minh mã OTP hợp lệ.</small>
-                        </div>
-                    </li>
-                    <li class="d-flex align-items-start gap-3">
-                        <div class="bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 36px; height: 36px;">
-                            <i class="bi bi-lock-fill"></i>
-                        </div>
-                        <div>
-                            <div class="fw-bold">Chống Brute-Force &amp; Timing Attack</div>
-                            <small class="text-white-50">Tự động tạm khóa tài khoản 15 phút sau 5 lần nhập sai và thiêu hủy mã OTP theo chuẩn forensic.</small>
-                        </div>
-                    </li>
-                </ul>
-            </div>
+        <div class="portal-topics"><span>Chủ đề tìm kiếm:</span>@foreach (var topic in Model.Topics){<a href="@catalogPath?category=@topic.Key"><i class="bi bi-@TopicIcon(topic.Key)" aria-hidden="true"></i>@topic.Name</a>}</div>
+        <dl class="portal-summary">
+            <div><i class="bi bi-book" aria-hidden="true"></i><dt>Sách mới trên trang</dt><dd>@Model.NewArrivals.Count</dd></div>
+            <div><i class="bi bi-collection" aria-hidden="true"></i><dt>Chuyên ngành tra cứu</dt><dd>@Model.Topics.Count</dd></div>
+            <div><i class="bi bi-journal-check" aria-hidden="true"></i><dt>Sách / lượt mượn sinh viên</dt><dd>@(studentRule?.MaxBooks.ToString() ?? "—")</dd></div>
+            <div><i class="bi bi-calendar3" aria-hidden="true"></i><dt>Ngày mượn sinh viên</dt><dd>@(studentRule?.LoanDays.ToString() ?? "—")</dd></div>
+        </dl>
+        <p class="portal-summary-note">Hạn mức mượn theo cấu hình hiện tại; vui lòng xác nhận quy định tại quầy.</p>
+    </div>
+</section>
+<section class="portal-section portal-arrivals" aria-labelledby="newTitle">
+    <div class="portal-container">
+        <div class="portal-section__head"><div><p class="portal-kicker"><i class="bi bi-patch-check" aria-hidden="true"></i> Bộ sưu tập học thuật mới</p><h2 id="newTitle">Sách mới bổ sung</h2><p class="portal-section__description">Khám phá những tài liệu mới được cập nhật tại thư viện.</p></div><a class="portal-section__link" href="@catalogPath">Xem tất cả tài liệu <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
+        @if (Model.NewArrivals.Count == 0){<div class="library-empty"><h3>Tủ sách đang được cập nhật</h3><p>Bạn có thể tra cứu tài liệu hiện có trong danh mục.</p><a href="@catalogPath">Mở danh mục sách</a></div>}
+        else{<div class="portal-books">@foreach (var book in Model.NewArrivals){<partial name="_PortalBook" model="book" />}</div>}
+    </div>
+</section>
+@if (Model.ReaderLoans is { } loans)
+{
+    <section class="portal-section portal-reader-loans" aria-labelledby="loansTitle"><div class="portal-container">
+        <div class="portal-section__head"><h2 id="loansTitle">Sách bạn đang mượn</h2><a class="portal-section__link" href="@Screens.GetPath(ScreenId.ReaderBorrowHistory)">Lịch sử mượn <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
+        @if (loans.Loans.Count == 0){<p>Bạn chưa mượn sách nào. Tìm tài liệu trong danh mục để bắt đầu.</p>}
+        else{<ul class="book-list">@foreach (var loan in loans.Loans){<li class="loan-row"><partial name="_DueStamp" model="new DueStamp(loan.DueDate, Model.Today)" /><span class="book-row__body"><span class="book-row__title">@loan.Title</span><span class="book-row__meta">@loan.Authors</span></span></li>}</ul>}
+        @if (loans.UnpaidFines > 0){<p class="loans-fine">Tiền phạt chưa nộp: <strong class="num">@CurrencyHelper.ToVnd(loans.UnpaidFines)</strong>. Nộp tại quầy thủ thư.</p>}
+    </div></section>
+}
+<section class="portal-section portal-collections" aria-labelledby="subjectsTitle">
+    <div class="portal-container">
+        <div class="portal-section__head"><div><p class="portal-kicker">Kho tri thức chuyên sâu</p><h2 id="subjectsTitle">Khám phá theo chuyên ngành</h2><p class="portal-section__description">Nguồn tài liệu phục vụ các lĩnh vực đào tạo và nghiên cứu của Đại học Giao thông Vận tải.</p></div></div>
+        <div class="portal-collection-grid">
+            <article class="portal-collection"><i class="bi bi-train-front portal-collection__icon" aria-hidden="true"></i><p class="portal-kicker">Công trình &amp; hạ tầng</p><h3>Công trình giao thông</h3><p>Cầu, hầm, đường bộ, nền móng và kết cấu công trình. Tài liệu phục vụ học tập và thiết kế công trình giao thông.</p><dl><dt>Chủ đề</dt><dd>Cầu đường, kết cấu</dd><dt>Tài liệu</dt><dd>Giáo trình chuyên ngành</dd></dl><a href="@catalogPath?category=civil">Truy cập bộ sưu tập <i class="bi bi-arrow-right" aria-hidden="true"></i></a></article>
+            <article class="portal-collection"><i class="bi bi-truck portal-collection__icon" aria-hidden="true"></i><p class="portal-kicker">Vận tải – kinh tế</p><h3>Vận tải &amp; Logistics</h3><p>Kinh tế vận tải, quản trị chuỗi cung ứng, khai thác logistics và tổ chức hoạt động vận tải.</p><dl><dt>Chủ đề</dt><dd>Kinh tế, logistics</dd><dt>Tài liệu</dt><dd>Sách &amp; giáo trình</dd></dl><a href="@catalogPath?category=logistics">Truy cập bộ sưu tập <i class="bi bi-arrow-right" aria-hidden="true"></i></a></article>
+            <article class="portal-collection"><i class="bi bi-cpu portal-collection__icon" aria-hidden="true"></i><p class="portal-kicker">Công nghệ số</p><h3>Công nghệ thông tin</h3><p>Cấu trúc dữ liệu, giải thuật, cơ sở dữ liệu và các nền tảng công nghệ phục vụ kỹ thuật và nghiên cứu.</p><dl><dt>Chủ đề</dt><dd>Lập trình, dữ liệu</dd><dt>Tài liệu</dt><dd>Giáo trình CNTT</dd></dl><a href="@catalogPath?category=it">Truy cập bộ sưu tập <i class="bi bi-arrow-right" aria-hidden="true"></i></a></article>
+            <article class="portal-collection"><i class="bi bi-calculator portal-collection__icon" aria-hidden="true"></i><p class="portal-kicker">Nền tảng kỹ thuật</p><h3>Khoa học cơ bản</h3><p>Giải tích, xác suất thống kê và kiến thức nền tảng để giải quyết các bài toán trong kỹ thuật giao thông.</p><dl><dt>Chủ đề</dt><dd>Toán học ứng dụng</dd><dt>Khám phá thêm</dt><dd><a href="@catalogPath?category=survey">Trắc địa</a> / <a href="@catalogPath?category=humanities">Kỹ năng học tập</a></dd></dl><a href="@catalogPath?category=science">Truy cập bộ sưu tập <i class="bi bi-arrow-right" aria-hidden="true"></i></a></article>
         </div>
     </div>
-</div>
+</section>
+<section class="portal-section portal-information" id="library-services" aria-labelledby="servicesTitle">
+    <div class="portal-container">
+        <div class="portal-section__head"><div><p class="portal-kicker">Quy chế &amp; tiện ích bạn đọc</p><h2 id="servicesTitle">Thông tin dành cho bạn đọc</h2><p class="portal-section__description">Thông tin về lịch phục vụ, quy định mượn trả và dịch vụ hỗ trợ tại thư viện.</p></div></div>
+        <div class="portal-info-grid">
+            <section class="portal-info" id="opening-hours"><h3><i class="bi bi-clock" aria-hidden="true"></i>Giờ mở cửa</h3>@if (Model.Info.OpeningHours is { } hours){<p>@hours</p>}else{<p><strong>Lịch phục vụ</strong></p><p>Giờ mở cửa đang được cập nhật. Vui lòng kiểm tra tại quầy thủ thư trước khi đến.</p>}<div class="portal-info__notice"><strong>Lưu ý khi đến thư viện</strong><p>Mang theo thẻ thư viện còn hạn để sử dụng dịch vụ mượn sách.</p></div></section>
+            <section class="portal-info" id="borrowing-rules"><h3><i class="bi bi-journal-arrow-down" aria-hidden="true"></i>Quy định mượn trả</h3>@foreach (var rule in Model.Info.LoanRules){<p><strong>@rule.ReaderTypeName:</strong><br />Mượn tối đa <strong>@rule.MaxBooks cuốn</strong> trong thời hạn <strong>@rule.LoanDays ngày.</strong></p>}<p>Phạt trả trễ: <strong>@CurrencyHelper.ToVnd(Model.Info.OverdueFinePerDay)/ngày.</strong></p><p class="portal-info__muted">Quy định mẫu theo cấu hình hiện tại; cần xác nhận tại quầy.</p></section>
+            <section class="portal-info" id="library-location"><h3><i class="bi bi-compass" aria-hidden="true"></i>Hướng dẫn &amp; Địa điểm</h3><p><strong>Thư viện Trường Đại học Giao thông Vận tải</strong></p><p>Vị trí phòng đọc và sơ đồ thư viện đang được cập nhật.</p><p><strong>Tìm tài liệu trên kệ:</strong><br />Tra cứu tên sách và ghi lại ký hiệu xếp giá. Cung cấp ký hiệu tại quầy để được hướng dẫn tìm sách.</p><a class="portal-info__link" href="@catalogPath">Tra cứu trước khi đến <i class="bi bi-arrow-right" aria-hidden="true"></i></a></section>
+            <section class="portal-info" id="reader-support"><h3><i class="bi bi-headset" aria-hidden="true"></i>Hỗ trợ &amp; Đăng ký</h3><p><strong>Đăng ký thẻ bạn đọc:</strong><br />Điền thông tin đăng ký và làm theo hướng dẫn xác thực tài khoản.</p><p><strong>Hỗ trợ tra cứu tài liệu:</strong><br />@if (Model.Info.Contact is { } contact){@contact}else{<span>Liên hệ trực tiếp quầy thủ thư để được hỗ trợ về tài liệu và quy định mượn trả.</span>}</p><a class="btn portal-button" href="@Screens.GetPath(ScreenId.Register)">Đăng ký thẻ thư viện</a><a class="portal-info__secondary" href="@Screens.GetPath(ScreenId.Login)">Đăng nhập tài khoản bạn đọc</a></section>
+        </div>
+    </div>
+</section>

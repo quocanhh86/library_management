@@ -1,144 +1,156 @@
+@{
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
+    var isStaff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Librarian);
+    var fullName = User.FindFirst("FullName")?.Value
+        ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+        ?? User.Identity?.Name;
+    var title = ViewData["Title"] as string;
+    // Trang chủ có dải tìm riêng; trang xác thực không cần ô tìm và nút đăng nhập trên header.
+    var isHome = ViewData["IsHome"] as bool? == true;
+    var isAuthPage = ViewData["IsAuthPage"] as bool? == true;
+}
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Thư Viện Đại Học Giao Thông Vận Tải</title>
+    <meta name="description" content="Thư viện Đại học Giao thông Vận tải: tra cứu giáo trình, tài liệu chuyên ngành, tình trạng sách và thông tin phục vụ bạn đọc." />
+    <title>@(string.IsNullOrEmpty(title) ? "Thư viện UTC" : $"{title} – Thư viện UTC")</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="~/images/favicon-32.png" />
+    <link rel="preload" href="~/fonts/be-vietnam-pro-vietnamese-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/web_mvc_management.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/fonts.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/base.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/areas/reader.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/areas/library.css" asp-append-version="true" />
+    @if (isHome)
+    {
+        <link rel="stylesheet" href="~/css/areas/portal-home.css" asp-append-version="true" />
+    }
+    @await RenderSectionAsync("Head", required: false)
 </head>
-<body class="d-flex flex-column min-vh-100 bg-light">
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm py-2">
-            <div class="container">
-                <a class="navbar-brand fw-bold d-flex align-items-center gap-2" asp-controller="Home" asp-action="Index">
-                    <span class="d-inline-flex align-items-center justify-content-center bg-white text-primary rounded-circle p-1" style="width: 32px; height: 32px;">
-                        <i class="bi bi-book-half fs-5"></i>
-                    </span>
-                    <span>THƯ VIỆN UTC</span>
-                </a>
+<body class="reader-area d-flex flex-column @(isHome ? "portal-home" : "")">
+    <a class="visually-hidden-focusable" href="#main">Bỏ qua đến nội dung chính</a>
 
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMainContent" aria-controls="navbarMainContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+    @if (isHome)
+    {
+        <partial name="_PortalHeader" />
+    }
+    else
+    {
+    <header class="site-header">
+        <div class="wrap site-header__inner">
+            <a class="brand" href="/">
+                <img class="brand__logo" src="~/images/utc-logo-128.webp" width="40" height="40" alt="Logo UTC" />
+                <span class="brand__text">
+                    <span class="brand__name">Thư viện UTC</span>
+                    <span class="brand__org">Trường Đại học Giao thông Vận tải</span>
+                </span>
+            </a>
 
-                <div class="navbar-collapse collapse" id="navbarMainContent">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item">
-                            <a class="nav-link text-white" asp-controller="Home" asp-action="Index">
-                                <i class="bi bi-house-door me-1"></i>Trang Chủ
-                            </a>
-                        </li>
-                    </ul>
+            @if (isHome)
+            {
+                <nav class="desktop-library-nav" aria-label="Điều hướng chính">
+                    <a href="/" aria-current="page">Trang chủ</a>
+                    <a href="@Screens.GetPath(ScreenId.BookCatalog)">Tra cứu sách</a>
+                    <a href="/#library-services">Dịch vụ thư viện</a>
+                    <a href="/#about-library">Giới thiệu</a>
+                </nav>
+            }
 
-                    <ul class="navbar-nav ms-auto align-items-center gap-2">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Reader";
-                            var fullName = User.FindFirst("FullName")?.Value
-                                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
-                                ?? User.Identity.Name;
-                            var roleBadgeClass = role switch
-                            {
-                                "Admin" => "bg-danger",
-                                "Librarian" => "bg-warning text-dark",
-                                _ => "bg-light text-primary"
-                            };
-
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle text-white d-flex align-items-center gap-2" href="#" id="userMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-person-circle fs-5"></i>
-                                    <span>@fullName</span>
-                                    <span class="badge @roleBadgeClass ms-1">@role</span>
-                                </a>
-                                <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3" aria-labelledby="userMenuDropdown">
-                                    <li class="px-3 py-2 border-bottom">
-                                        <div class="small fw-bold text-dark">@fullName</div>
-                                        <div class="small text-muted">Vai trò: <span class="badge @roleBadgeClass">@role</span></div>
-                                    </li>
-                                    <li>
-                                        <form asp-controller="Account" asp-action="Logout" method="post" class="p-2">
-                                            @Html.AntiForgeryToken()
-                                            <button type="submit" class="btn btn-outline-danger btn-sm w-100 rounded-2 text-start">
-                                                <i class="bi bi-box-arrow-right me-2"></i>Đăng Xuất
-                                            </button>
-                                        </form>
-                                    </li>
-                                </ul>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="nav-item">
-                                <a class="btn btn-outline-light btn-sm rounded-pill px-3" asp-controller="Account" asp-action="Register">
-                                    <i class="bi bi-person-plus me-1"></i>Mở Thẻ Độc Giả
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="btn btn-light btn-sm text-primary fw-semibold rounded-pill px-3 shadow-sm" asp-controller="Account" asp-action="Login">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i>Đăng Nhập Độc Giả
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="btn btn-dark btn-sm rounded-pill px-3" asp-controller="Account" asp-action="StaffLogin" style="background-color: #0f172a; border-color: #0f172a;">
-                                    <i class="bi bi-shield-lock me-1 text-warning"></i>Cán Bộ
-                                </a>
-                            </li>
-                        }
-                    </ul>
+            @if (!isHome && !isAuthPage)
+            {
+                <div class="site-header__search">
+                    <vc:search-bar />
                 </div>
-            </div>
-        </nav>
-    </header>
+            }
 
-    <div class="container flex-grow-1">
-        <!-- Toast / Alert Flash Notifications from TempData -->
-        @if (TempData["SuccessMessage"] != null)
-        {
-            <div class="alert alert-success alert-dismissible fade show mt-3 shadow-sm d-flex align-items-center" role="alert">
-                <i class="bi bi-check-circle-fill me-2 fs-5"></i>
-                <div>@TempData["SuccessMessage"]</div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <div class="site-header__account">
+                @if (isHome)
+                {
+                    <button class="btn btn-quiet library-menu-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#mobileLibraryNav" aria-expanded="false" aria-controls="mobileLibraryNav"><i class="bi bi-list" aria-hidden="true"></i><span class="visually-hidden">Mở điều hướng</span></button>
+                }
+                @if (isAuthenticated)
+                {
+                    <div class="dropdown">
+                        <button class="account-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person" aria-hidden="true"></i>
+                            <span class="account-toggle__name">@fullName</span>
+                            <span class="visually-hidden">Mở menu tài khoản</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            @if (isStaff)
+                            {
+                                <li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.CirculationBorrow)">Vào quầy thủ thư</a></li>
+                            }
+                            else
+                            {
+                                <li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.ReaderProfile)">Sách đang mượn</a></li>
+                                <li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.ReaderBorrowHistory)">Lịch sử mượn</a></li>
+                                <li><a class="dropdown-item" href="@Screens.GetPath(ScreenId.ReaderFines)">Tiền phạt</a></li>
+                            }
+                            <li><hr class="dropdown-divider" /></li>
+                            <li>
+                                <form asp-controller="Account" asp-action="Logout" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="dropdown-item">Đăng xuất</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                }
+                else if (!isAuthPage)
+                {
+                    <a class="site-header__register" href="@Screens.GetPath(ScreenId.Register)">Đăng ký thẻ</a>
+                    <a class="btn btn-quiet" href="@Screens.GetPath(ScreenId.Login)">Đăng nhập</a>
+                }
             </div>
-        }
-        @if (TempData["ErrorMessage"] != null)
-        {
-            <div class="alert alert-danger alert-dismissible fade show mt-3 shadow-sm d-flex align-items-center" role="alert">
-                <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
-                <div>@TempData["ErrorMessage"]</div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        }
-        @if (TempData["WarningMessage"] != null)
-        {
-            <div class="alert alert-warning alert-dismissible fade show mt-3 shadow-sm d-flex align-items-center" role="alert">
-                <i class="bi bi-exclamation-circle-fill me-2 fs-5"></i>
-                <div>@TempData["WarningMessage"]</div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        }
-        @if (TempData["InfoMessage"] != null)
-        {
-            <div class="alert alert-info alert-dismissible fade show mt-3 shadow-sm d-flex align-items-center" role="alert">
-                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
-                <div>@TempData["InfoMessage"]</div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        }
-
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
-
-    <footer class="footer mt-auto py-3 bg-white border-top text-muted">
-        <div class="container text-center small">
-            &copy; 2026 - Hệ Thống Quản Lý Thư Viện Đại Học Giao Thông Vận Tải (UTC). Bảo mật đa lớp OWASP &amp; NIST SP 800-63B.
         </div>
+        @if (isHome)
+        {
+            <nav class="collapse mobile-library-nav wrap" id="mobileLibraryNav" aria-label="Điều hướng trên điện thoại"><a href="/" aria-current="page">Trang chủ</a><a href="@Screens.GetPath(ScreenId.BookCatalog)">Tra cứu sách</a><a href="/#library-services">Dịch vụ thư viện</a><a href="/#about-library">Giới thiệu</a><a href="@Screens.GetPath(ScreenId.Register)">Đăng ký thẻ thư viện</a></nav>
+        }
+    </header>
+    }
+
+    <main id="main" class="site-main flex-grow-1 @(isHome ? "site-main--flush-top" : "") @(isAuthPage ? "site-main--auth" : "")">
+        @if (isHome)
+        {
+            @RenderBody()
+        }
+        else
+        {
+            <div class="wrap">
+                @RenderBody()
+            </div>
+        }
+    </main>
+
+    @if (isHome)
+    {
+        <partial name="_PortalFooter" />
+    }
+    else
+    {
+    <footer class="site-footer">
+        <div class="wrap library-footer" id="about-library">
+            <div><a class="brand" href="/"><img class="brand__logo" src="~/images/utc-logo-128.webp" width="40" height="40" alt="Logo UTC" /><span class="brand__text"><span class="brand__name">Thư viện UTC</span><span class="brand__org">Trường Đại học Giao thông Vận tải</span></span></a><p>Đồng hành cùng học tập, giảng dạy và nghiên cứu.</p></div>
+            <nav aria-label="Liên kết cuối trang"><a href="@Screens.GetPath(ScreenId.BookCatalog)">Tra cứu sách</a><a href="/#library-services">Thông tin thư viện</a>
+            @if (!isAuthenticated)
+            {
+                <a href="@Screens.GetPath(ScreenId.StaffLogin)">Đăng nhập cán bộ</a>
+            }
+            </nav>
+        </div>
+        <div class="wrap library-footer__bottom"><span>© @DateTime.Now.Year Thư viện Đại học Giao thông Vận tải</span><span>Học tập hôm nay. Kiến tạo ngày mai.</span></div>
     </footer>
+    }
+
+    <partial name="_Toast" />
+    <partial name="_ConfirmModal" />
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
