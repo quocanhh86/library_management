@@ -311,7 +311,11 @@ public class AccountController(
             HttpContext.Session.Remove(SessionPendingReturnUrl);
 
             SetSuccessMessage("Đã đăng nhập.");
-            return RedirectToLocal(returnUrl);
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return Redirect(Screens.GetPath(ScreenId.ManageBooks));
         }
 
         ModelState.AddModelError(string.Empty, ErrorMessages.Get(ErrorCode.OtpPurposeMismatch));

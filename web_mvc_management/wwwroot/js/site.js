@@ -1,4 +1,4 @@
-﻿// Hành vi dùng chung: toast, modal xác nhận, phím tắt, gợi ý tìm kiếm, phân trang.
+// Hành vi dùng chung: toast, modal xác nhận, phím tắt, gợi ý tìm kiếm, phân trang.
 (function ($) {
     "use strict";
 
@@ -81,6 +81,54 @@
             if (el.href) window.location.href = el.href;
             else el.dispatchEvent(new CustomEvent("confirmed", { bubbles: true }));
         });
+    });
+
+    // ---------- Modal xác nhận XÓA CỨNG 3 BƯỚC (Đổi Status -> Delete -> Confirm) ----------
+    let activeHardDeleteForm = null;
+
+    $(document).on("input", "#hardDeleteConfirmInput", function () {
+        const val = (this.value || "").trim().toUpperCase();
+        const okBtn = document.getElementById("hardDeleteOkBtn");
+        if (okBtn) okBtn.disabled = val !== "XOA";
+    });
+
+    $(document).on("click", "#hardDeleteOkBtn", function () {
+        if (!activeHardDeleteForm) return;
+        const inputEl = document.getElementById("hardDeleteConfirmInput");
+        if (!inputEl || inputEl.value.trim().toUpperCase() !== "XOA") return;
+
+        let hidden = activeHardDeleteForm.querySelector("input[name='confirmCode']");
+        if (!hidden) {
+            hidden = document.createElement("input");
+            hidden.type = "hidden";
+            hidden.name = "confirmCode";
+            activeHardDeleteForm.appendChild(hidden);
+        }
+        hidden.value = "XOA";
+        activeHardDeleteForm.dataset.hardConfirmed = "1";
+
+        const modalEl = document.getElementById("hardDeleteModal");
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        activeHardDeleteForm.requestSubmit ? activeHardDeleteForm.requestSubmit() : activeHardDeleteForm.submit();
+    });
+
+    $(document).on("submit", "form[data-hard-delete]", function (e) {
+        if (this.dataset.hardConfirmed === "1") return;
+        e.preventDefault();
+        activeHardDeleteForm = this;
+
+        const modalEl = document.getElementById("hardDeleteModal");
+        const targetLabel = document.getElementById("hardDeleteTargetName");
+        const confirmInput = document.getElementById("hardDeleteConfirmInput");
+        const okBtn = document.getElementById("hardDeleteOkBtn");
+
+        if (targetLabel) targetLabel.textContent = this.dataset.hardDelete || "Bản ghi đã chọn";
+        if (confirmInput) confirmInput.value = "";
+        if (okBtn) okBtn.disabled = true;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalEl.addEventListener("shown.bs.modal", () => confirmInput?.focus(), { once: true });
+        modal.show();
     });
 
     // ---------- Phím tắt ----------

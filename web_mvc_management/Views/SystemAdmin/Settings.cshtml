@@ -1,0 +1,163 @@
+@model web_mvc_management.Models.ViewModels.SystemAdmin.SystemSettingsPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quy định mượn trả & mức phạt";
+    ViewData["Screen"] = ScreenId.SystemSettings;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Cấu hình quy định mượn trả & mức phạt</h1>
+        <p class="text-muted-ink mb-0">Thiết lập mức phạt quá hạn, tỷ lệ đền bù sách hỏng/mất, trần nợ phạt tối đa, số ngày mượn và số sách tối đa.</p>
+    </div>
+    <div class="staff-page-head__keys">
+        <span class="shortcut-hint"><kbd>F9</kbd> Lưu quy định phạt</span>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- KHỐI 1: CẤU HÌNH MỨC PHẠT & VẬN HÀNH THƯ VIỆN -->
+    <div class="col-lg-5">
+        <div class="panel h-100">
+            <h2 class="mb-3">1. Quy định mức phạt & giữ chỗ</h2>
+            <form method="post" action="@Screens.GetPath(ScreenId.SystemSettings)/Save" novalidate>
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="SettingForm.Id" />
+
+                <div asp-validation-summary="ModelOnly" class="inline-error mb-3"></div>
+
+                <div class="mb-3">
+                    <label asp-for="SettingForm.OverdueFinePerDay" class="form-label"></label>
+                    <div class="input-group">
+                        <input asp-for="SettingForm.OverdueFinePerDay" type="number" step="500" class="form-control num" />
+                        <span class="input-group-text">₫ / ngày</span>
+                    </div>
+                    <div class="form-text">Áp dụng cho mỗi cuốn sách trả trễ hạn trên từng ngày quá hạn.</div>
+                    <span asp-validation-for="SettingForm.OverdueFinePerDay" class="field-validation-error"></span>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="SettingForm.DamagedFinePercent" class="form-label"></label>
+                        <div class="input-group">
+                            <input asp-for="SettingForm.DamagedFinePercent" type="number" class="form-control num" min="0" max="500" />
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <span asp-validation-for="SettingForm.DamagedFinePercent" class="field-validation-error"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="SettingForm.LostFinePercent" class="form-label"></label>
+                        <div class="input-group">
+                            <input asp-for="SettingForm.LostFinePercent" type="number" class="form-control num" min="50" max="500" />
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <span asp-validation-for="SettingForm.LostFinePercent" class="field-validation-error"></span>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="SettingForm.MaxUnpaidFine" class="form-label"></label>
+                    <div class="input-group">
+                        <input asp-for="SettingForm.MaxUnpaidFine" type="number" step="5000" class="form-control num" />
+                        <span class="input-group-text">₫</span>
+                    </div>
+                    <div class="form-text">Độc giả nợ phạt vượt mức này sẽ bị chặn mượn thêm sách mới.</div>
+                    <span asp-validation-for="SettingForm.MaxUnpaidFine" class="field-validation-error"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label asp-for="SettingForm.ReservationHoldHours" class="form-label"></label>
+                    <div class="input-group">
+                        <input asp-for="SettingForm.ReservationHoldHours" type="number" class="form-control num" min="1" max="336" />
+                        <span class="input-group-text">giờ</span>
+                    </div>
+                    <span asp-validation-for="SettingForm.ReservationHoldHours" class="field-validation-error"></span>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fs-xs text-muted-ink">
+                        @if (Model.SettingForm.UpdatedAt.HasValue)
+                        {
+                            <span>Cập nhật: @DateTimeHelper.ToVietnamTimeString(Model.SettingForm.UpdatedAt.Value)</span>
+                        }
+                    </span>
+                    <button type="submit" class="btn btn-primary" data-shortcut-click="F9">
+                        <i class="bi bi-check-lg" aria-hidden="true"></i>Lưu mức phạt <kbd>F9</kbd>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- KHỐI 2: CẤU HÌNH SỐ NGÀY MƯỢN & SỐ SÁCH TỐI ĐA THEO ĐỐI TƯỢNG -->
+    <div class="col-lg-7">
+        <div class="panel h-100">
+            <div class="d-flex justify-content-between align-items-baseline mb-3">
+                <div>
+                    <h2 class="mb-1">2. Quy định số ngày mượn & số sách tối đa</h2>
+                    <p class="fs-xs text-muted-ink mb-0">Chỉnh sửa trực tiếp số sách tối đa và số ngày mượn cho từng loại thẻ độc giả.</p>
+                </div>
+                <a href="@Screens.GetPath(ScreenId.ManageReaderTypes)" class="btn btn-quiet btn-sm">Quản lý chi tiết</a>
+            </div>
+
+            <div class="table-frame">
+                <table class="table data-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Đối tượng độc giả</th>
+                            <th scope="col" style="width: 140px;">Số sách tối đa</th>
+                            <th scope="col" style="width: 140px;">Số ngày mượn</th>
+                            <th scope="col" class="text-end">Lưu nhanh</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rt in Model.ReaderTypes)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="fw-medium">@rt.Name</div>
+                                    <div class="fs-xs text-muted-ink num">Mã: @rt.Code · Gia hạn @rt.MaxRenewals lần (@rt.RenewDays ngày)</div>
+                                </td>
+                                <td colspan="3">
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageReaderTypes)/Save" class="row g-2 align-items-center">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="returnPage" value="Settings" />
+                                        <input type="hidden" name="Id" value="@rt.Id" />
+                                        <input type="hidden" name="Code" value="@rt.Code" />
+                                        <input type="hidden" name="Name" value="@rt.Name" />
+                                        <input type="hidden" name="MaxRenewals" value="@rt.MaxRenewals" />
+                                        <input type="hidden" name="RenewDays" value="@rt.RenewDays" />
+                                        <input type="hidden" name="CardValidMonths" value="@rt.CardValidMonths" />
+                                        <input type="hidden" name="Description" value="@rt.Description" />
+                                        <input type="hidden" name="Status" value="@rt.Status" />
+
+                                        <div class="col-5">
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" class="form-control num" name="MaxBorrowBooks" value="@rt.MaxBorrowBooks" min="1" max="50" required aria-label="Số sách tối đa của @rt.Name" />
+                                                <span class="input-group-text">cuốn</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-5">
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" class="form-control num" name="LoanDays" value="@rt.LoanDays" min="1" max="180" required aria-label="Số ngày mượn của @rt.Name" />
+                                                <span class="input-group-text">ngày</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-2 text-end">
+                                            <button type="submit" class="btn btn-quiet btn-sm">Lưu</button>
+                                        </div>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+

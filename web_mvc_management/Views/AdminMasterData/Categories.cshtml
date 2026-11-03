@@ -1,0 +1,177 @@
+@model web_mvc_management.Models.ViewModels.AdminCatalog.CategoryPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quản lý thể loại sách";
+    ViewData["Screen"] = ScreenId.ManageCategories;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Quản lý thể loại sách</h1>
+        <p class="text-muted-ink mb-0">Phân loại chuyên ngành và lĩnh vực cho danh mục đầu sách thư viện.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCategoryModal()">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>Thêm thể loại
+    </button>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.ManageCategories)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label" for="catKeyword">Tìm kiếm thể loại <kbd>/</kbd></label>
+            <input type="search" class="form-control" id="catKeyword" name="Keyword" value="@Model.Filter.Keyword" data-search-input placeholder="Tên thể loại hoặc mô tả..." />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="catStatus">Trạng thái</label>
+            <select class="form-select" id="catStatus" name="Status">
+                <option value="">Đang dùng (Mặc định)</option>
+                <option value="@EntityStatus.Active" selected="@(Model.Filter.Status == EntityStatus.Active)">Đang hoạt động (ACTIVE)</option>
+                <option value="@EntityStatus.Inactive" selected="@(Model.Filter.Status == EntityStatus.Inactive)">Tạm ẩn (INACTIVE)</option>
+                <option value="@EntityStatus.Deleted" selected="@(Model.Filter.Status == EntityStatus.Deleted)">Đã xóa mềm (DELETED)</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Lọc</button>
+        </div>
+    </div>
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Tên thể loại</th>
+                <th scope="col">Mô tả chuyên ngành</th>
+                <th scope="col" class="num">Số đầu sách</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.PagedItems.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="5">
+                        <div class="state-block text-center">
+                            <div class="state-block__title">Chưa có thể loại phù hợp</div>
+                        </div>
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in Model.PagedItems.Items)
+                {
+                    <tr>
+                        <td class="fw-medium">@item.Name</td>
+                        <td class="text-muted-ink">@(string.IsNullOrWhiteSpace(item.Description) ? "—" : item.Description)</td>
+                        <td class="num">
+                            <a href="@Screens.GetPath(ScreenId.ManageBooks)?CategoryId=@item.Id" class="text-decoration-none">@item.BookCount đầu sách</a>
+                        </td>
+                        <td>
+                            @if (item.Status == EntityStatus.Deleted)
+                            {
+                                <span class="status status--danger">Đã xóa mềm (DELETED)</span>
+                            }
+                            else
+                            {
+                                <span class="status @(item.Status == EntityStatus.Active ? "status--ok" : "status--neutral")">
+                                    @(item.Status == EntityStatus.Active ? "Đang dùng" : "Tạm ẩn")
+                                </span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-1">
+                                @if (item.Status == EntityStatus.Deleted)
+                                {
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageCategories)/Restore/@item.Id" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm">Khôi phục</button>
+                                    </form>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageCategories)/HardDelete/@item.Id" class="d-inline"
+                                          data-hard-delete="Thể loại '@item.Name'">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-danger btn-sm">Xóa vĩnh viễn</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-quiet btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#categoryModal"
+                                            data-id="@item.Id"
+                                            data-name="@item.Name"
+                                            data-desc="@item.Description"
+                                            data-status="@item.Status"
+                                            onclick="openCategoryModal(this)">
+                                        Sửa
+                                    </button>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageCategories)/Delete/@item.Id" class="d-inline"
+                                          data-confirm="Bước 1: Xóa mềm thể loại '@item.Name'?"
+                                          data-confirm-detail="Thể loại sẽ chuyển sang trạng thái DELETED (xóa mềm). Chỉ xóa mềm được khi không còn đầu sách đang hoạt động thuộc thể loại này."
+                                          data-confirm-ok="Xóa mềm (DELETED)"
+                                          data-confirm-cancel="Giữ lại"
+                                          data-confirm-danger>
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm text-danger">Xóa mềm</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.PagedItems" />
+
+<div class="modal fade" id="categoryModal" tabindex="-1" aria-labelledby="categoryModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.ManageCategories)/Save">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="catId" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="categoryModalTitle">Thêm thể loại sách</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="catName">Tên thể loại</label>
+                        <input type="text" class="form-control" id="catName" name="Name" required maxlength="100" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="catDesc">Mô tả</label>
+                        <textarea class="form-control" id="catDesc" name="Description" rows="3" maxlength="255"></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="catStatusSelect">Trạng thái</label>
+                        <select class="form-select" id="catStatusSelect" name="Status">
+                            <option value="@EntityStatus.Active">Đang hoạt động (ACTIVE)</option>
+                            <option value="@EntityStatus.Inactive">Tạm ẩn (INACTIVE)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openCategoryModal(btn) {
+            document.getElementById('categoryModalTitle').textContent = btn ? 'Cập nhật thể loại sách' : 'Thêm thể loại sách';
+            document.getElementById('catId').value = btn ? (btn.dataset.id || '') : '';
+            document.getElementById('catName').value = btn ? (btn.dataset.name || '') : '';
+            document.getElementById('catDesc').value = btn ? (btn.dataset.desc || '') : '';
+            document.getElementById('catStatusSelect').value = btn ? (btn.dataset.status || 'ACTIVE') : 'ACTIVE';
+        }
+    </script>
+}
+

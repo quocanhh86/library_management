@@ -1,0 +1,208 @@
+@model web_mvc_management.Models.ViewModels.AdminCatalog.AdminBooksPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quản lý danh mục đầu sách";
+    ViewData["Screen"] = ScreenId.ManageBooks;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Quản lý danh mục đầu sách</h1>
+        <p class="text-muted-ink mb-0">Phân loại theo thể loại, tác giả, nhà xuất bản, năm xuất bản và quản lý số lượng bản sao theo từng đầu sách.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-quiet" href="@Screens.GetPath(ScreenId.ManageBookCopies)">
+            <i class="bi bi-upc-scan" aria-hidden="true"></i>Quản lý bản sao / mã vạch
+        </a>
+        <a class="btn btn-primary" href="@Screens.GetPath(ScreenId.ManageBooks)/Create">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nhập đầu sách mới
+        </a>
+    </div>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.ManageBooks)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label" for="bookKeyword">Từ khóa <kbd>/</kbd></label>
+            <input type="search" class="form-control" id="bookKeyword" name="Keyword" value="@Model.Filter.Keyword" data-search-input placeholder="Tên sách, mã ISBN, tên tác giả..." />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="bookCategory">Thể loại</label>
+            <select class="form-select" id="bookCategory" name="CategoryId">
+                <option value="">Tất cả thể loại</option>
+                @foreach (var c in Model.Categories)
+                {
+                    <option value="@c.Id" selected="@(Model.Filter.CategoryId == c.Id)">@c.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="bookAuthor">Tác giả</label>
+            <select class="form-select" id="bookAuthor" name="AuthorId">
+                <option value="">Tất cả tác giả</option>
+                @foreach (var a in Model.Authors)
+                {
+                    <option value="@a.Id" selected="@(Model.Filter.AuthorId == a.Id)">@a.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="bookPublisher">Nhà xuất bản</label>
+            <select class="form-select" id="bookPublisher" name="PublisherId">
+                <option value="">Tất cả NXB</option>
+                @foreach (var p in Model.Publishers)
+                {
+                    <option value="@p.Id" selected="@(Model.Filter.PublisherId == p.Id)">@p.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-1">
+            <label class="form-label" for="bookYear">Năm XB</label>
+            <input type="number" class="form-control num" id="bookYear" name="PublicationYear" value="@Model.Filter.PublicationYear" min="1800" max="2100" placeholder="Năm" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="bookStatus">Trạng thái</label>
+            <div class="d-flex gap-2">
+                <select class="form-select" id="bookStatus" name="Status">
+                    <option value="">Đang dùng (Mặc định)</option>
+                    <option value="@EntityStatus.Active" selected="@(Model.Filter.Status == EntityStatus.Active)">Hoạt động (ACTIVE)</option>
+                    <option value="@EntityStatus.Inactive" selected="@(Model.Filter.Status == EntityStatus.Inactive)">Tạm ẩn (INACTIVE)</option>
+                    <option value="@EntityStatus.Deleted" selected="@(Model.Filter.Status == EntityStatus.Deleted)">Đã xóa mềm (DELETED)</option>
+                </select>
+                <button type="submit" class="btn btn-primary">Lọc</button>
+            </div>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || Model.Filter.CategoryId.HasValue || Model.Filter.AuthorId.HasValue || Model.Filter.PublisherId.HasValue || Model.Filter.PublicationYear.HasValue || !string.IsNullOrWhiteSpace(Model.Filter.Status))
+    {
+        <div class="mt-2">
+            <a href="@Screens.GetPath(ScreenId.ManageBooks)" class="fs-xs">Xóa toàn bộ bộ lọc</a>
+        </div>
+    }
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Đầu sách / ISBN</th>
+                <th scope="col">Thể loại</th>
+                <th scope="col">Tác giả</th>
+                <th scope="col">Nhà xuất bản & Năm</th>
+                <th scope="col">Kệ sách</th>
+                <th scope="col" class="num">Bản sao (Sẵn / Tổng)</th>
+                <th scope="col" class="num">Hỏng/Mất</th>
+                <th scope="col" class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.PagedBooks.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="8">
+                        <div class="state-block text-center">
+                            <div class="state-block__title">Không tìm thấy đầu sách phù hợp</div>
+                            <p class="state-block__text mb-3">Thử thay đổi điều kiện lọc hoặc nhập đầu sách mới vào kho.</p>
+                            <a href="@Screens.GetPath(ScreenId.ManageBooks)/Create" class="btn btn-primary btn-sm">Nhập đầu sách mới</a>
+                        </div>
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in Model.PagedBooks.Items)
+                {
+                    <tr>
+                        <td>
+                            <a href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", item.Id.ToString())" class="fw-medium text-decoration-none">@item.Title</a>
+                            @if (item.Status == EntityStatus.Deleted)
+                            {
+                                <span class="status status--danger ms-1">Đã xóa mềm (DELETED)</span>
+                            }
+                            else if (item.Status == EntityStatus.Inactive)
+                            {
+                                <span class="status status--neutral ms-1">Tạm ẩn</span>
+                            }
+                            <div class="fs-xs text-muted-ink num">
+                                ISBN: @(item.Isbn ?? "—")
+                                @if (!string.IsNullOrWhiteSpace(item.Edition))
+                                {
+                                    <span> · @item.Edition</span>
+                                }
+                            </div>
+                        </td>
+                        <td>@item.CategoryName</td>
+                        <td>@item.AuthorsText</td>
+                        <td>
+                            <div>@item.PublisherName</div>
+                            <div class="fs-xs text-muted-ink num">Năm: @(item.PublicationYear?.ToString() ?? "—")</div>
+                        </td>
+                        <td class="num" style="text-align:left">@item.ShelfSummary</td>
+                        <td class="num">
+                            <a href="@Screens.GetPath(ScreenId.ManageBookCopies)?BookId=@item.Id" class="text-decoration-none">
+                                @if (item.AvailableCopies > 0)
+                                {
+                                    <span class="status status--ok">@item.AvailableCopies / @item.TotalCopies cuốn</span>
+                                }
+                                else
+                                {
+                                    <span class="status status--neutral">0 / @item.TotalCopies cuốn</span>
+                                }
+                            </a>
+                            @if (item.DisposedCopies > 0)
+                            {
+                                <div class="fs-xs text-muted-ink">Đã thanh lý: @item.DisposedCopies</div>
+                            }
+                        </td>
+                        <td class="num">
+                            @if (item.DamagedOrLostCopies > 0)
+                            {
+                                <span class="status status--warn">@item.DamagedOrLostCopies cuốn</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted-ink">0</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-1">
+                                @if (item.Status == EntityStatus.Deleted)
+                                {
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageBooks)/Restore/@item.Id" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm">Khôi phục</button>
+                                    </form>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageBooks)/HardDelete/@item.Id" class="d-inline"
+                                          data-hard-delete="Đầu sách '@item.Title' (ISBN: @(item.Isbn ?? "—"))"
+                                          data-hard-delete-detail="Chỉ xóa vĩnh viễn được khi đầu sách này không còn bản sao vật lý hoặc lịch sử đặt trước liên kết.">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-danger btn-sm">Xóa vĩnh viễn</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <a href="@Screens.GetPath(ScreenId.ManageBookCopies)?BookId=@item.Id" class="btn btn-quiet btn-sm" title="Quản lý các bản sao / mã vạch của đầu sách này">
+                                        <i class="bi bi-upc-scan" aria-hidden="true"></i>Bản sao
+                                    </a>
+                                    <a href="@Screens.GetPath(ScreenId.ManageBooks)/Edit/@item.Id" class="btn btn-quiet btn-sm">Sửa</a>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageBooks)/Delete/@item.Id" class="d-inline"
+                                          data-confirm="Bước 1: Xóa mềm đầu sách '@item.Title'?"
+                                          data-confirm-detail="Đầu sách sẽ chuyển sang trạng thái DELETED (xóa mềm) và ẩn khỏi danh mục tra cứu. Bạn có thể khôi phục hoặc thực hiện xóa cứng ở bộ lọc Đã xóa mềm."
+                                          data-confirm-ok="Xóa mềm (DELETED)"
+                                          data-confirm-cancel="Giữ lại"
+                                          data-confirm-danger>
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm text-danger">Xóa mềm</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.PagedBooks" />
+

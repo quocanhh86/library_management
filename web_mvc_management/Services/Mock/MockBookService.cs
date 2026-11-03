@@ -1,11 +1,11 @@
+using System;
+using System.Collections.Generic;
 using web_mvc_management.Models.ViewModels.Catalog;
-using web_mvc_management.Models.ViewModels.Home;
-using web_mvc_management.Util;
 
 namespace web_mvc_management.Services.Mock;
 
 /// <summary>
-/// Dữ liệu mẫu cho giai đoạn dựng UI. Thay bằng service EF Core khi nối DB, View không đổi.
+/// Dữ liệu mẫu tĩnh cho trang styleguide (/dev/styleguide).
 /// </summary>
 public static class MockCatalog
 {
@@ -25,7 +25,6 @@ public static class MockCatalog
         EarliestDueDate = earliestDue
     };
 
-    // TODO(xác nhận): danh sách thể loại thật; tên ngắn vì hiện trên bìa chữ 56px và dải tìm kiếm
     private const string Civil = "Cầu đường";
     private const string Logistics = "Kinh tế vận tải";
     private const string It = "Công nghệ thông tin";
@@ -51,41 +50,4 @@ public static class MockCatalog
         B(14, "Xác suất thống kê ứng dụng trong kỹ thuật", "Trương Thị Lan", "NXB Khoa học và Kỹ thuật", 2019, "519.5 TR-L", Science, "science", 3, 8),
         B(15, "Phương pháp học tập ở bậc đại học", "Mai Thanh Bình", "NXB Trẻ", 2024, "378.17 MA-B", Humanities, "humanities", 2, 2),
     ];
-}
-
-public class MockBookService : IBookService
-{
-    public Task<IReadOnlyList<BookSummaryViewModel>> GetNewArrivalsAsync(int count, CancellationToken ct = default)
-    {
-        // mock lấy theo năm xuất bản; bản EF lấy theo ngày nhập bản sao (book_copies.acquired_date)
-        IReadOnlyList<BookSummaryViewModel> items = MockCatalog.Books
-            .OrderByDescending(b => b.PublicationYear)
-            .Take(count)
-            .ToList();
-        return Task.FromResult(items);
-    }
-
-    public Task<IReadOnlyList<TopicViewModel>> GetTopicsAsync(CancellationToken ct = default)
-    {
-        IReadOnlyList<TopicViewModel> topics = MockCatalog.Books
-            .DistinctBy(b => b.CategoryKey)
-            .Select(b => new TopicViewModel(b.CategoryKey, b.CategoryName))
-            .ToList();
-        return Task.FromResult(topics);
-    }
-
-    public Task<IReadOnlyList<BookSummaryViewModel>> SuggestAsync(string keyword, int limit = 6, CancellationToken ct = default)
-    {
-        var term = StringUtil.RemoveVietnameseSigns(keyword.Trim()).ToLowerInvariant();
-        if (term.Length < 2)
-        {
-            return Task.FromResult<IReadOnlyList<BookSummaryViewModel>>([]);
-        }
-
-        IReadOnlyList<BookSummaryViewModel> items = MockCatalog.Books
-            .Where(b => StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors}").ToLowerInvariant().Contains(term))
-            .Take(limit)
-            .ToList();
-        return Task.FromResult(items);
-    }
 }

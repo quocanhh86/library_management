@@ -1,0 +1,401 @@
+@model web_mvc_management.Models.ViewModels.AdminCatalog.AdminBookCopiesPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quản lý bản sao & mã vạch";
+    ViewData["Screen"] = ScreenId.ManageBookCopies;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Quản lý bản sao sách (BookCopy / Mã vạch)</h1>
+        <p class="text-muted-ink mb-0">Quản lý từng cuốn sách vật lý theo mã vạch, vị trí kệ và thực hiện nghiệp vụ báo hỏng, báo mất hoặc thanh lý sách.</p>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="shortcut-hint me-2"><kbd>F4</kbd> Quét mã vạch</span>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#batchCreateModal">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nhập bổ sung bản sao
+        </button>
+    </div>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.ManageBookCopies)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label d-flex justify-content-between" for="copyKeyword">
+                <span>Mã vạch / Tên sách</span>
+                <kbd>F4</kbd>
+            </label>
+            <input type="search" class="form-control num" id="copyKeyword" name="Keyword" value="@Model.Filter.Keyword" data-shortcut-focus="F4" data-search-input placeholder="BC-2026... hoặc tên sách" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="copyBook">Đầu sách</label>
+            <select class="form-select" id="copyBook" name="BookId">
+                <option value="">Tất cả đầu sách</option>
+                @foreach (var b in Model.Books)
+                {
+                    <option value="@b.Id" selected="@(Model.Filter.BookId == b.Id)">@b.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="copyShelf">Vị trí kệ</label>
+            <select class="form-select" id="copyShelf" name="ShelfId">
+                <option value="">Tất cả kệ</option>
+                @foreach (var s in Model.Shelves)
+                {
+                    <option value="@s.Id" selected="@(Model.Filter.ShelfId == s.Id)">@s.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="copyStatus">Tình trạng sách</label>
+            <select class="form-select" id="copyStatus" name="CopyStatus">
+                <option value="">Tất cả tình trạng</option>
+                <option value="@LibraryConstants.CopyStatus.Available" selected="@(Model.Filter.CopyStatus == LibraryConstants.CopyStatus.Available)">Sẵn sàng (AVAILABLE)</option>
+                <option value="@LibraryConstants.CopyStatus.Borrowed" selected="@(Model.Filter.CopyStatus == LibraryConstants.CopyStatus.Borrowed)">Đang mượn (BORROWED)</option>
+                <option value="@LibraryConstants.CopyStatus.Reserved" selected="@(Model.Filter.CopyStatus == LibraryConstants.CopyStatus.Reserved)">Đang giữ chỗ (RESERVED)</option>
+                <option value="@LibraryConstants.CopyStatus.Damaged" selected="@(Model.Filter.CopyStatus == LibraryConstants.CopyStatus.Damaged)">Hư hỏng (DAMAGED)</option>
+                <option value="@LibraryConstants.CopyStatus.Lost" selected="@(Model.Filter.CopyStatus == LibraryConstants.CopyStatus.Lost)">Mất (LOST)</option>
+                <option value="@LibraryConstants.CopyStatus.Disposed" selected="@(Model.Filter.CopyStatus == LibraryConstants.CopyStatus.Disposed)">Đã thanh lý (DISPOSED)</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="copyRecordStatus">Trạng thái bản ghi</label>
+            <div class="d-flex gap-2">
+                <select class="form-select" id="copyRecordStatus" name="Status">
+                    <option value="">Đang dùng (ACTIVE)</option>
+                    <option value="@EntityStatus.Deleted" selected="@(Model.Filter.Status == EntityStatus.Deleted)">Đã xóa mềm (DELETED)</option>
+                </select>
+                <button type="submit" class="btn btn-primary">Lọc</button>
+            </div>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || Model.Filter.BookId.HasValue || Model.Filter.ShelfId.HasValue || !string.IsNullOrWhiteSpace(Model.Filter.CopyStatus) || !string.IsNullOrWhiteSpace(Model.Filter.Status))
+    {
+        <div class="mt-2">
+            <a href="@Screens.GetPath(ScreenId.ManageBookCopies)" class="fs-xs">Xóa bộ lọc</a>
+        </div>
+    }
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Mã vạch (Barcode)</th>
+                <th scope="col">Đầu sách</th>
+                <th scope="col">Vị trí kệ</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="num">Giá bìa</th>
+                <th scope="col" class="num">Ngày nhập</th>
+                <th scope="col">Ghi chú / Lý do thanh lý</th>
+                <th scope="col" class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.PagedCopies.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="8">
+                        <div class="state-block text-center">
+                            <div class="state-block__title">Không có bản sao nào khớp điều kiện</div>
+                            <p class="state-block__text mb-3">Bạn có thể nhập bổ sung bản sao mới cho đầu sách.</p>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#batchCreateModal">Nhập bổ sung bản sao</button>
+                        </div>
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var c in Model.PagedCopies.Items)
+                {
+                    <tr>
+                        <td class="num fw-medium" style="text-align:left">@c.Barcode</td>
+                        <td>
+                            <a href="@Screens.GetPath(ScreenId.ManageBooks)/Edit/@c.BookId" class="fw-medium text-decoration-none">@c.BookTitle</a>
+                            @if (!string.IsNullOrWhiteSpace(c.Isbn))
+                            {
+                                <div class="fs-xs text-muted-ink num">ISBN: @c.Isbn</div>
+                            }
+                        </td>
+                        <td class="num" style="text-align:left">@c.ShelfCode</td>
+                        <td>
+                            <partial name="_StatusBadge" model="new StatusBadge(StatusKind.Copy, c.CopyStatus)" />
+                            @if (c.Status == EntityStatus.Deleted)
+                            {
+                                <div class="mt-1"><span class="status status--danger">Đã xóa mềm (DELETED)</span></div>
+                            }
+                        </td>
+                        <td class="num">@CurrencyHelper.ToVnd(c.Price ?? 0m)</td>
+                        <td class="num">@c.AcquiredDate.ToString(AppConstants.DefaultDateFormat)</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(c.DisposalReason))
+                            {
+                                <div class="fs-xs text-danger fw-medium">Lý do: @c.DisposalReason</div>
+                            }
+                            @if (c.DisposedAt.HasValue)
+                            {
+                                <div class="fs-xs text-muted-ink num">Ngày xử lý: @DateTimeHelper.ToVietnamTimeString(c.DisposedAt.Value)</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(c.Note))
+                            {
+                                <div class="fs-xs text-muted-ink">@c.Note</div>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-1">
+                                @if (c.Status == EntityStatus.Deleted)
+                                {
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageBookCopies)/Restore/@c.Id" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="filterBookId" value="@Model.Filter.BookId" />
+                                        <button type="submit" class="btn btn-quiet btn-sm">Khôi phục</button>
+                                    </form>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageBookCopies)/HardDelete/@c.Id" class="d-inline"
+                                          data-hard-delete="Bản sao mã vạch '@c.Barcode' (@c.BookTitle)"
+                                          data-hard-delete-detail="Chỉ xóa vĩnh viễn được khi bản sao này chưa từng phát sinh lịch sử mượn trả.">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="filterBookId" value="@Model.Filter.BookId" />
+                                        <button type="submit" class="btn btn-danger btn-sm">Xóa vĩnh viễn</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-quiet btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editCopyModal"
+                                            data-id="@c.Id"
+                                            data-barcode="@c.Barcode"
+                                            data-book="@c.BookTitle"
+                                            data-shelf="@c.ShelfId"
+                                            data-price="@(c.Price ?? 0m)"
+                                            data-note="@c.Note"
+                                            data-status="@c.CopyStatus">
+                                        Sửa / Kệ
+                                    </button>
+                                    @if (c.CopyStatus != LibraryConstants.CopyStatus.Borrowed)
+                                    {
+                                        <button type="button" class="btn btn-quiet btn-sm text-danger"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#disposeCopyModal"
+                                                data-id="@c.Id"
+                                                data-barcode="@c.Barcode"
+                                                data-book="@c.BookTitle"
+                                                data-status="@c.CopyStatus"
+                                                data-reason="@c.DisposalReason">
+                                            Thanh lý / Hỏng
+                                        </button>
+                                        <form method="post" action="@Screens.GetPath(ScreenId.ManageBookCopies)/Delete/@c.Id" class="d-inline"
+                                              data-confirm="Bước 1: Xóa mềm bản sao '@c.Barcode'?"
+                                              data-confirm-detail="Bản sao sẽ chuyển sang trạng thái DELETED (xóa mềm). Bạn có thể khôi phục hoặc thực hiện xóa cứng ở bộ lọc Đã xóa mềm."
+                                              data-confirm-ok="Xóa mềm (DELETED)"
+                                              data-confirm-cancel="Giữ lại"
+                                              data-confirm-danger>
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="filterBookId" value="@Model.Filter.BookId" />
+                                            <button type="submit" class="btn btn-quiet btn-sm text-danger">Xóa mềm</button>
+                                        </form>
+                                    }
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.PagedCopies" />
+
+<!-- ======================================================================= -->
+<!-- MODAL 1: NHẬP BỔ SUNG BẢN SAO (CREATE BATCH)                            -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="batchCreateModal" tabindex="-1" aria-labelledby="batchCreateModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.ManageBookCopies)/CreateBatch">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="filterBookId" value="@Model.Filter.BookId" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="batchCreateModalTitle">Nhập bổ sung bản sao sách</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="batchBookId">Đầu sách</label>
+                        <select class="form-select" id="batchBookId" name="BookId" required>
+                            @foreach (var b in Model.Books)
+                            {
+                                <option value="@b.Id" selected="@(Model.BatchForm.BookId == b.Id)">@b.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="batchShelfId">Vị trí kệ đặt sách</label>
+                            <select class="form-select" id="batchShelfId" name="ShelfId" required>
+                                @foreach (var s in Model.Shelves)
+                                {
+                                    <option value="@s.Id" selected="@(Model.BatchForm.ShelfId == s.Id)">@s.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="batchQty">Số lượng cuốn nhập</label>
+                            <input type="number" class="form-control num" id="batchQty" name="Quantity" value="@Model.BatchForm.Quantity" min="1" max="50" required />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="batchPrice">Giá bìa mỗi cuốn (VNĐ)</label>
+                            <input type="number" step="1000" class="form-control num" id="batchPrice" name="Price" value="@Model.BatchForm.Price" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="batchAcquired">Ngày nhập kho</label>
+                            <input type="date" class="form-control num" id="batchAcquired" name="AcquiredDate" value="@Model.BatchForm.AcquiredDate?.ToString("yyyy-MM-dd")" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="batchBarcode">Mã vạch tùy chỉnh (chỉ dùng khi nhập 1 cuốn)</label>
+                        <input type="text" class="form-control num" id="batchBarcode" name="CustomBarcode" placeholder="Để trống hệ thống sẽ tự sinh BC-YYYYMMDD-XXXX" />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="batchNote">Ghi chú</label>
+                        <input type="text" class="form-control" id="batchNote" name="Note" placeholder="VD: Bổ sung sách giáo trình học kỳ I" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Sinh mã vạch & Nhập kho</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- MODAL 2: CHUYỂN KỆ / CẬP NHẬT / PHỤC HỒI BẢN SAO                        -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="editCopyModal" tabindex="-1" aria-labelledby="editCopyModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.ManageBookCopies)/Update">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="editCopyId" />
+                <input type="hidden" name="filterBookId" value="@Model.Filter.BookId" />
+                <input type="hidden" name="filterStatus" value="@Model.Filter.CopyStatus" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="editCopyModalTitle">Cập nhật bản sao <span class="num" id="editCopyBarcodeLabel"></span></h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted-ink fs-xs mb-3" id="editCopyBookLabel"></p>
+                    <div class="mb-3">
+                        <label class="form-label" for="editCopyShelf">Vị trí kệ</label>
+                        <select class="form-select" id="editCopyShelf" name="ShelfId">
+                            <option value="">-- Chưa xếp kệ --</option>
+                            @foreach (var s in Model.Shelves)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="editCopyPrice">Giá bìa (VNĐ)</label>
+                        <input type="number" step="1000" class="form-control num" id="editCopyPrice" name="Price" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="editCopyNote">Ghi chú tình trạng</label>
+                        <input type="text" class="form-control" id="editCopyNote" name="Note" />
+                    </div>
+                    <div class="form-check" id="restoreAvailableGroup">
+                        <input class="form-check-input" type="checkbox" value="true" id="editCopyRestore" name="RestoreToAvailable" />
+                        <label class="form-check-label" for="editCopyRestore">
+                            Khôi phục bản sao về trạng thái <strong>Sẵn sàng cho mượn (AVAILABLE)</strong>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- MODAL 3: THANH LÝ / BÁO HỎNG / BÁO MẤT SÁCH                             -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="disposeCopyModal" tabindex="-1" aria-labelledby="disposeCopyModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.ManageBookCopies)/Dispose">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="CopyId" id="disposeCopyId" />
+                <input type="hidden" name="filterBookId" value="@Model.Filter.BookId" />
+                <input type="hidden" name="filterStatus" value="@Model.Filter.CopyStatus" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="disposeCopyModalTitle">Thanh lý / Ghi nhận hỏng hoặc mất</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">
+                        Bản sao: <strong class="num" id="disposeBarcodeLabel"></strong> — <span id="disposeBookLabel"></span>
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label" for="disposeTargetStatus">Hình thức xử lý</label>
+                        <select class="form-select" id="disposeTargetStatus" name="TargetStatus" required>
+                            <option value="@LibraryConstants.CopyStatus.Disposed">Thanh lý hủy khỏi kho lưu hành (DISPOSED)</option>
+                            <option value="@LibraryConstants.CopyStatus.Damaged">Ghi nhận sách bị hư hỏng (DAMAGED)</option>
+                            <option value="@LibraryConstants.CopyStatus.Lost">Ghi nhận sách bị mất (LOST)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="disposeReason">Lý do thanh lý / hỏng / mất (bắt buộc)</label>
+                        <input type="text" class="form-control" id="disposeReason" name="DisposalReason" required placeholder="VD: Rách nát không thể phục hồi, xuất bản quá lâu..." />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="disposeNote">Ghi chú biên bản (tùy chọn)</label>
+                        <textarea class="form-control" id="disposeNote" name="Note" rows="2" placeholder="Số biên bản kiểm kê / thanh lý..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Quay lại</button>
+                    <button type="submit" class="btn btn-danger">Xác nhận xử lý</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('editCopyModal')?.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            document.getElementById('editCopyId').value = btn.dataset.id || '';
+            document.getElementById('editCopyBarcodeLabel').textContent = btn.dataset.barcode || '';
+            document.getElementById('editCopyBookLabel').textContent = btn.dataset.book || '';
+            document.getElementById('editCopyShelf').value = btn.dataset.shelf || '';
+            document.getElementById('editCopyPrice').value = btn.dataset.price || '0';
+            document.getElementById('editCopyNote').value = btn.dataset.note || '';
+            const status = btn.dataset.status || '';
+            const restoreCheck = document.getElementById('editCopyRestore');
+            restoreCheck.checked = false;
+            document.getElementById('restoreAvailableGroup').style.display =
+                (status === 'AVAILABLE' || status === 'BORROWED') ? 'none' : 'block';
+        });
+
+        document.getElementById('disposeCopyModal')?.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            document.getElementById('disposeCopyId').value = btn.dataset.id || '';
+            document.getElementById('disposeBarcodeLabel').textContent = btn.dataset.barcode || '';
+            document.getElementById('disposeBookLabel').textContent = btn.dataset.book || '';
+            document.getElementById('disposeReason').value = btn.dataset.reason || '';
+        });
+    </script>
+}
+

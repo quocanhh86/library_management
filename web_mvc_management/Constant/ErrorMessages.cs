@@ -48,25 +48,50 @@ public static class ErrorMessages
 
         // 5. Nghiệp vụ mượn trả & Sách
         [ErrorCode.BookNotFound] = "Không tìm thấy đầu sách này.",
+        [ErrorCode.BookIsbnAlreadyExists] = "Mã ISBN này đã tồn tại trên một đầu sách khác trong thư viện.",
+        [ErrorCode.BookHasBorrowedCopies] = "Chưa xóa được đầu sách vì đang có bản sao được mượn hoặc giữ chỗ.",
+        [ErrorCode.BookCopyNotFound] = "Không tìm thấy bản sao sách tương ứng.",
         [ErrorCode.BookCopyNotAvailable] = "Bản sao này không sẵn sàng cho mượn. Quét bản khác.",
         [ErrorCode.BookCopyDamagedOrLost] = "Bản sao này đã ghi nhận hỏng hoặc mất.",
+        [ErrorCode.BookCopyBarcodeAlreadyExists] = "Mã vạch bản sao này đã tồn tại trong hệ thống.",
+        [ErrorCode.BookCopyCurrentlyBorrowed] = "Bản sao đang được độc giả mượn nên không thể thanh lý hoặc đổi trạng thái trực tiếp.",
+        [ErrorCode.BookCopyAlreadyDisposed] = "Bản sao này đã được thanh lý trước đó.",
+        [ErrorCode.CategoryNotFound] = "Không tìm thấy thể loại sách yêu cầu.",
+        [ErrorCode.CategoryNameAlreadyExists] = "Tên thể loại sách này đã tồn tại.",
+        [ErrorCode.AuthorNotFound] = "Không tìm thấy thông tin tác giả yêu cầu.",
+        [ErrorCode.AuthorNameAlreadyExists] = "Tác giả này đã tồn tại trong danh mục.",
+        [ErrorCode.PublisherNotFound] = "Không tìm thấy thông tin nhà xuất bản yêu cầu.",
+        [ErrorCode.PublisherNameAlreadyExists] = "Tên nhà xuất bản này đã tồn tại.",
+        [ErrorCode.ShelfNotFound] = "Không tìm thấy vị trí kệ sách yêu cầu.",
+        [ErrorCode.ShelfCodeAlreadyExists] = "Mã vị trí kệ sách này đã tồn tại.",
+        [ErrorCode.ReaderNotFound] = "Không tìm thấy hồ sơ độc giả yêu cầu.",
         [ErrorCode.ReaderCardExpired] = "Thẻ thư viện đã hết hạn. Gia hạn thẻ tại quầy thủ thư.",
         [ErrorCode.ReaderCardLocked] = "Thẻ thư viện đang bị khóa nên chưa mượn được sách.",
         [ErrorCode.ReaderMaxBorrowLimitExceeded] = "Độc giả đang mượn đủ {0} cuốn theo hạn mức. Trả bớt sách trước khi mượn thêm.",
         [ErrorCode.ReaderHasOverdueBooks] = "Độc giả còn sách quá hạn chưa trả. Nhận trả sách trước khi cho mượn.",
         [ErrorCode.ReaderHasUnpaidFines] = "Độc giả còn nợ phạt {0}. Thu phạt trước khi cho mượn.",
+        [ErrorCode.ReaderTypeNotFound] = "Không tìm thấy loại độc giả yêu cầu.",
+        [ErrorCode.ReaderTypeCodeAlreadyExists] = "Mã loại độc giả này đã tồn tại.",
         [ErrorCode.BorrowSlipNotFound] = "Không tìm thấy phiếu mượn tương ứng.",
         [ErrorCode.BorrowDetailNotFound] = "Không tìm thấy chi tiết mượn sách tương ứng.",
         [ErrorCode.BookAlreadyReturned] = "Bản sao này đã được trả trước đó.",
         [ErrorCode.ReservationNotFound] = "Không tìm thấy phiếu đặt trước sách.",
         [ErrorCode.ReservationNotAvailable] = "Hiện không thể đặt trước đầu sách này.",
 
-        // 6. Lỗi chung & Dữ liệu
+        // 6. Quản trị hệ thống
+        [ErrorCode.StaffEmailAlreadyExists] = "Địa chỉ email này đã được gán cho một cán bộ khác.",
+        [ErrorCode.StaffUsernameAlreadyExists] = "Tên đăng nhập cán bộ này đã tồn tại.",
+        [ErrorCode.StaffCannotModifySelf] = "Không thể tự khóa hoặc tự hạ quyền tài khoản của chính mình.",
+        [ErrorCode.LibrarySettingNotFound] = "Chưa tìm thấy bản ghi cấu hình quy định thư viện.",
+
+        // 7. Lỗi chung & Dữ liệu
         [ErrorCode.CommonValidationError] = "Thông tin chưa hợp lệ. Kiểm tra lại các ô được đánh dấu.",
         [ErrorCode.CommonNotFound] = "Không tìm thấy dữ liệu này. Có thể nó đã bị xóa.",
         [ErrorCode.CommonSystemError] = "Hệ thống gặp lỗi khi xử lý yêu cầu. Thử lại; nếu vẫn lỗi, báo quản trị viên.",
         [ErrorCode.CommonInvalidRequest] = "Thiếu thông tin bắt buộc. Kiểm tra lại các ô được đánh dấu.",
-        [ErrorCode.CommonRecordInUse] = "Chưa xóa được vì dữ liệu này đang được dùng ở nơi khác."
+        [ErrorCode.CommonRecordInUse] = "Chưa xóa được vì dữ liệu này đang được dùng ở nơi khác.",
+        [ErrorCode.HardDeleteRequiresSoftDeleteFirst] = "Bắt buộc thực hiện Bước 1: Chuyển trạng thái bản ghi sang Đã xóa mềm (DELETED) trước khi xóa vĩnh viễn.",
+        [ErrorCode.HardDeleteConfirmInvalid] = "Bước 3 chưa hợp lệ: Vui lòng nhập đúng mã xác nhận 'XOA' để xóa vĩnh viễn bản ghi."
     };
 
     /// <summary>
@@ -93,4 +118,3 @@ public static class ErrorMessages
         }
     }
 }
-

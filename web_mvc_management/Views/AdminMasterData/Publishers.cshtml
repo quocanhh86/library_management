@@ -1,0 +1,208 @@
+@model web_mvc_management.Models.ViewModels.AdminCatalog.PublisherPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quản lý nhà xuất bản";
+    ViewData["Screen"] = ScreenId.ManagePublishers;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Quản lý nhà xuất bản</h1>
+        <p class="text-muted-ink mb-0">Thông tin đơn vị xuất bản tài liệu và giáo trình.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#publisherModal" onclick="openPublisherModal()">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>Thêm nhà xuất bản
+    </button>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.ManagePublishers)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label" for="pubKeyword">Tìm kiếm nhà xuất bản <kbd>/</kbd></label>
+            <input type="search" class="form-control" id="pubKeyword" name="Keyword" value="@Model.Filter.Keyword" data-search-input placeholder="Tên NXB, email, điện thoại..." />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="pubStatus">Trạng thái</label>
+            <select class="form-select" id="pubStatus" name="Status">
+                <option value="">Đang dùng (Mặc định)</option>
+                <option value="@EntityStatus.Active" selected="@(Model.Filter.Status == EntityStatus.Active)">Đang hoạt động (ACTIVE)</option>
+                <option value="@EntityStatus.Inactive" selected="@(Model.Filter.Status == EntityStatus.Inactive)">Tạm ẩn (INACTIVE)</option>
+                <option value="@EntityStatus.Deleted" selected="@(Model.Filter.Status == EntityStatus.Deleted)">Đã xóa mềm (DELETED)</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Lọc</button>
+        </div>
+    </div>
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Tên nhà xuất bản</th>
+                <th scope="col">Địa chỉ</th>
+                <th scope="col">Liên hệ</th>
+                <th scope="col" class="num">Số đầu sách</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.PagedItems.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="6">
+                        <div class="state-block text-center">
+                            <div class="state-block__title">Chưa có nhà xuất bản phù hợp</div>
+                        </div>
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in Model.PagedItems.Items)
+                {
+                    <tr>
+                        <td class="fw-medium">@item.Name</td>
+                        <td class="text-muted-ink">@(string.IsNullOrWhiteSpace(item.Address) ? "—" : item.Address)</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(item.Phone))
+                            {
+                                <div class="num fs-xs">@item.Phone</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.Email))
+                            {
+                                <div class="fs-xs text-muted-ink">@item.Email</div>
+                            }
+                        </td>
+                        <td class="num">
+                            <a href="@Screens.GetPath(ScreenId.ManageBooks)?PublisherId=@item.Id" class="text-decoration-none">@item.BookCount đầu sách</a>
+                        </td>
+                        <td>
+                            @if (item.Status == EntityStatus.Deleted)
+                            {
+                                <span class="status status--danger">Đã xóa mềm (DELETED)</span>
+                            }
+                            else
+                            {
+                                <span class="status @(item.Status == EntityStatus.Active ? "status--ok" : "status--neutral")">
+                                    @(item.Status == EntityStatus.Active ? "Đang dùng" : "Tạm ẩn")
+                                </span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-1">
+                                @if (item.Status == EntityStatus.Deleted)
+                                {
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManagePublishers)/Restore/@item.Id" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm">Khôi phục</button>
+                                    </form>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManagePublishers)/HardDelete/@item.Id" class="d-inline"
+                                          data-hard-delete="Nhà xuất bản '@item.Name'">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-danger btn-sm">Xóa vĩnh viễn</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-quiet btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#publisherModal"
+                                            data-id="@item.Id"
+                                            data-name="@item.Name"
+                                            data-address="@item.Address"
+                                            data-phone="@item.Phone"
+                                            data-email="@item.Email"
+                                            data-website="@item.Website"
+                                            data-status="@item.Status"
+                                            onclick="openPublisherModal(this)">
+                                        Sửa
+                                    </button>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManagePublishers)/Delete/@item.Id" class="d-inline"
+                                          data-confirm="Bước 1: Xóa mềm nhà xuất bản '@item.Name'?"
+                                          data-confirm-detail="Nhà xuất bản sẽ chuyển sang trạng thái DELETED (xóa mềm). Chỉ xóa mềm được khi không còn đầu sách đang hoạt động thuộc NXB này."
+                                          data-confirm-ok="Xóa mềm (DELETED)"
+                                          data-confirm-cancel="Giữ lại"
+                                          data-confirm-danger>
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm text-danger">Xóa mềm</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.PagedItems" />
+
+<div class="modal fade" id="publisherModal" tabindex="-1" aria-labelledby="publisherModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.ManagePublishers)/Save">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="pubId" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="publisherModalTitle">Thêm nhà xuất bản</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="pubName">Tên nhà xuất bản</label>
+                        <input type="text" class="form-control" id="pubName" name="Name" required maxlength="150" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="pubAddress">Địa chỉ</label>
+                        <input type="text" class="form-control" id="pubAddress" name="Address" maxlength="255" />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="pubPhone">Điện thoại</label>
+                            <input type="text" class="form-control num" id="pubPhone" name="Phone" maxlength="20" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="pubEmail">Email</label>
+                            <input type="email" class="form-control" id="pubEmail" name="Email" maxlength="255" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="pubWebsite">Website</label>
+                        <input type="text" class="form-control" id="pubWebsite" name="Website" maxlength="255" />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="pubStatusSelect">Trạng thái</label>
+                        <select class="form-select" id="pubStatusSelect" name="Status">
+                            <option value="@EntityStatus.Active">Đang hoạt động (ACTIVE)</option>
+                            <option value="@EntityStatus.Inactive">Tạm ẩn (INACTIVE)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openPublisherModal(btn) {
+            document.getElementById('publisherModalTitle').textContent = btn ? 'Cập nhật nhà xuất bản' : 'Thêm nhà xuất bản';
+            document.getElementById('pubId').value = btn ? (btn.dataset.id || '') : '';
+            document.getElementById('pubName').value = btn ? (btn.dataset.name || '') : '';
+            document.getElementById('pubAddress').value = btn ? (btn.dataset.address || '') : '';
+            document.getElementById('pubPhone').value = btn ? (btn.dataset.phone || '') : '';
+            document.getElementById('pubEmail').value = btn ? (btn.dataset.email || '') : '';
+            document.getElementById('pubWebsite').value = btn ? (btn.dataset.website || '') : '';
+            document.getElementById('pubStatusSelect').value = btn ? (btn.dataset.status || 'ACTIVE') : 'ACTIVE';
+        }
+    </script>
+}
+

@@ -6,9 +6,8 @@ namespace web_mvc_management.Constant;
 /// </summary>
 public enum ErrorCode
 {
-    // =========================================================================
+    
     // 1. XÁC THỰC & ĐĂNG NHẬP (AUTH & LOGIN)
-    // =========================================================================
     AuthInvalidCredentials,
     AuthAccountLocked,
     AuthAccountInactive,
@@ -20,9 +19,7 @@ public enum ErrorCode
     AuthUnauthorized,
     AuthAccessDenied,
 
-    // =========================================================================
     // 2. ĐĂNG KÝ BẠN ĐỌC (REGISTRATION)
-    // =========================================================================
     RegisterDuplicateUsername,
     RegisterDuplicateEmail,
     RegisterDuplicatePhone,
@@ -30,9 +27,7 @@ public enum ErrorCode
     RegisterSessionExpired,
     RegisterFailed,
 
-    // =========================================================================
     // 3. MÃ XÁC THỰC OTP (OTP ENGINE)
-    // =========================================================================
     OtpInvalid,
     OtpExpired,
     OtpBurned,
@@ -42,37 +37,57 @@ public enum ErrorCode
     OtpSendFailed,
     OtpInfoIncomplete,
 
-    // =========================================================================
     // 4. GIỚI HẠN TẦN SUẤT & BẢO MẬT (RATE LIMITING & SECURITY)
-    // =========================================================================
     RateLimitLoginExceeded,
     RateLimitOtpExceeded,
     RateLimitRequestExceeded,
 
-    // =========================================================================
     // 5. NGHIỆP VỤ MƯỢN TRẢ & SÁCH (CIRCULATION & BOOKS)
-    // =========================================================================
     BookNotFound,
+    BookIsbnAlreadyExists,
+    BookHasBorrowedCopies,
+    BookCopyNotFound,
     BookCopyNotAvailable,
     BookCopyDamagedOrLost,
+    BookCopyBarcodeAlreadyExists,
+    BookCopyCurrentlyBorrowed,
+    BookCopyAlreadyDisposed,
+    CategoryNotFound,
+    CategoryNameAlreadyExists,
+    AuthorNotFound,
+    AuthorNameAlreadyExists,
+    PublisherNotFound,
+    PublisherNameAlreadyExists,
+    ShelfNotFound,
+    ShelfCodeAlreadyExists,
+    ReaderNotFound,
     ReaderCardExpired,
     ReaderCardLocked,
     ReaderMaxBorrowLimitExceeded,
     ReaderHasOverdueBooks,
     ReaderHasUnpaidFines,
+    ReaderTypeNotFound,
+    ReaderTypeCodeAlreadyExists,
     BorrowSlipNotFound,
     BorrowDetailNotFound,
     BookAlreadyReturned,
     ReservationNotFound,
     ReservationNotAvailable,
 
-    // =========================================================================
-    // 6. LỖI CHUNG & DỮ LIỆU (COMMON & SYSTEM)
-    // =========================================================================
+    
+    // 6. QUẢN TRỊ HỆ THỐNG (SYSTEM ADMINISTRATION)
+    StaffEmailAlreadyExists,
+    StaffUsernameAlreadyExists,
+    StaffCannotModifySelf,
+    LibrarySettingNotFound,
+
+   
+    // 7. LỖI CHUNG & DỮ LIỆU (COMMON & SYSTEM)
     CommonValidationError,
     CommonNotFound,
     CommonSystemError,
     CommonInvalidRequest,
-    CommonRecordInUse
+    CommonRecordInUse,
+    HardDeleteRequiresSoftDeleteFirst,
+    HardDeleteConfirmInvalid
 }
-

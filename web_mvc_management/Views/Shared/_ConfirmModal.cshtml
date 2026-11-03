@@ -1,4 +1,4 @@
-@* Modal xác nhận dùng chung thay cho confirm(). Kích hoạt bằng thuộc tính trên nút/form:
+@* 1. Modal xác nhận thông thường (Xóa mềm / Đổi trạng thái). Kích hoạt bằng thuộc tính trên nút/form:
    data-confirm="Câu hỏi" data-confirm-detail="Giải thích hậu quả"
    data-confirm-ok="Nhãn nút làm việc đó" data-confirm-cancel="Nhãn nút giữ nguyên" data-confirm-danger *@
 <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
@@ -13,6 +13,49 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-quiet" data-bs-dismiss="modal" id="confirmModalCancel"></button>
                 <button type="button" class="btn btn-primary" id="confirmModalOk"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* 2. Modal xác nhận XÓA CỨNG 3 BƯỚC (Đổi Status -> Delete -> Confirm).
+   Kích hoạt bằng thuộc tính trên form: data-hard-delete="Tên đối tượng cần xóa cứng" *@
+<div class="modal fade" id="hardDeleteModal" tabindex="-1" aria-labelledby="hardDeleteModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title text-danger" id="hardDeleteModalTitle">
+                    <i class="bi bi-exclamation-octagon me-1" aria-hidden="true"></i>Xác nhận xóa cứng 3 bước
+                </h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="p-3 rounded mb-3" style="background: var(--c-paper); border: 1px solid var(--c-rule);">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="status status--ok"><i class="bi bi-check-circle" aria-hidden="true"></i>Bước 1</span>
+                        <span class="fs-xs">Đã chuyển trạng thái bản ghi sang <strong>DELETED (Xóa mềm)</strong>.</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="status status--warn"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>Bước 2</span>
+                        <span class="fs-xs">Yêu cầu xóa vĩnh viễn: <strong id="hardDeleteTargetName"></strong></span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="status status--stamp"><i class="bi bi-shield-lock" aria-hidden="true"></i>Bước 3</span>
+                        <span class="fs-xs">Nhập mã xác nhận cuối cùng để xóa vĩnh viễn khỏi CSDL.</span>
+                    </div>
+                </div>
+
+                <p class="fs-xs text-muted-ink mb-2">
+                    Hành động này sẽ xóa vĩnh viễn bản ghi khỏi cơ sở dữ liệu và <strong>không thể khôi phục</strong>.
+                    Nhập chính xác chữ <code class="fw-bold text-danger">XOA</code> vào ô bên dưới để mở khóa nút xác nhận:
+                </p>
+                <input type="text" class="form-control num" id="hardDeleteConfirmInput" autocomplete="off" placeholder="Nhập chữ XOA để xác nhận bước 3..." />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Hủy bỏ</button>
+                <button type="button" class="btn btn-danger" id="hardDeleteOkBtn" disabled>
+                    Xác nhận xóa vĩnh viễn
+                </button>
             </div>
         </div>
     </div>
