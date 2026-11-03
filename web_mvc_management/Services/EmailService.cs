@@ -70,6 +70,11 @@ public class EmailService(
         var (subject, purposeTitle) = ResolvePurposeInfo(purpose);
         var bodyHtml = GenerateEmailBody(otpCode, purposeTitle);
 
+        if (env.IsDevelopment())
+        {
+            logger.LogInformation("[DEV OTP] Mã OTP cho {Email} [{Purpose}]: {Code}", normalizedEmail, purpose, otpCode);
+        }
+
         try
         {
             if (!string.IsNullOrWhiteSpace(_settings.Username) && !string.IsNullOrWhiteSpace(_settings.Password))

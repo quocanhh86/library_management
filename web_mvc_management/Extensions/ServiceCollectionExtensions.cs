@@ -1,7 +1,10 @@
 using System;
+using System.Net.Sockets;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using web_mvc_management.Constant;
@@ -16,20 +19,73 @@ namespace web_mvc_management.Extensions;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Đăng ký DbContext với kết nối bảo mật.
+    /// Đăng ký DbContext với kết nối bảo mật (Tự động fallback sang InMemory DB nếu SQL Server chưa bật trên máy dev).
     /// </summary>
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = ResolveConnectionString(configuration);
+        var sqlServerReachable = IsSqlServerReachable(connectionString);
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(
-                connectionString,
-                sqlOptions => sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)
-            )
-        );
+        {
+            if (sqlServerReachable)
+            {
+                options.UseSqlServer(
+                    connectionString,
+                    sqlOptions => sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)
+                );
+            }
+            else
+            {
+                options.UseInMemoryDatabase("LibraryManagementDevDb")
+                    .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
+            }
+        });
 
         return services;
+    }
+
+    private static bool IsSqlServerReachable(string connectionString)
+    {
+        try
+        {
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            var dataSource = builder.DataSource;
+            if (string.IsNullOrWhiteSpace(dataSource))
+            {
+                return false;
+            }
+
+            var host = dataSource;
+            var port = 1433;
+
+            if (dataSource.Contains(','))
+            {
+                var parts = dataSource.Split(',', 2, StringSplitOptions.TrimEntries);
+                host = parts[0];
+                if (int.TryParse(parts[1], out var parsedPort))
+                {
+                    port = parsedPort;
+                }
+            }
+            else if (dataSource.Contains(':'))
+            {
+                var parts = dataSource.Split(':', 2, StringSplitOptions.TrimEntries);
+                host = parts[0];
+                if (int.TryParse(parts[1], out var parsedPort))
+                {
+                    port = parsedPort;
+                }
+            }
+
+            using var tcpClient = new TcpClient();
+            var connectTask = tcpClient.ConnectAsync(host, port);
+            return connectTask.Wait(TimeSpan.FromMilliseconds(600)) && tcpClient.Connected;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
