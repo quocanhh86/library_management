@@ -1,0 +1,209 @@
+@model FinesPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Thu phạt";
+    ViewData["Screen"] = ScreenId.ManageFines;
+    var isAdmin = User.IsInRole(AppRoles.Admin);
+    var statuses = new[]
+    {
+        (LibraryConstants.FineStatus.Unpaid, "Chưa nộp"),
+        (LibraryConstants.FineStatus.Paid, "Đã nộp"),
+        (LibraryConstants.FineStatus.Waived, "Được miễn"),
+    };
+    string TypeLabel(FineItemViewModel f) => f.FineType switch
+    {
+        LibraryConstants.FineType.Overdue => $"Trả trễ {f.OverdueDays} ngày",
+        LibraryConstants.FineType.Damaged => "Làm hỏng sách",
+        LibraryConstants.FineType.Lost => "Làm mất sách",
+        _ => f.FineType
+    };
+    string MethodLabel(string? method) => method switch
+    {
+        LibraryConstants.PaymentMethod.Cash => "tiền mặt",
+        LibraryConstants.PaymentMethod.BankTransfer => "chuyển khoản",
+        _ => method ?? ""
+    };
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Thu phạt</h1>
+        <p class="text-muted-ink mb-0">Phạt phát sinh khi nhận trả sách trễ hạn, hỏng hoặc mất. Độc giả còn nợ phạt chưa mượn được sách.</p>
+    </div>
+    <p class="mb-0">Tổng chưa thu <span class="action-bar__total num">@CurrencyHelper.ToVnd(Model.UnpaidTotal)</span></p>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.ManageFines)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label" for="fineKeyword">Tên độc giả / mã thẻ</label>
+            <input type="search" class="form-control" id="fineKeyword" name="Keyword" value="@Model.Filter.Keyword" data-search-input />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="fineStatus">Trạng thái</label>
+            <select class="form-select" id="fineStatus" name="FineStatus">
+                <option value="">Tất cả trạng thái</option>
+                @foreach (var (value, label) in statuses)
+                {
+                    <option value="@value" selected="@(Model.Filter.FineStatus == value)">@label</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-quiet w-100">Lọc</button>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || !string.IsNullOrWhiteSpace(Model.Filter.FineStatus))
+    {
+        <div class="mt-2"><a href="@Screens.GetPath(ScreenId.ManageFines)" class="fs-xs">Xóa bộ lọc</a></div>
+    }
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Độc giả</th>
+                <th scope="col">Tài liệu</th>
+                <th scope="col">Lý do</th>
+                <th scope="col" class="num">Số tiền</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="text-end"><span class="visually-hidden">Thao tác</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Fines.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="6">
+                        <div class="state-block text-center">
+                            <div class="state-block__title">Không có khoản phạt nào khớp điều kiện</div>
+                            <p class="state-block__text mb-0">Khoản phạt được tạo tự động khi nhận trả sách.</p>
+                        </div>
+                    </td>
+                </tr>
+            }
+            @foreach (var f in Model.Fines.Items)
+            {
+                <tr>
+                    <td>
+                        <span class="fw-medium">@f.ReaderName</span>
+                        <div class="fs-xs text-muted-ink num">@f.CardNo</div>
+                    </td>
+                    <td>
+                        @f.BookTitle
+                        <div class="fs-xs text-muted-ink num">@f.Barcode</div>
+                    </td>
+                    <td>
+                        @TypeLabel(f)
+                        <div class="fs-xs text-muted-ink num">@DateTimeHelper.ToVietnameseDateString(f.CreatedAt)</div>
+                    </td>
+                    <td class="num fw-medium">@CurrencyHelper.ToVnd(f.Amount)</td>
+                    <td>
+                        <partial name="_StatusBadge" model="new StatusBadge(StatusKind.Fine, f.FineStatus)" />
+                        @if (f.PaidAt is { } paidAt)
+                        {
+                            <div class="fs-xs text-muted-ink">@DateTimeHelper.ToVietnameseDateString(paidAt), @MethodLabel(f.PaymentMethod)</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(f.Note))
+                        {
+                            <div class="fs-xs text-muted-ink">@f.Note</div>
+                        }
+                    </td>
+                    <td class="text-end">
+                        @if (f.FineStatus == LibraryConstants.FineStatus.Unpaid)
+                        {
+                            <div class="d-inline-flex gap-1">
+                                <button type="button" class="btn btn-quiet btn-sm" data-bs-toggle="modal" data-bs-target="#payFineModal"
+                                        data-id="@f.Id" data-reader="@f.ReaderName" data-amount="@CurrencyHelper.ToVnd(f.Amount)">Thu tiền</button>
+                                @if (isAdmin)
+                                {
+                                    <button type="button" class="btn btn-quiet btn-sm" data-bs-toggle="modal" data-bs-target="#waiveFineModal"
+                                            data-id="@f.Id" data-reader="@f.ReaderName" data-amount="@CurrencyHelper.ToVnd(f.Amount)">Miễn</button>
+                                }
+                            </div>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.Fines" />
+
+<div class="modal fade" id="payFineModal" tabindex="-1" aria-labelledby="payFineTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Url.Action("PayFine", "Circulation")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" data-fine-id />
+                <input type="hidden" name="keyword" value="@Model.Filter.Keyword" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="payFineTitle">Thu tiền phạt</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3"><span data-fine-reader></span>: <strong class="num" data-fine-amount></strong></p>
+                    <fieldset>
+                        <legend class="form-label fs-6">Hình thức thu</legend>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="paymentMethod" id="payCash" value="@LibraryConstants.PaymentMethod.Cash" checked />
+                            <label class="form-check-label" for="payCash">Tiền mặt</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="paymentMethod" id="payTransfer" value="@LibraryConstants.PaymentMethod.BankTransfer" />
+                            <label class="form-check-label" for="payTransfer">Chuyển khoản</label>
+                        </div>
+                    </fieldset>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-primary">Xác nhận đã thu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@if (isAdmin)
+{
+    <div class="modal fade" id="waiveFineModal" tabindex="-1" aria-labelledby="waiveFineTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="@Url.Action("WaiveFine", "Circulation")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" data-fine-id />
+                    <input type="hidden" name="keyword" value="@Model.Filter.Keyword" />
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="waiveFineTitle">Miễn khoản phạt</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-3"><span data-fine-reader></span>: <strong class="num" data-fine-amount></strong></p>
+                        <label class="form-label" for="waiveNote">Lý do miễn</label>
+                        <input class="form-control" id="waiveNote" name="note" maxlength="500" required />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Đóng</button>
+                        <button type="submit" class="btn btn-primary">Miễn phạt</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        ['payFineModal', 'waiveFineModal'].forEach(id => {
+            document.getElementById(id)?.addEventListener('show.bs.modal', function (event) {
+                const btn = event.relatedTarget;
+                if (!btn) return;
+                this.querySelector('[data-fine-id]').value = btn.dataset.id;
+                this.querySelector('[data-fine-reader]').textContent = btn.dataset.reader;
+                this.querySelector('[data-fine-amount]').textContent = btn.dataset.amount;
+            });
+        });
+    </script>
+}

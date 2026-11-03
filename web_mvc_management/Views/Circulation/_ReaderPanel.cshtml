@@ -1,0 +1,76 @@
+@model CirculationDeskViewModel
+@{
+    var reader = Model.Reader;
+    var path = Screens.GetPath(Model.Returning ? ScreenId.CirculationReturn : ScreenId.CirculationBorrow);
+}
+<section class="panel" aria-labelledby="readerPanelTitle">
+    <h2 class="h5" id="readerPanelTitle">Độc giả</h2>
+    <form method="get" action="@path" class="mb-3">
+        <label class="form-label d-flex justify-content-between" for="readerCard">
+            <span>Mã thẻ độc giả</span><kbd>F2</kbd>
+        </label>
+        <div class="input-group">
+            <input type="search" class="form-control num" id="readerCard" name="card" value="@Model.Card"
+                   placeholder="Nhập hoặc quét mã thẻ" data-shortcut-focus="F2" autocomplete="off" required />
+            <button type="submit" class="btn btn-quiet">Tìm</button>
+        </div>
+    </form>
+
+    @if (Model.Error is not null)
+    {
+        <p class="text-danger fs-xs mb-0" role="alert">@Model.Error</p>
+    }
+    else if (reader is null)
+    {
+        <p class="text-muted-ink fs-xs mb-0">Thông tin thẻ và hạn mức mượn hiện ở đây sau khi tìm độc giả.</p>
+    }
+    else
+    {
+        <h3 class="h6 mb-1">@reader.FullName</h3>
+        <p class="num fs-xs text-muted-ink mb-2">@reader.CardNo · @reader.TypeName</p>
+        <partial name="_StatusBadge" model="new StatusBadge(StatusKind.Card, reader.CardStatus)" />
+        <dl class="row fs-xs mt-3 mb-0">
+            <dt class="col-6 fw-normal text-muted-ink">Hạn thẻ</dt>
+            <dd class="col-6 num">@reader.CardExpiryDate.ToString(AppConstants.DefaultDateFormat)</dd>
+            <dt class="col-6 fw-normal text-muted-ink">Đang mượn</dt>
+            <dd class="col-6 num">@reader.Borrowed/@reader.Limit cuốn</dd>
+            <dt class="col-6 fw-normal text-muted-ink">Nợ phạt</dt>
+            <dd class="col-6 num @(reader.UnpaidFines > 0 ? "text-danger" : "")">@CurrencyHelper.ToVnd(reader.UnpaidFines)</dd>
+        </dl>
+
+        @if (!Model.Returning && Model.BlockReasons.Count > 0)
+        {
+            <div class="alert alert-danger fs-xs mt-3 mb-0" role="alert">
+                <strong>Chưa cho mượn được</strong>
+                <ul class="mb-0 ps-3">
+                    @foreach (var reason in Model.BlockReasons)
+                    {
+                        <li>@reason</li>
+                    }
+                </ul>
+            </div>
+            <p class="fs-xs mt-2 mb-0">
+                <a href="@Screens.GetPath(ScreenId.CirculationReturn)?card=@Uri.EscapeDataString(reader.CardNo)">Nhận trả sách</a>
+                · <a href="@Screens.GetPath(ScreenId.ManageFines)?keyword=@Uri.EscapeDataString(reader.CardNo)">Thu phạt</a>
+            </p>
+        }
+
+        @if (Model.Holds.Count > 0)
+        {
+            <h3 class="h6 mt-4">Sách đang giữ cho độc giả</h3>
+            <ul class="list-unstyled fs-xs mb-0">
+                @foreach (var hold in Model.Holds)
+                {
+                    <li class="mb-1">
+                        <span class="fw-medium">@hold.Title</span>
+                        <span class="num text-muted-ink">@hold.Barcode</span>
+                        @if (hold.ExpiresAt is { } expires)
+                        {
+                            <span class="d-block text-muted-ink">Giữ đến @DateTimeHelper.ToVietnameseDateTimeString(expires)</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    }
+</section>

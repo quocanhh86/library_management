@@ -16,6 +16,11 @@
     --bs-offcanvas-color: var(--c-on-indigo-muted);
     background: var(--c-indigo);
     color: var(--c-on-indigo-muted);
+    font-size: 14px;
+    line-height: 1.6;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
 }
 @media (min-width: 992px) {
     .staff-sidebar {
@@ -23,52 +28,90 @@
         top: 0;
         flex: 0 0 var(--staff-sidebar-w);
         width: var(--staff-sidebar-w);
-        height: 100vh;
     }
 }
-.staff-sidebar .offcanvas-body {
-    height: 100%;
-    padding: 0;
+@media (max-width: 991.98px) {
+    .staff-sidebar { --bs-offcanvas-width: 270px; }
 }
-/* Bootstrap ép nền .offcanvas-lg và body trong suốt (!important) từ 992px, nên nền đặt ở lớp trong */
+.staff-sidebar .offcanvas-body {
+    height: 0;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+@media (min-width: 992px) {
+    .staff-sidebar .offcanvas-body { display: block; height: 100%; }
+}
+/* Bootstrap ép nền .offcanvas-lg và body trong suốt (!important) từ 992px, nên nền đặt ở lớp trong.
+   Logo và khối người dùng đứng yên, chỉ danh sách menu cuộn. */
 .staff-sidebar__inner {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--c-indigo);
+}
+.staff-sidebar__inner > nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.25) transparent;
 }
 .staff-sidebar__brand {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
     gap: var(--s-3);
-    padding: var(--s-4);
+    padding: 24px 20px;
     color: var(--c-on-indigo);
     text-decoration: none;
     line-height: 1.2;
 }
+@media (max-width: 991.98px) {
+    .staff-sidebar__brand { padding-block: 16px; }
+}
 .staff-sidebar__brand img { width: 40px; height: 40px; flex-shrink: 0; }
 .staff-sidebar__brand:focus-visible { outline: var(--focus-ring-dark); outline-offset: -2px; }
 .staff-sidebar__brand:hover { color: var(--c-on-indigo); }
-.staff-sidebar__brand strong { display: block; font-size: var(--fs-md); font-weight: 500; }
-.staff-sidebar__brand span { font-size: var(--fs-xs); color: var(--c-on-indigo-muted); }
+.staff-sidebar__brand strong { display: block; font-size: 16px; font-weight: 600; color: var(--c-on-indigo); }
+.staff-sidebar__brand span { font-size: 11px; color: var(--c-on-indigo-muted); }
 
 .staff-nav {
     margin: 0;
-    padding: var(--s-2) var(--s-2);
+    padding: 2px var(--s-2);
     list-style: none;
-    border-top: 1px solid rgb(255 255 255 / 0.12);
 }
+.staff-nav__heading {
+    display: block;
+    padding: 16px 20px 5px;
+    font-size: 10px;
+    color: rgb(255 255 255 / 0.52);
+}
+.staff-sidebar__public {
+    display: block;
+    margin-bottom: 14px;
+    color: var(--c-on-indigo-muted);
+    text-decoration: none;
+    font-size: 11px;
+}
+.staff-sidebar__public:hover { color: var(--c-on-indigo); }
 .staff-nav__link {
     display: flex;
     align-items: center;
     gap: var(--s-3);
     position: relative;
-    padding: 0.5rem var(--s-3);
+    min-height: 38px;
+    padding: 8px var(--s-3);
+    font-size: 12px;
     color: var(--c-on-indigo-muted);
     text-decoration: none;
     border-radius: var(--r-sm);
+}
+@media (pointer: coarse) {
+    .staff-nav__link { min-height: 44px; }
 }
 .staff-nav__link:hover {
     color: var(--c-on-indigo);
@@ -77,7 +120,7 @@
 .staff-nav__link.is-active {
     color: var(--c-on-indigo);
     font-weight: 500;
-    background: var(--c-on-indigo-active);
+    background: rgb(255 255 255 / 0.09);
 }
 /* Vạch vàng đánh dấu mục đang chọn (vàng chỉ xuất hiện trên nền chàm) */
 .staff-nav__link.is-active::before {
@@ -107,15 +150,19 @@
 }
 
 .staff-sidebar__user {
+    flex-shrink: 0;
     margin-top: auto;
-    padding: var(--s-3) var(--s-4);
+    padding: 16px 20px;
     border-top: 1px solid rgb(255 255 255 / 0.12);
-    font-size: var(--fs-xs);
+    font-size: 11px;
+    background: var(--c-indigo);
 }
-.staff-sidebar__user strong { display: block; color: var(--c-on-indigo); font-size: var(--fs-sm); font-weight: 500; }
+.staff-sidebar__user strong { display: block; margin-bottom: 3px; color: var(--c-on-indigo); font-size: 13px; font-weight: 500; }
 .staff-sidebar__logout {
+    float: right;
     padding: 0;
-    margin-top: var(--s-2);
+    margin-top: -20px;
+    font-size: 11px;
     color: var(--c-on-indigo-muted);
     background: none;
     border: 0;
@@ -124,7 +171,6 @@
 }
 .staff-sidebar__logout:hover { color: var(--c-on-indigo); }
 .staff-sidebar__logout:focus-visible { outline: var(--focus-ring-dark); }
-
 /* ---------- Vùng nội dung ---------- */
 .staff-main {
     flex: 1;

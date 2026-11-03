@@ -608,6 +608,8 @@ public static class DbInitializer
 
             var copyCleanCodeBorrowed = await context.BookCopies.FirstAsync(x => x.Barcode == "BC-202610-0003");
             var copyCleanArchOverdue = await context.BookCopies.FirstAsync(x => x.Barcode == "BC-202610-0006");
+            copyCleanCodeBorrowed.CopyStatus = LibraryConstants.CopyStatus.Borrowed;
+            copyCleanArchOverdue.CopyStatus = LibraryConstants.CopyStatus.Borrowed;
 
             // Phiếu 1: Đang mượn hợp lệ (Chưa đến hạn)
             var slipActive = new BorrowSlip

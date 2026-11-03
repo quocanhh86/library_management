@@ -1,0 +1,172 @@
+@model CirculationDeskViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Lập phiếu mượn";
+    ViewData["Screen"] = ScreenId.CirculationBorrow;
+    var reader = Model.Reader;
+    var remaining = reader is null ? 0 : Math.Max(0, reader.Limit - reader.Borrowed);
+    var dueDate = Model.Today.AddDays(Model.LoanDays).ToString(AppConstants.DefaultDateFormat);
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Lập phiếu mượn</h1>
+        <p class="text-muted-ink mb-0">Kiểm tra thẻ độc giả rồi quét mã vạch từng bản sao vào phiếu.</p>
+    </div>
+    <div class="staff-page-head__keys">
+        <span class="shortcut-hint"><kbd>F2</kbd> Tìm thẻ</span>
+        <span class="shortcut-hint"><kbd>F4</kbd> Quét mã vạch</span>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <partial name="_ReaderPanel" model="Model" />
+    </div>
+    <div class="col-lg-8">
+        <section class="panel" aria-labelledby="borrowDraftTitle">
+            <h2 class="h5" id="borrowDraftTitle">Bản sao trong phiếu</h2>
+            @if (!Model.CanBorrow)
+            {
+                <div class="state-block text-center">
+                    <div class="state-block__title">@(reader is null ? "Chưa chọn độc giả" : "Thẻ chưa đủ điều kiện mượn")</div>
+                    <p class="state-block__text mb-0">@(reader is null ? "Tìm độc giả theo mã thẻ để mở ô quét bản sao." : "Xử lý các mục trong khung độc giả trước khi lập phiếu.")</p>
+                </div>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <label class="form-label d-flex justify-content-between" for="copyBarcode">
+                        <span>Mã vạch bản sao</span><kbd>F4</kbd>
+                    </label>
+                    <div class="input-group">
+                        <input class="form-control num" id="copyBarcode" autocomplete="off" data-shortcut-focus="F4"
+                               placeholder="Quét hoặc nhập mã rồi bấm Enter" aria-describedby="copyBarcodeHint" />
+                        <button type="button" class="btn btn-quiet" data-borrow-add>Thêm</button>
+                    </div>
+                    <p class="fs-xs text-muted-ink mt-1 mb-0" id="copyBarcodeHint">Có thể mượn thêm @remaining cuốn. Hạn trả @dueDate.</p>
+                    <p class="fs-xs text-danger mt-1 mb-0" role="alert" data-borrow-error hidden></p>
+                </div>
+
+                <form id="borrowForm" method="post" action="@Screens.GetPath(ScreenId.CirculationBorrow)">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ReaderId" value="@reader!.Id" />
+                    <input type="hidden" name="card" value="@reader.CardNo" />
+                    <div class="table-frame mb-3">
+                        <table class="table data-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Mã vạch</th>
+                                    <th scope="col" class="num">Hạn trả</th>
+                                    <th scope="col" class="text-end"><span class="visually-hidden">Bỏ khỏi phiếu</span></th>
+                                </tr>
+                            </thead>
+                            <tbody data-borrow-rows></tbody>
+                        </table>
+                        <div class="state-block text-center" data-borrow-empty>
+                            <p class="state-block__text mb-0">Phiếu chưa có bản sao. Quét mã vạch để thêm.</p>
+                        </div>
+                    </div>
+                    <label class="form-label" for="borrowNote">Ghi chú (không bắt buộc)</label>
+                    <input class="form-control" id="borrowNote" name="Note" maxlength="500" />
+                </form>
+            }
+        </section>
+    </div>
+</div>
+
+@section ActionBar {
+    @if (Model.CanBorrow)
+    {
+        <div class="action-bar">
+            <div class="action-bar__summary"><span class="action-bar__total" data-borrow-count>0</span> cuốn trong phiếu</div>
+            <div class="action-bar__actions">
+                <button type="submit" form="borrowForm" class="btn btn-primary" data-borrow-submit disabled>Lập phiếu mượn</button>
+            </div>
+        </div>
+    }
+}
+
+@section Scripts {
+    @if (Model.CanBorrow)
+    {
+        <script>
+            (function () {
+                const input = document.getElementById('copyBarcode');
+                const rows = document.querySelector('[data-borrow-rows]');
+                const empty = document.querySelector('[data-borrow-empty]');
+                const error = document.querySelector('[data-borrow-error]');
+                const count = document.querySelector('[data-borrow-count]');
+                const submit = document.querySelector('[data-borrow-submit]');
+                const limit = @remaining;
+                const due = '@dueDate';
+                const codes = [];
+
+                function render() {
+                    rows.replaceChildren();
+                    codes.forEach((code, index) => {
+                        const tr = document.createElement('tr');
+                        const codeCell = document.createElement('td');
+                        codeCell.className = 'num fw-medium';
+                        codeCell.style.textAlign = 'left';
+                        codeCell.textContent = code;
+                        const hidden = document.createElement('input');
+                        hidden.type = 'hidden';
+                        hidden.name = 'Barcodes';
+                        hidden.value = code;
+                        codeCell.append(hidden);
+                        const dueCell = document.createElement('td');
+                        dueCell.className = 'num';
+                        dueCell.textContent = due;
+                        const actionCell = document.createElement('td');
+                        actionCell.className = 'text-end';
+                        const remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.className = 'btn btn-quiet btn-sm';
+                        remove.textContent = 'Bỏ';
+                        remove.setAttribute('aria-label', 'Bỏ ' + code + ' khỏi phiếu');
+                        remove.addEventListener('click', () => { codes.splice(index, 1); render(); input.focus(); });
+                        actionCell.append(remove);
+                        tr.append(codeCell, dueCell, actionCell);
+                        rows.append(tr);
+                    });
+                    count.textContent = String(codes.length);
+                    empty.hidden = codes.length > 0;
+                    submit.disabled = codes.length === 0;
+                }
+
+                function showError(message) {
+                    error.textContent = message;
+                    error.hidden = false;
+                    input.setAttribute('aria-invalid', 'true');
+                    input.select();
+                }
+
+                function add() {
+                    const code = input.value.trim().toUpperCase();
+                    if (!code) return;
+                    if (codes.includes(code)) { showError('Bản sao đã có trong phiếu. Quét mã khác.'); return; }
+                    if (codes.length >= limit) { showError('Phiếu đã đủ hạn mức của độc giả.'); return; }
+                    codes.push(code);
+                    error.hidden = true;
+                    input.removeAttribute('aria-invalid');
+                    input.value = '';
+                    render();
+                    input.focus();
+                }
+
+                input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+                input.addEventListener('input', () => { error.hidden = true; input.removeAttribute('aria-invalid'); });
+                document.querySelector('[data-borrow-add]').addEventListener('click', add);
+                if (window.matchMedia('(pointer: fine)').matches) input.focus();
+                render();
+            })();
+        </script>
+    }
+    else
+    {
+        <script>
+            if (window.matchMedia('(pointer: fine)').matches) document.getElementById('readerCard')?.focus();
+        </script>
+    }
+}

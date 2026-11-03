@@ -73,6 +73,20 @@ public enum ErrorCode
     BookAlreadyReturned,
     ReservationNotFound,
     ReservationNotAvailable,
+    BorrowListEmpty,
+    BorrowDuplicateBarcode,
+    BookCopyReservedForOther,
+    RenewalLimitReached,
+    RenewOverdueNotAllowed,
+    RenewBlockedByReservation,
+    ReturnConditionInvalid,
+    FineNotFound,
+    FineAlreadySettled,
+    FineWaiveNoteRequired,
+    ReservationDuplicate,
+    ReservationBookAvailable,
+    ReaderAlreadyBorrowingBook,
+    ReservationAlreadyClosed,
 
     
     // 6. QUẢN TRỊ HỆ THỐNG (SYSTEM ADMINISTRATION)
