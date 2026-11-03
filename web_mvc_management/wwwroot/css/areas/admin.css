@@ -1,7 +1,5 @@
-﻿/* Administration workspace. Reuses the shared Bootstrap, typography and status components. */
+/* Administration workspace. Reuses the shared Bootstrap, typography and status components. */
 .admin-portal {
-    --c-indigo: #171E42;
-    --c-indigo-hover: #01052B;
     --c-paper: #F5F6F8;
     --admin-muted: #667085;
     --admin-line: #E7EAF0;
@@ -10,34 +8,17 @@
     --admin-amber-tint: #FFF7E8;
     --admin-table-surface: #FAFBFC;
     --admin-topbar-z: 1010;
-    --staff-sidebar-w: 248px;
     font-size: 14px;
     line-height: 1.6;
 }
+/* Sidebar dùng chung màu logo với mọi trang; màu navy riêng chỉ áp cho vùng nội dung. */
+.admin-portal .staff-main { --c-indigo: #171E42; --c-indigo-hover: #01052B; }
 .admin-portal [hidden] { display: none; }
 .admin-portal h1, .admin-portal h2, .admin-portal h3 { font-family: var(--ff-sans); color: var(--c-indigo); }
 .admin-portal .btn { font-size: 13px; min-height: 42px; }
 .admin-portal .btn:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 3px; box-shadow: none; }
 .admin-portal .form-control, .admin-portal .form-select { font-size: 13px; min-height: 42px; }
 .admin-portal .form-label { font-size: 12px; font-weight: 500; margin-bottom: 7px; }
-.admin-portal .staff-sidebar { height: 100dvh; max-height: 100dvh; overflow: hidden; }
-.admin-portal .staff-sidebar .offcanvas-body { height: 0; flex: 1; min-height: 0; overflow: hidden; }
-@media (min-width: 992px) { .admin-portal .staff-sidebar .offcanvas-body { display: block; height: 100%; } }
-.admin-portal .staff-sidebar__inner { overflow: hidden; }
-.admin-portal .staff-sidebar__inner > nav { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .25) transparent; }
-.admin-portal .staff-sidebar__brand { padding: 24px 20px; flex-shrink: 0; }
-.admin-portal .staff-sidebar__brand strong { font-size: 16px; font-weight: 600; color: var(--c-on-indigo); }
-.admin-portal .staff-sidebar__brand span { font-size: 11px; }
-.admin-portal .staff-nav { border: 0; padding-block: 2px; }
-.admin-portal .staff-nav__heading { color: rgb(255 255 255 / .52); }
-.admin-portal .staff-nav__link { min-height: 38px; padding-block: 8px; font-size: 12px; border-radius: 5px; }
-.admin-portal .staff-nav__link.is-active { background: rgb(255 255 255 / .09); }
-.admin-portal .staff-nav__link:focus-visible { outline: 2px solid var(--admin-amber); }
-.admin-portal .staff-nav__link.is-active .bi { color: var(--admin-amber); }
-.admin-portal .staff-nav__link.is-active::before { background: var(--admin-amber); }
-.admin-portal .staff-sidebar__user { flex-shrink: 0; padding: 16px 20px; font-size: 11px; background: var(--c-indigo); }
-.admin-portal .staff-sidebar__user strong { font-size: 13px; margin-bottom: 3px; }
-.admin-portal .staff-sidebar__logout { float: right; margin-top: -20px; font-size: 11px; }
 .admin-portal .staff-content { padding: 28px 32px 40px; width: 100%; max-width: 1600px; margin-inline: auto; }
 .admin-topbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; min-height: 72px; padding: 16px 32px; border-bottom: 1px solid var(--admin-line); background: var(--c-surface); position: sticky; top: 0; z-index: var(--admin-topbar-z); }
 .admin-breadcrumb { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--admin-muted); }
@@ -262,8 +243,6 @@
     .admin-metric__label { align-items: flex-start; }
     .admin-metric__note { font-size: 9px; }
     .admin-report-bars a { grid-template-columns: 150px 1fr 90px; }
-    .admin-portal .staff-sidebar { --bs-offcanvas-width: 270px; }
-    .admin-portal .staff-sidebar__brand { padding-block: 16px; }
 }
 @media (max-width: 767.98px) {
     .admin-dashboard-grid { grid-template-columns: 1fr; }
@@ -347,6 +326,6 @@
     .admin-draft .admin-table { min-width: 530px; }
 }
 @media (pointer: coarse) {
-    .admin-portal .btn, .admin-portal .staff-nav__link { min-height: 44px; }
+    .admin-portal .btn { min-height: 44px; }
     .admin-icon-button { width: 44px; height: 44px; }
 }
