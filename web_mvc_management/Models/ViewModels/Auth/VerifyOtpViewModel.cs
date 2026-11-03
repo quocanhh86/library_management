@@ -1,4 +1,3 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace web_mvc_management.Models.ViewModels.Auth;

@@ -1,10 +1,8 @@
-using System;
-
 namespace web_mvc_management.Common;
 
 /// <summary>
 /// Lớp chứa tham số phân trang chuẩn dùng chung cho toàn bộ hệ thống ASP.NET Core MVC.
-/// - pageItemSize: Mặc định là 10 (cho phép client tùy chọn qua query string, nếu không truyền hoặc <= 0 thì mặc định 10, tối đa 100).
+/// - pageItemSize: Mặc định là 10 (cho phép client tùy chọn qua query string, nếu không truyền hoặc &lt;= 0 thì mặc định 10, tối đa 100).
 /// - pageNo: Hỗ trợ client truyền 0 hoặc 1, cả hai đều truy vấn từ bản ghi đầu tiên trong CSDL (Skip = 0).
 /// </summary>
 public class PaginationParams
@@ -36,7 +34,7 @@ public class PaginationParams
     /// <summary>
     /// Số lượng bản ghi trên một trang (mặc định 10).
     /// Cho phép client tùy chọn (ví dụ 10, 20, 50, 100).
-    /// Nếu client không truyền hoặc <= 0 thì tự động gán mặc định 10.
+    /// Nếu client không truyền hoặc &lt;= 0 thì tự động gán mặc định 10.
     /// </summary>
     public int PageItemSize
     {

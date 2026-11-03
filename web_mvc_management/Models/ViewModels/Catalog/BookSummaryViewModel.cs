@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace web_mvc_management.Models.ViewModels.Catalog;
 
 /// <summary>
@@ -13,6 +10,20 @@ public class PublicBookCopyViewModel
     public string ShelfCode { get; init; } = string.Empty;
     public string ShelfDescription { get; init; } = string.Empty;
     public string CopyStatus { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Thông tin một ảnh của đầu sách hiển thị trên trang chi tiết (ảnh bìa trước, bìa sau, mục lục, trang đọc thử...).
+/// </summary>
+public class PublicBookImageViewModel
+{
+    public Guid Id { get; init; }
+    public string ImageUrl { get; init; } = string.Empty;
+    public string ImageType { get; init; } = string.Empty;
+    public string ImageTypeLabel { get; init; } = string.Empty;
+    public string? Caption { get; init; }
+    public int DisplayOrder { get; init; }
+    public bool IsPrimary { get; init; }
 }
 
 /// <summary>
@@ -51,4 +62,7 @@ public class BookSummaryViewModel
 
     /// <summary>Danh sách các bản sao vật lý kèm mã vạch và vị trí kệ (hiển thị ở trang chi tiết).</summary>
     public IReadOnlyList<PublicBookCopyViewModel> Copies { get; init; } = [];
+
+    /// <summary>Danh sách bộ sưu tập hình ảnh của đầu sách (ảnh bìa trước, bìa sau, mục lục, trang sách đọc thử...).</summary>
+    public IReadOnlyList<PublicBookImageViewModel> Images { get; init; } = [];
 }

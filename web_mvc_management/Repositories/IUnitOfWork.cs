@@ -18,6 +18,7 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     IBaseRepository<Book> Books { get; }
     IBaseRepository<BookAuthor> BookAuthors { get; }
     IBaseRepository<BookCopy> BookCopies { get; }
+    IBaseRepository<BookImage> BookImages { get; }
     IBaseRepository<BorrowSlip> BorrowSlips { get; }
     IBaseRepository<BorrowDetail> BorrowDetails { get; }
     IBaseRepository<Fine> Fines { get; }

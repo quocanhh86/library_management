@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using web_mvc_management.Constant;
 
 namespace web_mvc_management.Entity;

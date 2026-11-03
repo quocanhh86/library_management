@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Constant;
@@ -41,8 +38,14 @@ public class SystemAdminController(
         }
 
         var result = await systemAdminService.CreateStaffAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Staff));
     }
@@ -58,8 +61,14 @@ public class SystemAdminController(
         }
 
         var result = await systemAdminService.UpdateStaffAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Staff));
     }
@@ -69,8 +78,14 @@ public class SystemAdminController(
     public async Task<IActionResult> UnlockStaff(Guid id, CancellationToken ct)
     {
         var result = await systemAdminService.UnlockStaffAccountAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Staff));
     }
@@ -80,8 +95,14 @@ public class SystemAdminController(
     public async Task<IActionResult> DeleteStaff(Guid id, CancellationToken ct)
     {
         var result = await systemAdminService.SoftDeleteStaffAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Staff));
     }
@@ -91,8 +112,14 @@ public class SystemAdminController(
     public async Task<IActionResult> RestoreStaff(Guid id, CancellationToken ct)
     {
         var result = await systemAdminService.RestoreStaffAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Staff), new { status = EntityStatus.Deleted });
     }
@@ -102,8 +129,14 @@ public class SystemAdminController(
     public async Task<IActionResult> HardDeleteStaff(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await systemAdminService.HardDeleteStaffAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Staff), new { status = EntityStatus.Deleted });
     }
@@ -134,8 +167,14 @@ public class SystemAdminController(
         }
 
         var result = await systemAdminService.SaveReaderTypeAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return string.Equals(returnPage, "Settings", StringComparison.OrdinalIgnoreCase)
             ? RedirectToAction(nameof(Settings))
@@ -147,8 +186,14 @@ public class SystemAdminController(
     public async Task<IActionResult> DeleteReaderType(Guid id, CancellationToken ct)
     {
         var result = await systemAdminService.DeleteReaderTypeAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(ReaderTypes));
     }
@@ -158,8 +203,14 @@ public class SystemAdminController(
     public async Task<IActionResult> RestoreReaderType(Guid id, CancellationToken ct)
     {
         var result = await systemAdminService.RestoreReaderTypeAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(ReaderTypes));
     }
@@ -169,8 +220,14 @@ public class SystemAdminController(
     public async Task<IActionResult> HardDeleteReaderType(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await systemAdminService.HardDeleteReaderTypeAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(ReaderTypes));
     }
@@ -207,8 +264,14 @@ public class SystemAdminController(
         }
 
         var result = await systemAdminService.SaveLibrarySettingAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Settings));
     }

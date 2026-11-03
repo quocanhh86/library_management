@@ -1,5 +1,6 @@
+using System.Net;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using web_mvc_management.Constant;
 using web_mvc_management.Entity;
 using web_mvc_management.Util;
@@ -13,6 +14,39 @@ public static class DbInitializer
 {
     public static async Task InitializeAsync(ApplicationDbContext context, IConfiguration? configuration = null)
     {
+        // 0. Đảm bảo bảng dbo.book_images tồn tại trên SQL Server (nâng cấp tự động không cần xóa DB cũ)
+        const string ensureBookImagesTableSql = """
+            IF OBJECT_ID('dbo.book_images', 'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.book_images (
+                    id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                    book_id UNIQUEIDENTIFIER NOT NULL,
+                    image_url NVARCHAR(500) NOT NULL,
+                    public_id NVARCHAR(255) NULL,
+                    image_type VARCHAR(30) NOT NULL DEFAULT 'COVER',
+                    caption NVARCHAR(200) NULL,
+                    display_order INT NOT NULL DEFAULT 0,
+                    is_primary BIT NOT NULL DEFAULT 0,
+                    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                    created_at DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+                    updated_at DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+                    created_by UNIQUEIDENTIFIER NULL,
+                    updated_by UNIQUEIDENTIFIER NULL,
+                    CONSTRAINT fk_book_images_books FOREIGN KEY (book_id) REFERENCES dbo.books(id) ON DELETE CASCADE
+                );
+                CREATE INDEX ix_book_images_book_id_status_display_order ON dbo.book_images(book_id, status, display_order);
+            END
+
+            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.books') AND name = 'language')
+            BEGIN
+                IF OBJECT_ID('dbo.df_books_language', 'D') IS NOT NULL
+                    ALTER TABLE dbo.books DROP CONSTRAINT df_books_language;
+                ALTER TABLE dbo.books ALTER COLUMN language NVARCHAR(50) NULL;
+                UPDATE dbo.books SET language = N'Tiếng Việt' WHERE language LIKE 'Ti%ng Vi%t';
+            END
+            """;
+        await context.Database.ExecuteSqlRawAsync(ensureBookImagesTableSql);
+
         // 1. Cấu hình quy định thư viện (LibrarySettings)
         if (!await context.LibrarySettings.AnyAsync())
         {
@@ -98,10 +132,17 @@ public static class DbInitializer
         await context.SaveChangesAsync();
 
         // 3. Nhân viên & Quản trị viên (Staff)
-        var defaultPassword = configuration?["SeedSettings:DefaultPassword"]
-            ?? Environment.GetEnvironmentVariable("SeedSettings__DefaultPassword")
-            ?? "123456";
-        var defaultPasswordHash = PasswordHasher.HashPassword(defaultPassword);
+        var configuredDefaultPassword = configuration?["SeedSettings:DefaultPassword"]
+            ?? Environment.GetEnvironmentVariable("SeedSettings__DefaultPassword");
+
+        var hasConfiguredPassword = !string.IsNullOrWhiteSpace(configuredDefaultPassword) &&
+            !configuredDefaultPassword.Equals("your_seed_password", StringComparison.OrdinalIgnoreCase);
+
+        var effectiveDefaultPassword = hasConfiguredPassword
+            ? configuredDefaultPassword!.Trim()
+            : Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
+
+        var defaultPasswordHash = PasswordHasher.HashPassword(effectiveDefaultPassword);
 
         if (!await context.Staff.AnyAsync())
         {
@@ -139,29 +180,36 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        // Nạp cấu hình 3 tài khoản hạt giống từ IConfiguration (SeedSettings:Users) / biến môi trường .env
-        var seedUsers = new List<SeedUserSetting>
-        {
-            GetSeedUser(configuration, 0, "anhnqth01267@fpt.edu.vn", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin FPT)", "anhnq_admin", "GV20268881", "GV8881"),
-            GetSeedUser(configuration, 1, "quocanhn352@gmail.com", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin Tổng)", "quocanh_admin", "SV20268888", "SV8888"),
-            GetSeedUser(configuration, 2, "attendancestudent86@gmail.com", AppRoles.Librarian, defaultPassword, "Cán Bộ Thủ Thư (Attendance)", "attendance_librarian", "SV20268889", "SV8889")
-        };
+        // Nạp danh sách tài khoản hạt giống từ IConfiguration (SeedSettings:Users) / biến môi trường .env
+        var seedUsers = GetSeedUsers(configuration, effectiveDefaultPassword, hasConfiguredPassword);
 
-        // Đồng bộ 3 tài khoản vào bảng Staff
+        // Đồng bộ các tài khoản hạt giống vào bảng Staff (đảm bảo không trùng Username)
+        var usedStaffUsernames = new HashSet<string>(
+            await context.Staff.Select(x => x.Username.ToLower()).ToListAsync(),
+            StringComparer.OrdinalIgnoreCase);
+
         foreach (var u in seedUsers)
         {
             var staffUser = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
-            var passHash = PasswordHasher.HashPassword(u.Password);
+            var passHash = u.HasExplicitPassword ? PasswordHasher.HashPassword(u.Password) : null;
 
             if (staffUser == null)
             {
+                var candidateUsername = u.Username;
+                var suffix = 1;
+                while (usedStaffUsernames.Contains(candidateUsername))
+                {
+                    candidateUsername = $"{u.Username}{suffix++}";
+                }
+                usedStaffUsernames.Add(candidateUsername);
+
                 staffUser = new Staff
                 {
                     Id = Guid.NewGuid(),
-                    Username = u.Username,
+                    Username = candidateUsername,
                     Email = u.Email,
                     FullName = u.FullName,
-                    PasswordHash = passHash,
+                    PasswordHash = passHash ?? defaultPasswordHash,
                     Phone = "0981112233",
                     Role = u.Role,
                     Status = EntityStatus.Active,
@@ -175,7 +223,10 @@ public static class DbInitializer
             {
                 staffUser.Role = u.Role;
                 staffUser.FullName = u.FullName;
-                staffUser.PasswordHash = passHash;
+                if (passHash != null)
+                {
+                    staffUser.PasswordHash = passHash;
+                }
                 staffUser.Status = EntityStatus.Active;
                 if (string.IsNullOrWhiteSpace(staffUser.SecurityStamp))
                 {
@@ -185,7 +236,7 @@ public static class DbInitializer
         }
         await context.SaveChangesAsync();
 
-        Staff adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin)
+        var adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin)
             ?? await context.Staff.FirstAsync();
 
         // 4. Kệ sách (Shelves)
@@ -348,25 +399,50 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        // Đồng bộ 3 tài khoản hạt giống vào bảng Readers để kiểm thử Cổng Độc giả (/Account/Login)
+        // Đồng bộ các tài khoản hạt giống vào bảng Readers để kiểm thử Cổng Độc giả (/Account/Login)
+        var usedReaderUsernames = new HashSet<string>(
+            await context.Readers.Select(x => x.Username.ToLower()).ToListAsync(),
+            StringComparer.OrdinalIgnoreCase);
+        var usedReaderCardNos = new HashSet<string>(
+            await context.Readers.Select(x => x.CardNo.ToUpper()).ToListAsync(),
+            StringComparer.OrdinalIgnoreCase);
+
         foreach (var u in seedUsers)
         {
             var readerUser = await context.Readers.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
-            var passHash = PasswordHasher.HashPassword(u.Password);
+            var passHash = u.HasExplicitPassword ? PasswordHasher.HashPassword(u.Password) : null;
             var targetTypeId = u.Role == AppRoles.Admin ? lecturerType.Id : studentType.Id;
 
             if (readerUser == null)
             {
+                var baseReaderUsername = u.Username.Replace("_admin", "_reader").Replace("_librarian", "_student");
+                var candidateUsername = baseReaderUsername;
+                var uSuffix = 1;
+                while (usedReaderUsernames.Contains(candidateUsername))
+                {
+                    candidateUsername = $"{baseReaderUsername}{uSuffix++}";
+                }
+                usedReaderUsernames.Add(candidateUsername);
+
+                var candidateCardNo = u.CardNo;
+                var cardSeq = 8900;
+                var cardPrefix = u.Role == AppRoles.Admin ? "GV" : "SV";
+                while (usedReaderCardNos.Contains(candidateCardNo))
+                {
+                    candidateCardNo = $"{cardPrefix}2026{cardSeq++}";
+                }
+                usedReaderCardNos.Add(candidateCardNo);
+
                 readerUser = new Reader
                 {
                     Id = Guid.NewGuid(),
                     ReaderTypeId = targetTypeId,
-                    Username = u.Username.Replace("_admin", "_reader").Replace("_librarian", "_student"),
+                    Username = candidateUsername,
                     Email = u.Email,
-                    PasswordHash = passHash,
+                    PasswordHash = passHash ?? defaultPasswordHash,
                     FullName = u.FullName,
                     Phone = "0981112233",
-                    CardNo = u.CardNo,
+                    CardNo = candidateCardNo,
                     MemberCode = u.MemberCode,
                     DateOfBirth = new DateOnly(2000, 1, 1),
                     Address = "Hà Nội",
@@ -383,7 +459,10 @@ public static class DbInitializer
             }
             else
             {
-                readerUser.PasswordHash = passHash;
+                if (passHash != null)
+                {
+                    readerUser.PasswordHash = passHash;
+                }
                 readerUser.Status = EntityStatus.Active;
                 readerUser.CardStatus = LibraryConstants.CardStatus.Active;
                 if (string.IsNullOrWhiteSpace(readerUser.SecurityStamp))
@@ -601,6 +680,12 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
+        // 9.5. Khởi tạo Bộ sưu tập Hình ảnh Sách mẫu (BookImages: Ảnh bìa trước + Mục lục + Trang đọc thử + Bìa sau)
+        if (!await context.BookImages.AnyAsync())
+        {
+            await SeedSampleBookImagesAsync(context, adminStaff.Id);
+        }
+
         // 10. Phiếu mượn mẫu (BorrowSlips) & Chi tiết mượn (BorrowDetails)
         if (!await context.BorrowSlips.AnyAsync())
         {
@@ -721,53 +806,374 @@ public static class DbInitializer
         }
     }
 
+    private static async Task SeedSampleBookImagesAsync(ApplicationDbContext context, Guid adminStaffId)
+    {
+        var cwd = Directory.GetCurrentDirectory();
+        var webRoot = Directory.Exists(Path.Combine(cwd, "wwwroot"))
+            ? Path.Combine(cwd, "wwwroot")
+            : Path.Combine(cwd, "web_mvc_management", "wwwroot");
+
+        var seedDir = Path.Combine(webRoot, "uploads", "books", "seed");
+        Directory.CreateDirectory(seedDir);
+
+        var books = await context.Books
+            .Include(b => b.Category)
+            .Include(b => b.Publisher)
+            .OrderBy(b => b.CreatedAt)
+            .ToListAsync();
+
+        var palettes = new (string Bg1, string Bg2, string Accent)[]
+        {
+            ("#0F2A4A", "#1E4E79", "#F59E0B"),
+            ("#143D34", "#1F6354", "#34D399"),
+            ("#311B47", "#4E2A70", "#C084FC"),
+            ("#4A1D1F", "#7A2E32", "#F87171"),
+            ("#1E293B", "#334155", "#38BDF8"),
+            ("#3B2F1E", "#66502C", "#FBBF24"),
+            ("#1B3B2B", "#2D6A4F", "#74C69D")
+        };
+
+        var imagesToInsert = new List<BookImage>();
+
+        for (var i = 0; i < books.Count; i++)
+        {
+            var book = books[i];
+            var palette = palettes[i % palettes.Length];
+            var slug = $"book-{i + 1:00}";
+
+            // 1. Ảnh bìa trước (COVER)
+            var coverRelUrl = $"/uploads/books/seed/{slug}-cover.svg";
+            var coverSvg = BuildCoverSvg(book.Title, book.Isbn ?? "978-604-000", book.Publisher?.Name ?? "Thư Viện UTC", palette.Bg1, palette.Bg2, palette.Accent);
+            await File.WriteAllTextAsync(Path.Combine(seedDir, $"{slug}-cover.svg"), coverSvg, Encoding.UTF8);
+
+            // 2. Ảnh Mục lục (TABLE_OF_CONTENTS)
+            var tocRelUrl = $"/uploads/books/seed/{slug}-toc.svg";
+            var tocSvg = BuildPageSvg(
+                book.Title,
+                "MỤC LỤC CHI TIẾT (TABLE OF CONTENTS)",
+                [
+                    "Chương 1: Tổng quan kiến thức nền tảng & Nguyên lý cốt lõi .......... Trang 05",
+                    "Chương 2: Phân tích cấu trúc, mô hình hóa & Tiêu chuẩn kỹ thuật .... Trang 48",
+                    "Chương 3: Thiết kế hệ thống & Các mẫu thực hành tốt nhất ........... Trang 112",
+                    "Chương 4: Nghiên cứu tình huống thực tế (Case Studies) .............. Trang 195",
+                    "Chương 5: Câu hỏi ôn tập, Bài tập thực hành & Phụ lục tra cứu ...... Trang 280"
+                ],
+                "Trang i — Mục lục",
+                palette.Bg1);
+            await File.WriteAllTextAsync(Path.Combine(seedDir, $"{slug}-toc.svg"), tocSvg, Encoding.UTF8);
+
+            // 3. Ảnh Trang đọc thử 1 (PREVIEW_PAGE)
+            var p1RelUrl = $"/uploads/books/seed/{slug}-page-01.svg";
+            var p1Svg = BuildPageSvg(
+                book.Title,
+                "CHƯƠNG 1: DẪN NHẬP & NGUYÊN LÝ CỐT LÕI",
+                [
+                    "1.1. Đặt vấn đề và bối cảnh ứng dụng trong thực tiễn hiện đại:",
+                    book.Description ?? "Tài liệu chuyên khảo phục vụ đào tạo và nghiên cứu tại Trường Đại học Giao thông Vận tải.",
+                    "1.2. Các tiêu chuẩn chất lượng cần tuân thủ:",
+                    "• Tính chính xác, tường minh và khả năng mở rộng dài hạn.",
+                    "• Tối ưu hóa hiệu năng vận hành và đảm bảo an toàn dữ liệu."
+                ],
+                "Trang 12 — Đọc thử",
+                palette.Bg1);
+            await File.WriteAllTextAsync(Path.Combine(seedDir, $"{slug}-page-01.svg"), p1Svg, Encoding.UTF8);
+
+            // 4. Ảnh Trang đọc thử 2 (PREVIEW_PAGE)
+            var p2RelUrl = $"/uploads/books/seed/{slug}-page-02.svg";
+            var p2Svg = BuildPageSvg(
+                book.Title,
+                "CHƯƠNG 2: SƠ ĐỒ KIẾN TRÚC & BÀI TẬP THỰC HÀNH",
+                [
+                    "2.1. Quy trình triển khai tiêu chuẩn qua 4 giai đoạn:",
+                    "[Khảo sát & Đặc tả]  --->  [Thiết kế Mô hình]  --->  [Thực thi]  --->  [Kiểm định]",
+                    "2.2. Ghi chú dành cho sinh viên và học viên cao học:",
+                    "• Sinh viên đối chiếu mã kệ " + (book.Isbn ?? "UTC") + " tại phòng đọc chuyên ngành.",
+                    "• Kết hợp làm bài tập thực hành cuối mỗi chương để nắm vững lý thuyết."
+                ],
+                "Trang 25 — Đọc thử",
+                palette.Bg1);
+            await File.WriteAllTextAsync(Path.Combine(seedDir, $"{slug}-page-02.svg"), p2Svg, Encoding.UTF8);
+
+            // Cập nhật CoverUrl của đầu sách trỏ về ảnh bìa thực tế vừa tạo
+            book.CoverUrl = coverRelUrl;
+
+            imagesToInsert.AddRange(
+            [
+                new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = coverRelUrl,
+                    PublicId = $"seed/{slug}-cover",
+                    ImageType = LibraryConstants.BookImageType.Cover,
+                    Caption = "Ảnh bìa chính",
+                    DisplayOrder = 0,
+                    IsPrimary = true,
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = adminStaffId
+                },
+                new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = tocRelUrl,
+                    PublicId = $"seed/{slug}-toc",
+                    ImageType = LibraryConstants.BookImageType.TableOfContents,
+                    Caption = "Mục lục sách",
+                    DisplayOrder = 1,
+                    IsPrimary = false,
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = adminStaffId
+                },
+                new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = p1RelUrl,
+                    PublicId = $"seed/{slug}-page-01",
+                    ImageType = LibraryConstants.BookImageType.PreviewPage,
+                    Caption = "Trang đọc thử — Chương 1 (Tr. 12)",
+                    DisplayOrder = 2,
+                    IsPrimary = false,
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = adminStaffId
+                },
+                new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = p2RelUrl,
+                    PublicId = $"seed/{slug}-page-02",
+                    ImageType = LibraryConstants.BookImageType.PreviewPage,
+                    Caption = "Trang đọc thử — Chương 2 (Tr. 25)",
+                    DisplayOrder = 3,
+                    IsPrimary = false,
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = adminStaffId
+                }
+            ]);
+        }
+
+        if (imagesToInsert.Count > 0)
+        {
+            await context.BookImages.AddRangeAsync(imagesToInsert);
+            await context.SaveChangesAsync();
+        }
+    }
+
+    private static string BuildCoverSvg(string title, string isbn, string publisher, string bg1, string bg2, string accent)
+    {
+        var lines = WrapText(title, 24, 3);
+        var titleTspans = new StringBuilder();
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var dy = i == 0 ? "0" : "42";
+            titleTspans.Append($"<tspan x=\"60\" dy=\"{dy}\">{WebUtility.HtmlEncode(lines[i])}</tspan>");
+        }
+
+        return $$"""
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+              <defs>
+                <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="{{bg1}}"/>
+                  <stop offset="100%" stop-color="{{bg2}}"/>
+                </linearGradient>
+              </defs>
+              <rect width="600" height="840" rx="18" fill="url(#bg)"/>
+              <rect x="24" y="24" width="552" height="792" rx="12" fill="none" stroke="{{accent}}" stroke-width="2" stroke-opacity="0.45"/>
+              <rect x="60" y="70" width="170" height="32" rx="6" fill="{{accent}}"/>
+              <text x="145" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0F172A" text-anchor="middle">THƯ VIỆN ĐH GTVT</text>
+              <text x="60" y="210" font-family="Georgia, Times New Roman, serif" font-size="33" font-weight="700" fill="#FFFFFF">{{titleTspans}}</text>
+              <line x1="60" y1="365" x2="240" y2="365" stroke="{{accent}}" stroke-width="4"/>
+              <circle cx="460" cy="540" r="95" fill="{{accent}}" fill-opacity="0.12" stroke="{{accent}}" stroke-width="2" stroke-opacity="0.4"/>
+              <text x="60" y="720" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="600" fill="#E2E8F0">{{WebUtility.HtmlEncode(publisher)}}</text>
+              <text x="60" y="752" font-family="Consolas, monospace" font-size="15" fill="{{accent}}">ISBN: {{WebUtility.HtmlEncode(isbn)}}</text>
+            </svg>
+            """;
+    }
+
+    private static string BuildPageSvg(string bookTitle, string heading, IReadOnlyList<string> paragraphs, string footerPage, string accentColor)
+    {
+        var bodyBuilder = new StringBuilder();
+        var currentY = 215;
+
+        foreach (var para in paragraphs)
+        {
+            var wrapped = WrapText(para, 58, 3);
+            foreach (var line in wrapped)
+            {
+                bodyBuilder.AppendLine($"<text x=\"65\" y=\"{currentY}\" font-family=\"Georgia, serif\" font-size=\"16\" fill=\"#334155\">{WebUtility.HtmlEncode(line)}</text>");
+                currentY += 28;
+            }
+            currentY += 18;
+        }
+
+        var shortTitle = bookTitle.Length > 48 ? bookTitle[..45] + "..." : bookTitle;
+
+        return $$"""
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+              <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+              <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+              <text x="65" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#64748B">{{WebUtility.HtmlEncode(shortTitle)}}</text>
+              <line x1="65" y1="92" x2="535" y2="92" stroke="#CBD5E1" stroke-width="1.5"/>
+              <rect x="65" y="122" width="470" height="44" rx="6" fill="{{accentColor}}" fill-opacity="0.08"/>
+              <text x="80" y="150" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="{{accentColor}}">{{WebUtility.HtmlEncode(heading)}}</text>
+              {{bodyBuilder}}
+              <line x1="65" y1="745" x2="535" y2="745" stroke="#E2E8F0" stroke-width="1"/>
+              <text x="300" y="775" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">{{WebUtility.HtmlEncode(footerPage)}}</text>
+            </svg>
+            """;
+    }
+
+    private static List<string> WrapText(string text, int maxCharsPerLine, int maxLines)
+    {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var lines = new List<string>();
+        var current = new StringBuilder();
+
+        foreach (var word in words)
+        {
+            if (current.Length + word.Length + 1 > maxCharsPerLine && current.Length > 0)
+            {
+                lines.Add(current.ToString());
+                current.Clear();
+                if (lines.Count >= maxLines - 1)
+                {
+                    break;
+                }
+            }
+
+            if (current.Length > 0)
+            {
+                current.Append(' ');
+            }
+            current.Append(word);
+        }
+
+        if (current.Length > 0 && lines.Count < maxLines)
+        {
+            lines.Add(current.ToString());
+        }
+
+        return lines;
+    }
+
     private record SeedUserSetting(
         string Email,
         string Role,
         string Password,
+        bool HasExplicitPassword,
         string FullName,
         string Username,
         string CardNo,
         string MemberCode);
 
-    private static SeedUserSetting GetSeedUser(
+    private static List<SeedUserSetting> GetSeedUsers(
         IConfiguration? configuration,
-        int zeroBasedIndex,
-        string defaultEmail,
-        string defaultRole,
         string defaultPassword,
-        string defaultFullName,
-        string defaultUsername,
-        string defaultCardNo,
-        string defaultMemberCode)
+        bool hasDefaultPassword)
     {
-        var email = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:Email"]
-            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__Email");
-        email = string.IsNullOrWhiteSpace(email) ? defaultEmail : email.Trim().ToLowerInvariant();
+        var indices = new SortedSet<int>(Enumerable.Range(0, 20));
 
-        var role = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:Role"]
-            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__Role");
-        role = string.IsNullOrWhiteSpace(role) ? defaultRole : role.Trim();
-        role = string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
-            ? AppRoles.Admin
-            : AppRoles.Librarian;
+        if (configuration != null)
+        {
+            foreach (var child in configuration.GetSection("SeedSettings:Users").GetChildren())
+            {
+                if (int.TryParse(child.Key, out var idx) && idx >= 0)
+                {
+                    indices.Add(idx);
+                }
+            }
+        }
 
-        var password = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:Password"]
-            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__Password");
-        password = string.IsNullOrWhiteSpace(password) ? defaultPassword : password.Trim();
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            var key = entry.Key?.ToString();
+            if (key != null && key.StartsWith("SeedSettings__Users__", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = key.Split("__", StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 3 && int.TryParse(parts[2], out var idx) && idx >= 0)
+                {
+                    indices.Add(idx);
+                }
+            }
+        }
 
-        var fullName = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:FullName"]
-            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__FullName");
-        fullName = string.IsNullOrWhiteSpace(fullName) ? defaultFullName : fullName.Trim();
+        var result = new List<SeedUserSetting>();
+        var seenEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        return new SeedUserSetting(
-            email,
-            role,
-            password,
-            fullName,
-            defaultUsername,
-            defaultCardNo,
-            defaultMemberCode
-        );
+        foreach (var i in indices)
+        {
+            var email = configuration?[$"SeedSettings:Users:{i}:Email"]
+                ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{i}__Email");
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                continue;
+            }
+
+            email = email.Trim().ToLowerInvariant();
+            if (email.EndsWith("@example.com", StringComparison.OrdinalIgnoreCase) ||
+                email.StartsWith("your_", StringComparison.OrdinalIgnoreCase) ||
+                !seenEmails.Add(email))
+            {
+                continue;
+            }
+
+            var roleRaw = configuration?[$"SeedSettings:Users:{i}:Role"]
+                ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{i}__Role");
+            var role = string.Equals(roleRaw?.Trim(), AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+                ? AppRoles.Admin
+                : AppRoles.Librarian;
+
+            var userPassword = configuration?[$"SeedSettings:Users:{i}:Password"]
+                ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{i}__Password");
+            var hasUserPassword = !string.IsNullOrWhiteSpace(userPassword) &&
+                !userPassword.Equals("your_seed_password", StringComparison.OrdinalIgnoreCase);
+
+            var password = hasUserPassword
+                ? userPassword!.Trim()
+                : defaultPassword;
+
+            var emailPrefix = email.Split('@')[0];
+            var fullName = configuration?[$"SeedSettings:Users:{i}:FullName"]
+                ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{i}__FullName");
+            fullName = string.IsNullOrWhiteSpace(fullName) ? emailPrefix : fullName.Trim();
+
+            var roleSuffix = role == AppRoles.Admin ? "admin" : "librarian";
+            var username = configuration?[$"SeedSettings:Users:{i}:Username"]
+                ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{i}__Username");
+            username = string.IsNullOrWhiteSpace(username) ? $"{emailPrefix}_{roleSuffix}" : username.Trim();
+
+            var cardPrefix = role == AppRoles.Admin ? "GV" : "SV";
+            var seq = 8881 + i;
+            var cardNo = configuration?[$"SeedSettings:Users:{i}:CardNo"]
+                ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{i}__CardNo")
+                ?? $"{cardPrefix}2026{seq}";
+
+            var memberCode = configuration?[$"SeedSettings:Users:{i}:MemberCode"]
+                ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{i}__MemberCode")
+                ?? $"{cardPrefix}{seq}";
+
+            result.Add(new SeedUserSetting(
+                email,
+                role,
+                password,
+                hasUserPassword || hasDefaultPassword,
+                fullName,
+                username,
+                cardNo,
+                memberCode));
+        }
+
+        return result;
     }
 }

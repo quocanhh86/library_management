@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace web_mvc_management.Constant;
 
 /// <summary>
@@ -111,10 +108,7 @@ public static class ErrorMessages
     /// <summary>
     /// Lấy chuỗi thông báo lỗi tĩnh theo mã ErrorCode.
     /// </summary>
-    public static string Get(ErrorCode code)
-    {
-        return Messages.TryGetValue(code, out var message) ? message : "Đã có lỗi xảy ra.";
-    }
+    public static string Get(ErrorCode code) => Messages.TryGetValue(code, out var message) ? message : "Đã có lỗi xảy ra.";
 
     /// <summary>
     /// Lấy chuỗi thông báo lỗi động có tham số format theo mã ErrorCode.

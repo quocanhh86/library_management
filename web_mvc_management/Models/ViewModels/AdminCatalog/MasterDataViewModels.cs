@@ -1,4 +1,3 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;

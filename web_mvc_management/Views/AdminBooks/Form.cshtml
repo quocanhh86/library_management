@@ -21,7 +21,7 @@
     </div>
 </div>
 
-<form method="post" action="@formAction" novalidate>
+<form method="post" action="@formAction" enctype="multipart/form-data" novalidate>
     @Html.AntiForgeryToken()
     @if (isEdit)
     {
@@ -32,7 +32,7 @@
 
     <div class="row g-4">
         <div class="col-lg-8">
-            <div class="panel">
+            <div class="panel mb-4">
                 <h2 class="mb-3">1. Thông tin biên mục đầu sách (Book)</h2>
                 <div class="row g-3">
                     <div class="col-md-8">
@@ -130,7 +130,7 @@
 
                     <div class="col-md-8">
                         <label asp-for="CoverUrl" class="form-label"></label>
-                        <input asp-for="CoverUrl" class="form-control" placeholder="Để trống nếu dùng bìa chữ tiêu chuẩn của thư viện" />
+                        <input asp-for="CoverUrl" class="form-control" placeholder="Tự động điền khi tải ảnh lên hoặc dán URL ảnh trực tiếp" />
                         <span asp-validation-for="CoverUrl" class="field-validation-error"></span>
                     </div>
 
@@ -143,13 +143,110 @@
                     </div>
                 </div>
             </div>
+
+            <div class="panel">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 class="mb-0"><i class="bi bi-images me-1" aria-hidden="true"></i>2. Bộ sưu tập Hình ảnh Sách (Ảnh bìa, Mục lục, Trang đọc thử)</h2>
+                    <span class="status status--ok"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Cloudinary Ready</span>
+                </div>
+                <p class="fs-xs text-muted-ink mb-3">
+                    Một đầu sách có thể lưu trữ <strong>nhiều hình ảnh</strong>: Ảnh bìa chính, Bìa sau, Mục lục và các Trang sách đọc thử. Chấp nhận định dạng <code>.jpg</code>, <code>.png</code>, <code>.webp</code>, <code>.svg</code> (tối đa 10 MB/ảnh).
+                </p>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded bg-white h-100">
+                            <label asp-for="CoverImageFile" class="form-label fw-semibold">
+                                <i class="bi bi-book me-1" aria-hidden="true"></i>Tải lên Ảnh bìa chính (COVER)
+                            </label>
+                            <input asp-for="CoverImageFile" type="file" class="form-control" id="coverImageInput" accept=".jpg,.jpeg,.png,.webp,.gif,.svg" />
+                            <div class="form-text">Ảnh này sẽ được đặt làm bìa đại diện chính của cuốn sách.</div>
+                            <div id="coverPreviewBox" class="mt-2 d-none">
+                                <div class="fs-xs text-muted-ink mb-1">Xem trước ảnh bìa mới chọn:</div>
+                                <img id="coverPreviewImg" src="" alt="Preview bìa sách" class="rounded border" style="height: 130px; width: auto; object-fit: cover;" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded bg-white h-100">
+                            <label asp-for="GalleryFiles" class="form-label fw-semibold">
+                                <i class="bi bi-file-earmark-richtext me-1" aria-hidden="true"></i>Tải lên Nhiều ảnh trang sách / mục lục
+                            </label>
+                            <input asp-for="GalleryFiles" type="file" multiple class="form-control mb-2" id="galleryFilesInput" accept=".jpg,.jpeg,.png,.webp,.gif,.svg" />
+
+                            <div class="row g-2">
+                                <div class="col-sm-6">
+                                    <label asp-for="GalleryImageType" class="form-label fs-xs mb-1">Loại hình ảnh</label>
+                                    <select asp-for="GalleryImageType" class="form-select form-select-sm">
+                                        <option value="@LibraryConstants.BookImageType.PreviewPage">Trang đọc thử (PREVIEW_PAGE)</option>
+                                        <option value="@LibraryConstants.BookImageType.TableOfContents">Mục lục sách (TABLE_OF_CONTENTS)</option>
+                                        <option value="@LibraryConstants.BookImageType.BackCover">Ảnh bìa sau (BACK_COVER)</option>
+                                        <option value="@LibraryConstants.BookImageType.Gallery">Ảnh minh họa khác (GALLERY)</option>
+                                    </select>
+                                </div>
+                                <div class="col-sm-6">
+                                    <label asp-for="GalleryCaptionPrefix" class="form-label fs-xs mb-1">Ghi chú / Chú thích</label>
+                                    <input asp-for="GalleryCaptionPrefix" class="form-control form-control-sm" placeholder="VD: Chương 1 - Đọc thử" />
+                                </div>
+                            </div>
+
+                            <div id="galleryPreviewBox" class="mt-2 d-none">
+                                <div class="fs-xs text-muted-ink mb-1">Đã chọn <span id="galleryCountBadge" class="fw-bold">0</span> ảnh trang sách:</div>
+                                <div id="galleryPreviewGrid" class="d-flex flex-wrap gap-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (isEdit && Model.ExistingImages.Count > 0)
+                {
+                    <hr class="my-3" />
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h3 class="fs-6 fw-semibold mb-0">Danh sách hình ảnh hiện có của đầu sách (@Model.ExistingImages.Count ảnh)</h3>
+                        <span class="fs-xs text-muted-ink">Chọn "Đặt làm bìa chính" hoặc tích "Xóa ảnh" rồi bấm Lưu cập nhật</span>
+                    </div>
+
+                    <div class="row g-3">
+                        @foreach (var img in Model.ExistingImages)
+                        {
+                            <div class="col-sm-6 col-md-4 col-xl-3">
+                                <div class="border rounded p-2 bg-white h-100 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="position-relative text-center bg-light rounded p-1 mb-2" style="height: 150px;">
+                                            <img src="@img.ImageUrl" alt="@img.Caption" style="max-height: 140px; max-width: 100%; object-fit: contain;" loading="lazy" />
+                                            @if (img.IsPrimary)
+                                            {
+                                                <span class="status status--ok position-absolute top-0 start-0 m-1">Bìa chính</span>
+                                            }
+                                        </div>
+                                        <div class="fs-xs fw-semibold text-truncate" title="@img.Caption">@(img.Caption ?? img.ImageTypeLabel)</div>
+                                        <div class="fs-xs text-muted-ink">@img.ImageTypeLabel</div>
+                                    </div>
+
+                                    <div class="border-top pt-2 mt-2 d-flex flex-column gap-1 fs-xs">
+                                        <label class="form-check d-flex align-items-center gap-1 mb-0">
+                                            <input class="form-check-input mt-0" type="radio" name="PrimaryImageId" value="@img.Id" checked="@(Model.PrimaryImageId == img.Id || img.IsPrimary)" />
+                                            <span>Đặt làm bìa chính</span>
+                                        </label>
+                                        <label class="form-check d-flex align-items-center gap-1 mb-0 text-danger">
+                                            <input class="form-check-input mt-0" type="checkbox" name="DeleteImageIds" value="@img.Id" />
+                                            <span>Xóa ảnh này</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
         </div>
 
         <div class="col-lg-4">
             @if (!isEdit)
             {
                 <div class="panel">
-                    <h2 class="mb-2">2. Nhập lô bản sao vật lý (BookCopy)</h2>
+                    <h2 class="mb-2">3. Nhập lô bản sao vật lý (BookCopy)</h2>
                     <p class="fs-xs text-muted-ink mb-3">
                         Mỗi cuốn sách vật lý sẽ được tự động cấp một <strong>mã vạch (Barcode)</strong> riêng biệt theo chuẩn <code>BC-YYYYMMDD-XXXX</code> và xếp vào vị trí kệ đã chọn.
                     </p>
@@ -219,5 +316,59 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-}
+    <script>
+        (function () {
+            var coverInput = document.getElementById('coverImageInput');
+            var coverBox = document.getElementById('coverPreviewBox');
+            var coverImg = document.getElementById('coverPreviewImg');
 
+            if (coverInput && coverBox && coverImg) {
+                coverInput.addEventListener('change', function () {
+                    var file = coverInput.files && coverInput.files[0];
+                    if (!file) {
+                        coverBox.classList.add('d-none');
+                        return;
+                    }
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        coverImg.src = e.target.result;
+                        coverBox.classList.remove('d-none');
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            var galleryInput = document.getElementById('galleryFilesInput');
+            var galleryBox = document.getElementById('galleryPreviewBox');
+            var galleryGrid = document.getElementById('galleryPreviewGrid');
+            var galleryCount = document.getElementById('galleryCountBadge');
+
+            if (galleryInput && galleryBox && galleryGrid && galleryCount) {
+                galleryInput.addEventListener('change', function () {
+                    galleryGrid.innerHTML = '';
+                    var files = galleryInput.files;
+                    if (!files || files.length === 0) {
+                        galleryBox.classList.add('d-none');
+                        return;
+                    }
+                    galleryCount.textContent = files.length;
+                    galleryBox.classList.remove('d-none');
+
+                    Array.from(files).forEach(function (file, idx) {
+                        var reader = new FileReader();
+                        reader.onload = function (e) {
+                            var wrap = document.createElement('div');
+                            wrap.className = 'border rounded p-1 bg-light text-center';
+                            wrap.style.width = '78px';
+                            wrap.innerHTML =
+                                '<img src="' + e.target.result + '" style="height:68px;width:100%;object-fit:cover;" class="rounded mb-1" />' +
+                                '<div class="fs-xs text-truncate" title="' + file.name + '">Trang ' + (idx + 1) + '</div>';
+                            galleryGrid.appendChild(wrap);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                });
+            }
+        })();
+    </script>
+}

@@ -1,6 +1,11 @@
 @model web_mvc_management.Models.ViewModels.Catalog.BookSummaryViewModel
 @{
     ViewData["Title"] = Model.Title;
+    var imagesList = Model.Images ?? [];
+    var hasImages = imagesList.Count > 0;
+    var primaryImg = hasImages
+        ? (imagesList.FirstOrDefault(x => x.IsPrimary) ?? imagesList[0])
+        : null;
 }
 <div class="d-flex justify-content-between align-items-center mb-3">
     <a href="@Screens.GetPath(ScreenId.BookCatalog)"><i class="bi bi-arrow-left" aria-hidden="true"></i> Trở về danh mục sách</a>
@@ -8,7 +13,7 @@
     {
         <div class="d-flex gap-2">
             <a class="btn btn-quiet btn-sm" href="@Screens.GetPath(ScreenId.ManageBooks)/Edit/@Model.Id">
-                <i class="bi bi-pencil" aria-hidden="true"></i>Sửa đầu sách
+                <i class="bi bi-pencil" aria-hidden="true"></i>Sửa đầu sách & Ảnh
             </a>
             <a class="btn btn-primary btn-sm" href="@Screens.GetPath(ScreenId.ManageBookCopies)?bookId=@Model.Id">
                 <i class="bi bi-upc-scan" aria-hidden="true"></i>Quản lý bản sao
@@ -18,7 +23,64 @@
 </div>
 
 <article class="book-detail">
-    <partial name="_BookShelfItem" model="Model" />
+    <div>
+        @if (hasImages && primaryImg != null)
+        {
+            <div class="border rounded bg-white p-2 shadow-sm mb-3">
+                <div class="position-relative text-center bg-light rounded overflow-hidden" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
+                    <img id="mainBookViewerImg"
+                         src="@primaryImg.ImageUrl"
+                         alt="@(primaryImg.Caption ?? Model.Title)"
+                         style="max-width: 100%; max-height: 360px; object-fit: contain; cursor: zoom-in;"
+                         data-bs-toggle="modal"
+                         data-bs-target="#bookReaderModal" />
+                    <span id="mainBookViewerType" class="badge bg-dark bg-opacity-75 position-absolute top-0 start-0 m-2">
+                        @primaryImg.ImageTypeLabel
+                    </span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2 px-1">
+                    <span id="mainBookViewerCaption" class="fs-xs text-muted-ink text-truncate">
+                        @(primaryImg.Caption ?? primaryImg.ImageTypeLabel)
+                    </span>
+                    <button type="button" class="btn btn-quiet btn-sm py-0 px-2 fs-xs" data-bs-toggle="modal" data-bs-target="#bookReaderModal">
+                        <i class="bi bi-arrows-fullscreen me-1" aria-hidden="true"></i>Đọc trang sách (@imagesList.Count)
+                    </button>
+                </div>
+            </div>
+
+            @if (imagesList.Count > 1)
+            {
+                <div class="mb-3">
+                    <div class="fs-xs fw-semibold text-muted-ink mb-2">
+                        <i class="bi bi-images me-1" aria-hidden="true"></i>Ảnh bìa, Mục lục & Trang đọc thử (@imagesList.Count ảnh):
+                    </div>
+                    <div class="d-flex flex-wrap gap-2" id="bookGalleryThumbs">
+                        @for (var i = 0; i < imagesList.Count; i++)
+                        {
+                            var img = imagesList[i];
+                            var isCurrent = img.Id == primaryImg.Id;
+                            <button type="button"
+                                    class="btn p-1 border rounded bg-white book-thumb-btn @(isCurrent ? "border-primary border-2" : "")"
+                                    style="width: 66px;"
+                                    data-index="@i"
+                                    data-url="@img.ImageUrl"
+                                    data-type="@img.ImageTypeLabel"
+                                    data-caption="@(img.Caption ?? img.ImageTypeLabel)"
+                                    title="@(img.Caption ?? img.ImageTypeLabel)">
+                                <img src="@img.ImageUrl" alt="@img.Caption" style="width: 100%; height: 72px; object-fit: cover;" class="rounded" loading="lazy" />
+                                <div class="fs-xs text-truncate mt-1" style="font-size: 0.68rem;">@img.ImageTypeLabel</div>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <partial name="_BookShelfItem" model="Model" />
+        }
+    </div>
+
     <div>
         <p class="section-caption">@Model.CategoryName</p>
         <h1 class="page-title serif">@Model.Title</h1>
@@ -105,3 +167,97 @@
         <p class="fs-xs text-muted-ink mt-4">Mang theo thẻ thư viện và cung cấp mã vạch hoặc vị trí kệ tại quầy thủ thư để được hỗ trợ mượn tài liệu.</p>
     </div>
 </article>
+
+@if (hasImages && primaryImg != null)
+{
+    <div class="modal fade" id="bookReaderModal" tabindex="-1" aria-labelledby="bookReaderModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <div>
+                        <h2 class="modal-title fs-6 fw-bold mb-0" id="bookReaderModalLabel">@Model.Title</h2>
+                        <span id="modalImageCaption" class="fs-xs text-muted-ink">@(primaryImg.Caption ?? primaryImg.ImageTypeLabel)</span>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body bg-light text-center p-3">
+                    <img id="modalReaderImg" src="@primaryImg.ImageUrl" alt="@Model.Title" style="max-width: 100%; max-height: 72vh; object-fit: contain;" class="rounded shadow-sm bg-white" />
+                </div>
+                <div class="modal-footer py-2 d-flex justify-content-between">
+                    <button type="button" class="btn btn-quiet btn-sm" id="btnPrevPage">
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i> Trang trước
+                    </button>
+                    <span id="modalPageCounter" class="fs-xs fw-semibold num">1 / @imagesList.Count</span>
+                    <button type="button" class="btn btn-quiet btn-sm" id="btnNextPage">
+                        Trang tiếp <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @section Scripts {
+        <script>
+            (function () {
+                var thumbs = Array.from(document.querySelectorAll('.book-thumb-btn'));
+                var mainImg = document.getElementById('mainBookViewerImg');
+                var mainType = document.getElementById('mainBookViewerType');
+                var mainCaption = document.getElementById('mainBookViewerCaption');
+
+                var modalImg = document.getElementById('modalReaderImg');
+                var modalCaption = document.getElementById('modalImageCaption');
+                var modalCounter = document.getElementById('modalPageCounter');
+                var btnPrev = document.getElementById('btnPrevPage');
+                var btnNext = document.getElementById('btnNextPage');
+
+                var currentIndex = 0;
+
+                function selectImage(idx) {
+                    if (thumbs.length === 0) return;
+                    if (idx < 0) idx = thumbs.length - 1;
+                    if (idx >= thumbs.length) idx = 0;
+                    currentIndex = idx;
+
+                    var btn = thumbs[currentIndex];
+                    var url = btn.getAttribute('data-url');
+                    var typeLabel = btn.getAttribute('data-type');
+                    var caption = btn.getAttribute('data-caption');
+
+                    thumbs.forEach(function (t, i) {
+                        if (i === currentIndex) {
+                            t.classList.add('border-primary', 'border-2');
+                        } else {
+                            t.classList.remove('border-primary', 'border-2');
+                        }
+                    });
+
+                    if (mainImg) mainImg.src = url;
+                    if (mainType) mainType.textContent = typeLabel;
+                    if (mainCaption) mainCaption.textContent = caption;
+
+                    if (modalImg) modalImg.src = url;
+                    if (modalCaption) modalCaption.textContent = caption + ' (' + typeLabel + ')';
+                    if (modalCounter) modalCounter.textContent = (currentIndex + 1) + ' / ' + thumbs.length;
+                }
+
+                thumbs.forEach(function (btn, idx) {
+                    btn.addEventListener('click', function () {
+                        selectImage(idx);
+                    });
+                });
+
+                if (btnPrev) {
+                    btnPrev.addEventListener('click', function () {
+                        selectImage(currentIndex - 1);
+                    });
+                }
+
+                if (btnNext) {
+                    btnNext.addEventListener('click', function () {
+                        selectImage(currentIndex + 1);
+                    });
+                }
+            })();
+        </script>
+    }
+}

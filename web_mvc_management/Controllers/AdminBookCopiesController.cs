@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Constant;
@@ -117,8 +114,14 @@ public class AdminBookCopiesController(
     public async Task<IActionResult> Delete(Guid id, Guid? filterBookId, CancellationToken ct)
     {
         var result = await bookService.SoftDeleteBookCopyAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index), new { bookId = filterBookId });
     }
@@ -128,8 +131,14 @@ public class AdminBookCopiesController(
     public async Task<IActionResult> Restore(Guid id, Guid? filterBookId, CancellationToken ct)
     {
         var result = await bookService.RestoreBookCopyAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index), new { bookId = filterBookId, status = EntityStatus.Deleted });
     }
@@ -139,8 +148,14 @@ public class AdminBookCopiesController(
     public async Task<IActionResult> HardDelete(Guid id, [FromForm] string? confirmCode, Guid? filterBookId, CancellationToken ct)
     {
         var result = await bookService.HardDeleteBookCopyAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index), new { bookId = filterBookId, status = EntityStatus.Deleted });
     }

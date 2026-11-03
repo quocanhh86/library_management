@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Http;
 
 namespace web_mvc_management.Extensions;
 
@@ -13,10 +12,7 @@ public static class SessionExtensions
         PropertyNameCaseInsensitive = true
     };
 
-    public static void SetObject<T>(this ISession session, string key, T value)
-    {
-        session.SetString(key, JsonSerializer.Serialize(value, JsonOptions));
-    }
+    public static void SetObject<T>(this ISession session, string key, T value) => session.SetString(key, JsonSerializer.Serialize(value, JsonOptions));
 
     public static T? GetObject<T>(this ISession session, string key)
     {

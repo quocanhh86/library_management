@@ -1,0 +1,19 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+  <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+  <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="65" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#64748B">T&#244;i Thấy Hoa V&#224;ng Tr&#234;n Cỏ Xanh</text>
+  <line x1="65" y1="92" x2="535" y2="92" stroke="#CBD5E1" stroke-width="1.5"/>
+  <rect x="65" y="122" width="470" height="44" rx="6" fill="#1B3B2B" fill-opacity="0.08"/>
+  <text x="80" y="150" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#1B3B2B">CHƯƠNG 2: SƠ ĐỒ KIẾN TR&#218;C &amp; B&#192;I TẬP THỰC H&#192;NH</text>
+  <text x="65" y="215" font-family="Georgia, serif" font-size="16" fill="#334155">2.1. Quy tr&#236;nh triển khai ti&#234;u chuẩn qua 4 giai đoạn:</text>
+<text x="65" y="261" font-family="Georgia, serif" font-size="16" fill="#334155">[Khảo s&#225;t &amp; Đặc tả] ---&gt; [Thiết kế M&#244; h&#236;nh] ---&gt; [Thực</text>
+<text x="65" y="289" font-family="Georgia, serif" font-size="16" fill="#334155">thi] ---&gt; [Kiểm định]</text>
+<text x="65" y="335" font-family="Georgia, serif" font-size="16" fill="#334155">2.2. Ghi ch&#250; d&#224;nh cho sinh vi&#234;n v&#224; học vi&#234;n cao học:</text>
+<text x="65" y="381" font-family="Georgia, serif" font-size="16" fill="#334155">• Sinh vi&#234;n đối chiếu m&#227; kệ 978-6042081234 tại ph&#242;ng đọc</text>
+<text x="65" y="409" font-family="Georgia, serif" font-size="16" fill="#334155">chuy&#234;n ng&#224;nh.</text>
+<text x="65" y="455" font-family="Georgia, serif" font-size="16" fill="#334155">• Kết hợp l&#224;m b&#224;i tập thực h&#224;nh cuối mỗi chương để nắm</text>
+<text x="65" y="483" font-family="Georgia, serif" font-size="16" fill="#334155">vững l&#253; thuyết.</text>
+
+  <line x1="65" y1="745" x2="535" y2="745" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="300" y="775" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">Trang 25 — Đọc thử</text>
+</svg>

@@ -5,20 +5,13 @@ using web_mvc_management.Infrastructure;
 
 namespace web_mvc_management.Data;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext(
+    DbContextOptions<ApplicationDbContext> options,
+    IUserContext? userContext = null,
+    IDateTimeProvider? dateTimeProvider = null) : DbContext(options)
 {
-    private readonly IUserContext? _userContext;
-    private readonly IDateTimeProvider? _dateTimeProvider;
-
-    public ApplicationDbContext(
-        DbContextOptions<ApplicationDbContext> options,
-        IUserContext? userContext = null,
-        IDateTimeProvider? dateTimeProvider = null)
-        : base(options)
-    {
-        _userContext = userContext;
-        _dateTimeProvider = dateTimeProvider;
-    }
+    private readonly IUserContext? _userContext = userContext;
+    private readonly IDateTimeProvider? _dateTimeProvider = dateTimeProvider;
 
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<ReaderType> ReaderTypes => Set<ReaderType>();
@@ -30,6 +23,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Book> Books => Set<Book>();
     public DbSet<BookAuthor> BookAuthors => Set<BookAuthor>();
     public DbSet<BookCopy> BookCopies => Set<BookCopy>();
+    public DbSet<BookImage> BookImages => Set<BookImage>();
     public DbSet<BorrowSlip> BorrowSlips => Set<BorrowSlip>();
     public DbSet<BorrowDetail> BorrowDetails => Set<BorrowDetail>();
     public DbSet<Fine> Fines => Set<Fine>();
@@ -256,7 +250,7 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.PublisherId).HasColumnName("publisher_id");
             b.Property(x => x.PublicationYear).HasColumnName("publication_year");
             b.Property(x => x.Edition).HasColumnName("edition").HasMaxLength(50);
-            b.Property(x => x.Language).HasColumnName("language").HasMaxLength(10).IsUnicode(false);
+            b.Property(x => x.Language).HasColumnName("language").HasMaxLength(50);
             b.Property(x => x.PageCount).HasColumnName("page_count");
             b.Property(x => x.Description).HasColumnName("description");
             b.Property(x => x.CoverUrl).HasColumnName("cover_url").HasMaxLength(500).IsUnicode(false);
@@ -500,6 +494,33 @@ public class ApplicationDbContext : DbContext
             b.Property(x => x.CreatedAt).HasColumnName("created_at");
 
             b.HasIndex(x => new { x.Email, x.Purpose, x.IsUsed, x.ExpiresAt });
+        });
+
+        // 17. BookImage (1 Book - N BookImages: Cover, BackCover, TableOfContents, PreviewPage, Gallery)
+        modelBuilder.Entity<BookImage>(b =>
+        {
+            b.ToTable("book_images", tb => tb.UseSqlOutputClause(false));
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasColumnName("id");
+            b.Property(x => x.BookId).HasColumnName("book_id");
+            b.Property(x => x.ImageUrl).HasColumnName("image_url").HasMaxLength(500).IsUnicode(false);
+            b.Property(x => x.PublicId).HasColumnName("public_id").HasMaxLength(255).IsUnicode(false);
+            b.Property(x => x.ImageType).HasColumnName("image_type").HasMaxLength(30).IsUnicode(false);
+            b.Property(x => x.Caption).HasColumnName("caption").HasMaxLength(200);
+            b.Property(x => x.DisplayOrder).HasColumnName("display_order");
+            b.Property(x => x.IsPrimary).HasColumnName("is_primary");
+            b.Property(x => x.Status).HasColumnName("status").HasMaxLength(10).IsUnicode(false);
+            b.Property(x => x.CreatedAt).HasColumnName("created_at");
+            b.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            b.Property(x => x.CreatedBy).HasColumnName("created_by");
+            b.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+
+            b.HasOne(x => x.Book)
+                .WithMany(x => x.BookImages)
+                .HasForeignKey(x => x.BookId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(x => new { x.BookId, x.Status, x.DisplayOrder });
         });
     }
 }

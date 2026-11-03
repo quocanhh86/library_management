@@ -1,4 +1,3 @@
-using System;
 using System.Security.Cryptography;
 
 namespace web_mvc_management.Util;
@@ -15,10 +14,10 @@ public static class PasswordHasher
     private static readonly HashAlgorithmName Algorithm = HashAlgorithmName.SHA256;
 
     /// <summary>
-    /// Hash giả lập dùng để chạy kiểm tra mật khẩu khi tài khoản không tồn tại,
+    /// Hash giả lập sinh ngẫu nhiên lúc khởi động để chạy kiểm tra mật khẩu khi tài khoản không tồn tại,
     /// đảm bảo thời gian xử lý luôn đồng nhất ~100-200ms, chống lại Timing Attack (SEC-15).
     /// </summary>
-    private static readonly string DummyHash = HashPassword("UtcLibrary#SecurityDummyPassword2026!");
+    private static readonly string DummyHash = HashPassword(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
 
     /// <summary>
     /// Băm mật khẩu ra chuỗi định dạng: {iterations}.{salt_base64}.{hash_base64}
@@ -87,8 +86,5 @@ public static class PasswordHasher
     /// Chạy hàm băm giả lập khi username hoặc email không tồn tại trong CSDL.
     /// Triệt tiêu hoàn toàn khả năng đo độ trễ mạng để phát hiện tài khoản tồn tại (SEC-15).
     /// </summary>
-    public static bool VerifyDummyPassword(string password)
-    {
-        return VerifyPassword(password, DummyHash);
-    }
+    public static bool VerifyDummyPassword(string password) => VerifyPassword(password, DummyHash);
 }

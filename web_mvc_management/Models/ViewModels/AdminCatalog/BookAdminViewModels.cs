@@ -1,6 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Models.ViewModels.Catalog;
@@ -19,6 +18,21 @@ public class AdminBookFilter : BaseFilter
 }
 
 /// <summary>
+/// Một ảnh đính kèm của đầu sách trong khu vực quản trị.
+/// </summary>
+public class BookImageItemViewModel
+{
+    public Guid Id { get; init; }
+    public string ImageUrl { get; init; } = string.Empty;
+    public string? PublicId { get; init; }
+    public string ImageType { get; init; } = LibraryConstants.BookImageType.Cover;
+    public string ImageTypeLabel { get; init; } = string.Empty;
+    public string? Caption { get; init; }
+    public int DisplayOrder { get; init; }
+    public bool IsPrimary { get; init; }
+}
+
+/// <summary>
 /// Một dòng đầu sách trong bảng quản lý danh mục sách (/Admin/Books).
 /// </summary>
 public class AdminBookListItemViewModel
@@ -26,6 +40,8 @@ public class AdminBookListItemViewModel
     public Guid Id { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? Isbn { get; init; }
+    public string? CoverUrl { get; init; }
+    public int ImageCount { get; init; }
     public Guid? CategoryId { get; init; }
     public string CategoryName { get; init; } = string.Empty;
     public Guid? PublisherId { get; init; }
@@ -57,7 +73,7 @@ public class AdminBooksPageViewModel
 }
 
 /// <summary>
-/// Form thêm mới / chỉnh sửa đầu sách (hỗ trợ nhập kèm lô bản sao ban đầu và chọn vị trí kệ).
+/// Form thêm mới / chỉnh sửa đầu sách (hỗ trợ nhập kèm lô bản sao ban đầu, upload ảnh bìa + nhiều ảnh trang sách qua Cloudinary).
 /// </summary>
 public class BookUpsertViewModel
 {
@@ -106,12 +122,37 @@ public class BookUpsertViewModel
     public string? Description { get; set; }
 
     [StringLength(500, ErrorMessage = "Đường dẫn ảnh bìa không vượt quá 500 ký tự.")]
-    [Display(Name = "Đường dẫn ảnh bìa (tùy chọn)")]
+    [Display(Name = "Đường dẫn ảnh bìa (URL trực tiếp - tùy chọn)")]
     public string? CoverUrl { get; set; }
 
     [Required]
     [Display(Name = "Trạng thái")]
     public string Status { get; set; } = EntityStatus.Active;
+
+    // -------------------------------------------------------------------------
+    // Upload Hình ảnh Đầu sách (Cloudinary / Local Fallback): Ảnh bìa + Nhiều ảnh trang sách
+    // -------------------------------------------------------------------------
+    [Display(Name = "Tải lên ảnh bìa chính")]
+    public IFormFile? CoverImageFile { get; set; }
+
+    [Display(Name = "Tải lên thêm nhiều ảnh (Mục lục, Trang đọc thử, Bìa sau...)")]
+    public List<IFormFile> GalleryFiles { get; set; } = [];
+
+    [Display(Name = "Phân loại nhóm ảnh tải thêm")]
+    public string GalleryImageType { get; set; } = LibraryConstants.BookImageType.PreviewPage;
+
+    [StringLength(200, ErrorMessage = "Chú thích ảnh không vượt quá 200 ký tự.")]
+    [Display(Name = "Chú thích chung cho ảnh tải thêm")]
+    public string? GalleryCaptionPrefix { get; set; }
+
+    /// <summary>Danh sách ID ảnh hiện có được đánh dấu xóa khi lưu cập nhật.</summary>
+    public List<Guid> DeleteImageIds { get; set; } = [];
+
+    /// <summary>ID ảnh hiện có được chọn làm ảnh bìa chính mới.</summary>
+    public Guid? PrimaryImageId { get; set; }
+
+    /// <summary>Danh sách ảnh đang gắn với đầu sách (hiển thị khi chỉnh sửa).</summary>
+    public IReadOnlyList<BookImageItemViewModel> ExistingImages { get; set; } = [];
 
     // -------------------------------------------------------------------------
     // Thông tin nhập lô bản sao ban đầu (chỉ áp dụng khi thêm mới đầu sách)
@@ -140,4 +181,3 @@ public class BookUpsertViewModel
     public IReadOnlyList<SelectOptionViewModel> Publishers { get; set; } = [];
     public IReadOnlyList<SelectOptionViewModel> Shelves { get; set; } = [];
 }
-

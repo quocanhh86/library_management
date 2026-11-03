@@ -1,7 +1,4 @@
-using System.Collections.Generic;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
 using web_mvc_management.Common;
 using web_mvc_management.Entity;
 using web_mvc_management.Models.ViewModels.Auth;
@@ -30,7 +27,7 @@ public interface IAuthService
     Task<ServiceResult<Reader>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default);
 
     /// <summary>
-    /// Bước 1 đăng nhập độc giả: kiểm tra tài khoản, mật khẩu (PBKDF2 & Timing Attack Defense),
+    /// Bước 1 đăng nhập độc giả: kiểm tra tài khoản, mật khẩu (PBKDF2 và Timing Attack Defense),
     /// kiểm tra lockout và gửi OTP 2FA.
     /// </summary>
     Task<ServiceResult<LoginStepResult>> InitiateReaderLoginAsync(ReaderLoginViewModel model, string clientIp, CancellationToken ct = default);

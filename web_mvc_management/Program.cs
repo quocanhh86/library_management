@@ -4,8 +4,23 @@ using web_mvc_management.Data;
 using web_mvc_management.Extensions;
 using web_mvc_management.Middlewares;
 
-// Nạp file .env bằng thư viện chuẩn DotNetEnv (tự động duyệt ngược tìm .env ở project root/solution root)
+// Nạp file .env tại thư mục gốc dự án (duyệt ngược từ CWD và fallback từ AppContext.BaseDirectory)
 Env.TraversePath().Load();
+if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")) &&
+    string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DatabaseSettings__Host")))
+{
+    var baseDir = new DirectoryInfo(AppContext.BaseDirectory);
+    while (baseDir != null)
+    {
+        var candidateEnv = Path.Combine(baseDir.FullName, ".env");
+        if (File.Exists(candidateEnv))
+        {
+            Env.Load(candidateEnv);
+            break;
+        }
+        baseDir = baseDir.Parent;
+    }
+}
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Entity;
@@ -84,7 +78,7 @@ public class AuthService(
             return sendResult;
         }
 
-        return ServiceResult.Success("Đã gửi mã xác thực tới email của bạn.");
+        return ServiceResult.Success(sendResult.Message);
     }
 
     public async Task<ServiceResult<Reader>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default)
@@ -247,7 +241,7 @@ public class AuthService(
             MaskedEmail = StringUtil.MaskEmail(reader.Email),
             Purpose = PurposeReaderLogin,
             ReturnUrl = model.ReturnUrl
-        }, "Mã xác thực đăng nhập 2 bước (2FA) đã được gửi đến email của bạn.");
+        }, sendResult.Message);
     }
 
     public async Task<ServiceResult<ClaimsPrincipal>> CompleteReaderLoginOtpAsync(string email, string otpCode, string clientIp, CancellationToken ct = default)
@@ -342,7 +336,7 @@ public class AuthService(
         if (staff == null || staff.Status != EntityStatus.Active)
         {
             // SEC-15: Chạy dummy PBKDF2
-            PasswordHasher.VerifyDummyPassword("DummyCheckPassword");
+            PasswordHasher.VerifyDummyPassword(normalizedEmail);
             return ServiceResult<LoginStepResult>.Success(new LoginStepResult
             {
                 RequiresOtp = true,
@@ -377,7 +371,7 @@ public class AuthService(
             MaskedEmail = StringUtil.MaskEmail(staff.Email),
             Purpose = PurposeStaffLogin,
             ReturnUrl = model.ReturnUrl
-        }, "Mã xác thực OTP đã được gửi về Gmail của bạn.");
+        }, sendResult.Message);
     }
 
     public async Task<ServiceResult<ClaimsPrincipal>> CompleteStaffLoginOtpAsync(string email, string otpCode, string clientIp, CancellationToken ct = default)

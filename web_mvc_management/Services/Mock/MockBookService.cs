@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using web_mvc_management.Models.ViewModels.Catalog;
 
 namespace web_mvc_management.Services.Mock;
