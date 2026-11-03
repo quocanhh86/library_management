@@ -1,0 +1,177 @@
+@model web_mvc_management.Models.ViewModels.AdminCatalog.AuthorPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quản lý tác giả";
+    ViewData["Screen"] = ScreenId.ManageAuthors;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Quản lý tác giả</h1>
+        <p class="text-muted-ink mb-0">Danh mục tác giả phục vụ biên mục và phân loại đầu sách.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#authorModal" onclick="openAuthorModal()">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>Thêm tác giả
+    </button>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.ManageAuthors)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label" for="authorKeyword">Tìm kiếm tác giả <kbd>/</kbd></label>
+            <input type="search" class="form-control" id="authorKeyword" name="Keyword" value="@Model.Filter.Keyword" data-search-input placeholder="Họ tên tác giả hoặc tiểu sử..." />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="authorStatus">Trạng thái</label>
+            <select class="form-select" id="authorStatus" name="Status">
+                <option value="">Đang dùng (Mặc định)</option>
+                <option value="@EntityStatus.Active" selected="@(Model.Filter.Status == EntityStatus.Active)">Đang hoạt động (ACTIVE)</option>
+                <option value="@EntityStatus.Inactive" selected="@(Model.Filter.Status == EntityStatus.Inactive)">Tạm ẩn (INACTIVE)</option>
+                <option value="@EntityStatus.Deleted" selected="@(Model.Filter.Status == EntityStatus.Deleted)">Đã xóa mềm (DELETED)</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Lọc</button>
+        </div>
+    </div>
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Họ tên tác giả</th>
+                <th scope="col">Tiểu sử / Chuyên môn</th>
+                <th scope="col" class="num">Số đầu sách</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.PagedItems.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="5">
+                        <div class="state-block text-center">
+                            <div class="state-block__title">Chưa có tác giả phù hợp</div>
+                        </div>
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in Model.PagedItems.Items)
+                {
+                    <tr>
+                        <td class="fw-medium">@item.FullName</td>
+                        <td class="text-muted-ink">@(string.IsNullOrWhiteSpace(item.Biography) ? "—" : item.Biography)</td>
+                        <td class="num">
+                            <a href="@Screens.GetPath(ScreenId.ManageBooks)?AuthorId=@item.Id" class="text-decoration-none">@item.BookCount đầu sách</a>
+                        </td>
+                        <td>
+                            @if (item.Status == EntityStatus.Deleted)
+                            {
+                                <span class="status status--danger">Đã xóa mềm (DELETED)</span>
+                            }
+                            else
+                            {
+                                <span class="status @(item.Status == EntityStatus.Active ? "status--ok" : "status--neutral")">
+                                    @(item.Status == EntityStatus.Active ? "Đang dùng" : "Tạm ẩn")
+                                </span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-1">
+                                @if (item.Status == EntityStatus.Deleted)
+                                {
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageAuthors)/Restore/@item.Id" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm">Khôi phục</button>
+                                    </form>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageAuthors)/HardDelete/@item.Id" class="d-inline"
+                                          data-hard-delete="Tác giả '@item.FullName'">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-danger btn-sm">Xóa vĩnh viễn</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-quiet btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#authorModal"
+                                            data-id="@item.Id"
+                                            data-name="@item.FullName"
+                                            data-bio="@item.Biography"
+                                            data-status="@item.Status"
+                                            onclick="openAuthorModal(this)">
+                                        Sửa
+                                    </button>
+                                    <form method="post" action="@Screens.GetPath(ScreenId.ManageAuthors)/Delete/@item.Id" class="d-inline"
+                                          data-confirm="Bước 1: Xóa mềm tác giả '@item.FullName'?"
+                                          data-confirm-detail="Tác giả sẽ chuyển sang trạng thái DELETED (xóa mềm). Chỉ xóa mềm được khi tác giả không còn gắn với đầu sách đang hoạt động."
+                                          data-confirm-ok="Xóa mềm (DELETED)"
+                                          data-confirm-cancel="Giữ lại"
+                                          data-confirm-danger>
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm text-danger">Xóa mềm</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.PagedItems" />
+
+<div class="modal fade" id="authorModal" tabindex="-1" aria-labelledby="authorModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.ManageAuthors)/Save">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="authorId" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="authorModalTitle">Thêm tác giả</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="authorFullName">Họ tên tác giả</label>
+                        <input type="text" class="form-control" id="authorFullName" name="FullName" required maxlength="150" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="authorBio">Tiểu sử / Ghi chú</label>
+                        <textarea class="form-control" id="authorBio" name="Biography" rows="3" maxlength="1000"></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="authorStatusSelect">Trạng thái</label>
+                        <select class="form-select" id="authorStatusSelect" name="Status">
+                            <option value="@EntityStatus.Active">Đang hoạt động (ACTIVE)</option>
+                            <option value="@EntityStatus.Inactive">Tạm ẩn (INACTIVE)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openAuthorModal(btn) {
+            document.getElementById('authorModalTitle').textContent = btn ? 'Cập nhật tác giả' : 'Thêm tác giả';
+            document.getElementById('authorId').value = btn ? (btn.dataset.id || '') : '';
+            document.getElementById('authorFullName').value = btn ? (btn.dataset.name || '') : '';
+            document.getElementById('authorBio').value = btn ? (btn.dataset.bio || '') : '';
+            document.getElementById('authorStatusSelect').value = btn ? (btn.dataset.status || 'ACTIVE') : 'ACTIVE';
+        }
+    </script>
+}
+
