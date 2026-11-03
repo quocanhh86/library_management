@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace web_mvc_management.Models.ViewModels.Catalog;
 
 /// <summary>

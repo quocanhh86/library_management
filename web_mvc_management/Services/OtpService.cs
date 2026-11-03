@@ -1,10 +1,6 @@
-using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Constant;
 using web_mvc_management.Entity;
@@ -15,9 +11,9 @@ namespace web_mvc_management.Services;
 
 /// <summary>
 /// Triển khai dịch vụ OTP Engine chuẩn an ninh:
-/// - SEC-04: OTP Verification Brute-Force Defense & OTP Burning Engine (giới hạn 5 lần sai).
+/// - SEC-04: OTP Verification Brute-Force Defense và OTP Burning Engine (giới hạn 5 lần sai).
 /// - SEC-08: Persistent Database Storage (lưu SQL Server thông qua IUnitOfWork).
-/// - SEC-12: OTP Purpose & Namespace Isolation.
+/// - SEC-12: OTP Purpose và Namespace Isolation.
 /// - SEC-14: Concurrency Race Condition Defense.
 /// </summary>
 public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvider) : IOtpService

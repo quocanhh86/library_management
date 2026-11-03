@@ -1,4 +1,3 @@
-using System;
 using web_mvc_management.Common;
 
 namespace web_mvc_management.Entity;

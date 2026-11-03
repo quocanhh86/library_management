@@ -1,6 +1,3 @@
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Constant;
 using web_mvc_management.Models.ViewModels.Home;
@@ -9,7 +6,7 @@ using web_mvc_management.Repositories;
 namespace web_mvc_management.Services;
 
 /// <summary>
-/// Lấy thông tin quy định mượn trả trực tiếp từ cơ sở dữ liệu (ReaderTypes & LibrarySettings).
+/// Lấy thông tin quy định mượn trả trực tiếp từ cơ sở dữ liệu (ReaderTypes và LibrarySettings).
 /// Khi quản trị viên cập nhật quy định trong /System/Settings hoặc /Admin/ReaderTypes, trang chủ tự động hiển thị số mới.
 /// </summary>
 public class LibraryInfoService(IUnitOfWork unitOfWork) : ILibraryInfoService

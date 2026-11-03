@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 namespace web_mvc_management.Common;
 
 /// <summary>
-/// Chứa kết quả phân trang dùng chung cho các màn hình danh sách (Razor View & PartialView).
+/// Chứa kết quả phân trang dùng chung cho các màn hình danh sách (Razor View và PartialView).
 /// Triển khai IPagedResult để tương thích hoàn toàn với _Pagination.cshtml.
 /// </summary>
 public class PagedResult<T> : IPagedResult
@@ -42,7 +38,10 @@ public class PagedResult<T> : IPagedResult
     /// </summary>
     public IReadOnlyList<int> GetPageNumbers(int maxDisplayPages = 5)
     {
-        if (TotalPages <= 1) return [1];
+        if (TotalPages <= 1)
+        {
+            return [1];
+        }
 
         var pages = new List<int>();
         var half = maxDisplayPages / 2;
@@ -54,7 +53,7 @@ public class PagedResult<T> : IPagedResult
             startPage = Math.Max(1, endPage - maxDisplayPages + 1);
         }
 
-        for (int i = startPage; i <= endPage; i++)
+        for (var i = startPage; i <= endPage; i++)
         {
             pages.Add(i);
         }

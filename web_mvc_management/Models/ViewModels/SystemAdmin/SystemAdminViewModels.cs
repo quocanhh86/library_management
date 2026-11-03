@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
@@ -243,7 +241,7 @@ public class ReaderTypesPageViewModel
 }
 
 /// <summary>
-/// Cấu hình quy định mức phạt & vận hành thư viện (bảng library_settings).
+/// Cấu hình quy định mức phạt và vận hành thư viện (bảng library_settings).
 /// </summary>
 public class LibrarySettingFormViewModel
 {

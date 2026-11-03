@@ -1,7 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Constant;
@@ -147,8 +143,14 @@ public class AdminBooksController(
     public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
     {
         var result = await bookService.RestoreBookAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index), new { status = EntityStatus.Deleted });
     }
@@ -158,8 +160,14 @@ public class AdminBooksController(
     public async Task<IActionResult> HardDelete(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await bookService.HardDeleteBookAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index), new { status = EntityStatus.Deleted });
     }

@@ -18,9 +18,6 @@ public static class CurrencyHelper
         return string.Format(VnCulture, "{0:C0}", amount.Value);
     }
 
-    public static string ToVnd(double? amount)
-    {
-        return ToVnd(amount.HasValue ? (decimal)amount.Value : null);
-    }
+    public static string ToVnd(double? amount) => ToVnd(amount.HasValue ? (decimal)amount.Value : null);
 }
 

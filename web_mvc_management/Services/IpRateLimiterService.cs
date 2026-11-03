@@ -1,8 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.AspNetCore.Http;
 using web_mvc_management.Infrastructure;
 
 namespace web_mvc_management.Services;
@@ -14,7 +10,7 @@ namespace web_mvc_management.Services;
 public class IpRateLimiterService(IDateTimeProvider dateTimeProvider) : IIpRateLimiterService
 {
     private readonly ConcurrentDictionary<string, List<DateTimeOffset>> _requestTracker = new();
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     public string GetClientIp(HttpContext httpContext)
     {

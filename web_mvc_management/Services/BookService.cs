@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
@@ -43,7 +38,7 @@ public class BookService(
             .Take(count)
             .ToListAsync(ct);
 
-        return books.Select(b => MapToSummaryViewModel(b, includeCopies: false)).ToList();
+        return [.. books.Select(b => MapToSummaryViewModel(b, includeCopies: false))];
     }
 
     public async Task<IReadOnlyList<TopicViewModel>> GetTopicsAsync(CancellationToken ct = default)
@@ -53,9 +48,7 @@ public class BookService(
             .OrderBy(c => c.Name)
             .ToListAsync(ct);
 
-        return categories
-            .Select(c => new TopicViewModel(c.Id.ToString(), c.Name))
-            .ToList();
+        return [.. categories.Select(c => new TopicViewModel(c.Id.ToString(), c.Name))];
     }
 
     public async Task<IReadOnlyList<BookSummaryViewModel>> SuggestAsync(string keyword, int limit = 6, CancellationToken ct = default)
@@ -67,10 +60,9 @@ public class BookService(
         }
 
         var allActive = await GetNewArrivalsAsync(200, ct);
-        return allActive
+        return [.. allActive
             .Where(b => StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors} {b.Isbn}").ToLowerInvariant().Contains(term))
-            .Take(limit)
-            .ToList();
+            .Take(limit)];
     }
 
     public async Task<CatalogViewModel> GetPublicCatalogAsync(
@@ -126,19 +118,19 @@ public class BookService(
 
         if (!string.IsNullOrWhiteSpace(category) && !Guid.TryParse(category, out _))
         {
-            mapped = mapped.Where(b => b.CategoryKey.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
+            mapped = [.. mapped.Where(b => b.CategoryKey.Equals(category, StringComparison.OrdinalIgnoreCase))];
         }
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             var term = StringUtil.RemoveVietnameseSigns(keyword.Trim()).ToLowerInvariant();
-            mapped = mapped.Where(b =>
-                StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors} {b.Publisher} {b.Isbn}").ToLowerInvariant().Contains(term)).ToList();
+            mapped = [.. mapped.Where(b =>
+                StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors} {b.Publisher} {b.Isbn}").ToLowerInvariant().Contains(term))];
         }
 
         if (available)
         {
-            mapped = mapped.Where(b => b.AvailableCopies > 0).ToList();
+            mapped = [.. mapped.Where(b => b.AvailableCopies > 0)];
         }
 
         const int pageSize = 10;
@@ -161,7 +153,7 @@ public class BookService(
 
         return new CatalogViewModel
         {
-            Books = mapped.Skip((safePage - 1) * pageSize).Take(pageSize).ToList(),
+            Books = [.. mapped.Skip((safePage - 1) * pageSize).Take(pageSize)],
             Topics = topics,
             Authors = authors,
             Publishers = publishers,
@@ -326,11 +318,10 @@ public class BookService(
             Isbn = book.Isbn,
             CategoryId = book.CategoryId,
             PublisherId = book.PublisherId,
-            AuthorIds = book.BookAuthors
+            AuthorIds = [.. book.BookAuthors
                 .Where(ba => ba.Status != EntityStatus.Deleted)
                 .OrderBy(ba => ba.AuthorOrder)
-                .Select(ba => ba.AuthorId)
-                .ToList(),
+                .Select(ba => ba.AuthorId)],
             PublicationYear = book.PublicationYear,
             Edition = book.Edition,
             Language = book.Language,
@@ -403,7 +394,7 @@ public class BookService(
                 var acquired = model.AcquiredDate ?? dateTimeProvider.Today;
                 var generatedBarcodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                for (int i = 0; i < model.InitialCopyCount; i++)
+                for (var i = 0; i < model.InitialCopyCount; i++)
                 {
                     var barcode = await GenerateUniqueBarcodeAsync(generatedBarcodes, ct);
                     generatedBarcodes.Add(barcode);
@@ -736,7 +727,7 @@ public class BookService(
         var generatedBarcodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var acquiredDate = model.AcquiredDate ?? dateTimeProvider.Today;
 
-        for (int i = 0; i < model.Quantity; i++)
+        for (var i = 0; i < model.Quantity; i++)
         {
             var barcode = await GenerateUniqueBarcodeAsync(generatedBarcodes, ct);
             generatedBarcodes.Add(barcode);
@@ -919,7 +910,7 @@ public class BookService(
     // =========================================================================
     private async Task<string> GenerateUniqueBarcodeAsync(HashSet<string> batchSet, CancellationToken ct)
     {
-        for (int attempt = 0; attempt < 20; attempt++)
+        for (var attempt = 0; attempt < 20; attempt++)
         {
             var candidate = BarcodeHelper.GenerateBarcode();
             if (batchSet.Contains(candidate))
@@ -997,7 +988,7 @@ public class BookService(
             Id = b.Id,
             Title = b.Title,
             Authors = authorsText,
-            AuthorIds = authorsList.Select(ba => ba.AuthorId).ToList(),
+            AuthorIds = [.. authorsList.Select(ba => ba.AuthorId)],
             Publisher = b.Publisher?.Name ?? "NXB Đại học",
             PublisherId = b.PublisherId,
             PublicationYear = b.PublicationYear,
@@ -1022,15 +1013,30 @@ public class BookService(
     {
         var norm = StringUtil.RemoveVietnameseSigns(categoryName).ToLowerInvariant();
         if (norm.Contains("cong nghe") || norm.Contains("lap trinh") || norm.Contains("co so du lieu") || norm.Contains("he thong"))
+        {
             return "it";
+        }
+
         if (norm.Contains("giao thong") || norm.Contains("cau duong") || norm.Contains("xay dung"))
+        {
             return "civil";
+        }
+
         if (norm.Contains("kinh te") || norm.Contains("logistics") || norm.Contains("quan tri"))
+        {
             return "logistics";
+        }
+
         if (norm.Contains("toan") || norm.Contains("khoa hoc"))
+        {
             return "science";
+        }
+
         if (norm.Contains("trac dia"))
+        {
             return "survey";
+        }
+
         return "humanities";
     }
 }

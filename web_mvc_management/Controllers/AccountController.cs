@@ -1,11 +1,7 @@
-using System;
-using System.Security.Claims;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Extensions;
 using web_mvc_management.Models.ViewModels.Auth;
@@ -379,15 +375,9 @@ public class AccountController(
     // =========================================================================
     [HttpGet]
     [AllowAnonymous]
-    public IActionResult AccessDenied()
-    {
-        return View();
-    }
+    public IActionResult AccessDenied() => View();
 
-    private async Task LoadReaderTypesAsync()
-    {
-        ViewBag.ReaderTypes = await authService.GetActiveReaderTypesAsync();
-    }
+    private async Task LoadReaderTypesAsync() => ViewBag.ReaderTypes = await authService.GetActiveReaderTypesAsync();
 
     private IActionResult RedirectToLocal(string? returnUrl)
     {

@@ -20,7 +20,11 @@ public class DevController(IWebHostEnvironment env) : BaseController
     [HttpGet("styleguide")]
     public IActionResult Styleguide()
     {
-        if (!env.IsDevelopment()) return NotFound();
+        if (!env.IsDevelopment())
+        {
+            return NotFound();
+        }
+
         return View(new PagedResult<Models.ViewModels.Catalog.BookSummaryViewModel>(MockCatalog.Books, 128, 3, 10));
     }
 
@@ -28,7 +32,10 @@ public class DevController(IWebHostEnvironment env) : BaseController
     [HttpGet("styleguide/staff")]
     public IActionResult StaffStyleguide(string role = AppRoles.Librarian)
     {
-        if (!env.IsDevelopment()) return NotFound();
+        if (!env.IsDevelopment())
+        {
+            return NotFound();
+        }
 
         role = role == AppRoles.Admin ? AppRoles.Admin : AppRoles.Librarian;
         var name = role == AppRoles.Admin ? "Nguyễn Quốc Anh" : "Trần Thu Hà";
@@ -45,7 +52,10 @@ public class DevController(IWebHostEnvironment env) : BaseController
         [FromServices] IDateTimeProvider dateTimeProvider,
         CancellationToken ct)
     {
-        if (!env.IsDevelopment()) return NotFound();
+        if (!env.IsDevelopment())
+        {
+            return NotFound();
+        }
 
         ActAs("Lê Minh Châu", AppRoles.Reader);
         var model = await HomeController.BuildModelAsync(bookService, libraryInfoService, borrowService, dateTimeProvider, Guid.Empty, ct);
@@ -56,7 +66,10 @@ public class DevController(IWebHostEnvironment env) : BaseController
     [HttpGet("register")]
     public IActionResult Register()
     {
-        if (!env.IsDevelopment()) return NotFound();
+        if (!env.IsDevelopment())
+        {
+            return NotFound();
+        }
 
         ViewBag.ReaderTypes = new List<ReaderType>
         {
@@ -71,7 +84,10 @@ public class DevController(IWebHostEnvironment env) : BaseController
     [HttpGet("verify-otp")]
     public IActionResult VerifyOtp(bool error = false)
     {
-        if (!env.IsDevelopment()) return NotFound();
+        if (!env.IsDevelopment())
+        {
+            return NotFound();
+        }
 
         if (error)
         {

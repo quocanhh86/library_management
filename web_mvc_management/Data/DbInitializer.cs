@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using web_mvc_management.Constant;
 using web_mvc_management.Entity;
 using web_mvc_management.Util;
@@ -185,7 +184,7 @@ public static class DbInitializer
         }
         await context.SaveChangesAsync();
 
-        Staff adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin)
+        var adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin)
             ?? await context.Staff.FirstAsync();
 
         // 4. Kệ sách (Shelves)

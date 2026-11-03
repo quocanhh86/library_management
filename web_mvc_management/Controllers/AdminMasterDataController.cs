@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Common;
@@ -39,8 +36,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
         }
 
         var result = await masterService.SaveCategoryAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Categories));
     }
@@ -50,8 +53,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> DeleteCategory(Guid id, CancellationToken ct)
     {
         var result = await masterService.DeleteCategoryAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Categories));
     }
@@ -61,8 +70,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> RestoreCategory(Guid id, CancellationToken ct)
     {
         var result = await masterService.RestoreCategoryAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Categories), new { status = EntityStatus.Deleted });
     }
@@ -72,8 +87,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> HardDeleteCategory(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await masterService.HardDeleteCategoryAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Categories), new { status = EntityStatus.Deleted });
     }
@@ -103,8 +124,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
         }
 
         var result = await masterService.SaveAuthorAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Authors));
     }
@@ -114,8 +141,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> DeleteAuthor(Guid id, CancellationToken ct)
     {
         var result = await masterService.DeleteAuthorAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Authors));
     }
@@ -125,8 +158,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> RestoreAuthor(Guid id, CancellationToken ct)
     {
         var result = await masterService.RestoreAuthorAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Authors), new { status = EntityStatus.Deleted });
     }
@@ -136,8 +175,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> HardDeleteAuthor(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await masterService.HardDeleteAuthorAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Authors), new { status = EntityStatus.Deleted });
     }
@@ -167,8 +212,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
         }
 
         var result = await masterService.SavePublisherAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Publishers));
     }
@@ -178,8 +229,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> DeletePublisher(Guid id, CancellationToken ct)
     {
         var result = await masterService.DeletePublisherAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Publishers));
     }
@@ -189,8 +246,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> RestorePublisher(Guid id, CancellationToken ct)
     {
         var result = await masterService.RestorePublisherAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Publishers), new { status = EntityStatus.Deleted });
     }
@@ -200,8 +263,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> HardDeletePublisher(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await masterService.HardDeletePublisherAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Publishers), new { status = EntityStatus.Deleted });
     }
@@ -231,8 +300,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
         }
 
         var result = await masterService.SaveShelfAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Shelves));
     }
@@ -242,8 +317,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> DeleteShelf(Guid id, CancellationToken ct)
     {
         var result = await masterService.DeleteShelfAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Shelves));
     }
@@ -253,8 +334,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> RestoreShelf(Guid id, CancellationToken ct)
     {
         var result = await masterService.RestoreShelfAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Shelves), new { status = EntityStatus.Deleted });
     }
@@ -264,8 +351,14 @@ public class AdminMasterDataController(ICatalogMasterService masterService) : Ba
     public async Task<IActionResult> HardDeleteShelf(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await masterService.HardDeleteShelfAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Shelves), new { status = EntityStatus.Deleted });
     }

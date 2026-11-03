@@ -1,4 +1,3 @@
-using System;
 using System.Security.Cryptography;
 
 namespace web_mvc_management.Util;
@@ -87,8 +86,5 @@ public static class PasswordHasher
     /// Chạy hàm băm giả lập khi username hoặc email không tồn tại trong CSDL.
     /// Triệt tiêu hoàn toàn khả năng đo độ trễ mạng để phát hiện tài khoản tồn tại (SEC-15).
     /// </summary>
-    public static bool VerifyDummyPassword(string password)
-    {
-        return VerifyPassword(password, DummyHash);
-    }
+    public static bool VerifyDummyPassword(string password) => VerifyPassword(password, DummyHash);
 }

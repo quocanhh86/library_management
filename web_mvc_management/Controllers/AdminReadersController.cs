@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Constant;
@@ -42,8 +39,14 @@ public class AdminReadersController(
         }
 
         var result = await systemAdminService.UpdateReaderAccountAsync(model, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index));
     }
@@ -53,8 +56,14 @@ public class AdminReadersController(
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         var result = await systemAdminService.SoftDeleteReaderAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index));
     }
@@ -64,8 +73,14 @@ public class AdminReadersController(
     public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
     {
         var result = await systemAdminService.RestoreReaderAsync(id, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index), new { status = EntityStatus.Deleted });
     }
@@ -75,8 +90,14 @@ public class AdminReadersController(
     public async Task<IActionResult> HardDelete(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
         var result = await systemAdminService.HardDeleteReaderAsync(id, confirmCode, ct);
-        if (result.Succeeded) SetSuccessMessage(result.Message);
-        else SetErrorMessage(result.Message);
+        if (result.Succeeded)
+        {
+            SetSuccessMessage(result.Message);
+        }
+        else
+        {
+            SetErrorMessage(result.Message);
+        }
 
         return RedirectToAction(nameof(Index), new { status = EntityStatus.Deleted });
     }

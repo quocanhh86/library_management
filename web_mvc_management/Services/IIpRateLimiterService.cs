@@ -1,6 +1,3 @@
-using System;
-using Microsoft.AspNetCore.Http;
-
 namespace web_mvc_management.Services;
 
 public interface IIpRateLimiterService

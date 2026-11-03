@@ -1,11 +1,6 @@
-using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Mail;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using web_mvc_management.Common;
 using web_mvc_management.Infrastructure;
@@ -15,7 +10,7 @@ namespace web_mvc_management.Services;
 
 /// <summary>
 /// Dịch vụ gửi email xác thực chuẩn an ninh:
-/// - SEC-17: Cooldown Engine 60 giây chống Mail Toll Fraud & Spam DoS.
+/// - SEC-17: Cooldown Engine 60 giây chống Mail Toll Fraud và Spam DoS.
 /// - Tích hợp Gmail SMTP bảo mật với TLS (Port 587) qua IOptions&lt;EmailSettings&gt;.
 /// - Fallback thông minh ghi log console trong môi trường dev nếu mất kết nối mạng.
 /// </summary>

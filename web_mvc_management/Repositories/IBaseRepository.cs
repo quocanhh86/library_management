@@ -15,7 +15,7 @@ public interface IBaseRepository<TEntity> where TEntity : class
     IQueryable<TEntity> GetQueryable(bool asNoTracking = true);
 
     /// <summary>
-    /// Lấy thực thể theo Id (chỉ áp dụng cho thực thể kế thừa IEntity<Guid>).
+    /// Lấy thực thể theo Id (chỉ áp dụng cho thực thể kế thừa IEntity&lt;Guid&gt;).
     /// </summary>
     Task<TEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
@@ -53,7 +53,7 @@ public interface IBaseRepository<TEntity> where TEntity : class
     /// <summary>
     /// Truy vấn phân trang kèm điều kiện lọc và sắp xếp.
     /// - Hỗ trợ pageIndex = 0 hoặc 1 đều truy vấn từ item 0 trong CSDL.
-    /// - pageSize mặc định = 10 (nếu không truyền hoặc <= 0).
+    /// - pageSize mặc định = 10 (nếu không truyền hoặc &lt;= 0).
     /// </summary>
     Task<PagedResult<TEntity>> GetPagedAsync(
         int pageIndex,

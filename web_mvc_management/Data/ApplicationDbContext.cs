@@ -5,20 +5,13 @@ using web_mvc_management.Infrastructure;
 
 namespace web_mvc_management.Data;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext(
+    DbContextOptions<ApplicationDbContext> options,
+    IUserContext? userContext = null,
+    IDateTimeProvider? dateTimeProvider = null) : DbContext(options)
 {
-    private readonly IUserContext? _userContext;
-    private readonly IDateTimeProvider? _dateTimeProvider;
-
-    public ApplicationDbContext(
-        DbContextOptions<ApplicationDbContext> options,
-        IUserContext? userContext = null,
-        IDateTimeProvider? dateTimeProvider = null)
-        : base(options)
-    {
-        _userContext = userContext;
-        _dateTimeProvider = dateTimeProvider;
-    }
+    private readonly IUserContext? _userContext = userContext;
+    private readonly IDateTimeProvider? _dateTimeProvider = dateTimeProvider;
 
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<ReaderType> ReaderTypes => Set<ReaderType>();

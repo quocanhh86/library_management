@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Common;
 
@@ -10,7 +5,7 @@ namespace web_mvc_management.Extensions;
 
 /// <summary>
 /// Các phương thức mở rộng hỗ trợ phân trang LINQ / EF Core dùng chung.
-/// - pageItemSize mặc định = 10 (tùy chọn theo client, nếu không truyền hoặc <= 0 thì mặc định 10).
+/// - pageItemSize mặc định = 10 (tùy chọn theo client, nếu không truyền hoặc &lt;= 0 thì mặc định 10).
 /// - pageNo = 0 hoặc 1 đều truy vấn từ item index 0 trong CSDL (Skip = 0).
 /// </summary>
 public static class QueryableExtensions
@@ -64,7 +59,7 @@ public static class QueryableExtensions
         var normalizedPageNo = pageNo <= 1 ? 1 : pageNo;
         var skip = (normalizedPageNo - 1) * safePageItemSize;
 
-        var list = source as IList<T> ?? source.ToList();
+        var list = source as IList<T> ?? [.. source];
         var totalCount = list.Count;
         var items = list.Skip(skip).Take(safePageItemSize).ToList();
 

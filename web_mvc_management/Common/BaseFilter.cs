@@ -1,5 +1,3 @@
-using System;
-
 namespace web_mvc_management.Common;
 
 /// <summary>

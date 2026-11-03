@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using web_mvc_management.Common;
 using web_mvc_management.Models.ViewModels.Catalog;
 using web_mvc_management.Models.ViewModels.SystemAdmin;
