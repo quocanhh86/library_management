@@ -66,6 +66,10 @@ public class AccountController(
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeRegister);
 
         // Trang nhập mã đã ghi rõ mã gửi tới đâu, không cần toast lặp lại
+        if (result.Message.Contains("Log của Server", StringComparison.OrdinalIgnoreCase))
+        {
+            SetWarningMessage(result.Message);
+        }
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeRegister });
     }
 
@@ -107,6 +111,10 @@ public class AccountController(
         HttpContext.Session.SetString(SessionPendingReturnUrl, model.ReturnUrl ?? string.Empty);
         HttpContext.Session.SetString(SessionPendingRememberMe, model.RememberMe.ToString());
 
+        if (result.Message.Contains("Log của Server", StringComparison.OrdinalIgnoreCase))
+        {
+            SetWarningMessage(result.Message);
+        }
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeReaderLogin });
     }
 
@@ -147,6 +155,10 @@ public class AccountController(
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeStaffLogin);
         HttpContext.Session.SetString(SessionPendingReturnUrl, model.ReturnUrl ?? string.Empty);
 
+        if (result.Message.Contains("Log của Server", StringComparison.OrdinalIgnoreCase))
+        {
+            SetWarningMessage(result.Message);
+        }
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeStaffLogin });
     }
 
