@@ -29,16 +29,16 @@ Tạo file `.env` tại thư mục gốc từ file `.env.example`:
 cp .env.example .env
 ```
 
-Cập nhật thông tin kết nối CSDL và gửi mail trong `.env`:
+Cập nhật thông tin kết nối CSDL, SMTP, tài khoản khởi tạo và Cloudinary trong `.env` (tại thư mục gốc dự án):
 
 ```env
 # Database Configuration (ASP.NET Core Hierarchical IConfiguration)
-ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=library_management;User Id=sa;Password=123456;TrustServerCertificate=True;"
+ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=library_management;User Id=sa;Password=your_db_password;TrustServerCertificate=True;"
 DatabaseSettings__Host=localhost
 DatabaseSettings__Port=1433
 DatabaseSettings__Database=library_management
 DatabaseSettings__Username=sa
-DatabaseSettings__Password=123456
+DatabaseSettings__Password=your_db_password
 
 # Mail SMTP Configuration (Binds to MailSettings section)
 MailSettings__Host=smtp.gmail.com
@@ -50,6 +50,12 @@ MailSettings__Protocol=smtp
 MailSettings__Auth=true
 MailSettings__StartTls=true
 MailSettings__StartTlsRequired=true
+
+# Seed Configuration & Cloudinary
+SeedSettings__DefaultPassword=your_seed_password
+CloudinarySettings__CloudName=your_cloud_name
+CloudinarySettings__ApiKey=your_api_key
+CloudinarySettings__ApiSecret=your_api_secret
 ```
 
 ### 3. Cập Nhật Migration & Cơ Sở Dữ Liệu
@@ -85,6 +91,9 @@ Truy cập trên trình duyệt: `https://localhost:5001` hoặc `http://localho
    - **Controller (Thin):** Chỉ tiếp nhận HTTP Request, kiểm tra `ModelState.IsValid`, gọi Service, ghi flash message vào `TempData` và trả về View/Redirect. **Tuyệt đối không inject `ApplicationDbContext` vào Controller**.
    - **Service (Fat Business Logic):** Xử lý mọi nghiệp vụ, tính toán, kiểm tra bảo mật (brute-force, lockout, OTP, rate-limit), trả kết quả qua `ServiceResult` hoặc `ServiceResult<T>`.
    - **Repository & UnitOfWork:** Đóng gói thao tác truy vấn CSDL qua EF Core.
+5. **Bảo mật Khóa & Biến Môi Trường (`.env`):**
+   - Tất cả key, API, secret và cấu hình nhạy cảm bảo mật (Connection String chứa mật khẩu, SMTP App Password, Cloudinary API Key/Secret, Seed Password/Account,...) **bắt buộc đặt trong file `.env` duy nhất tại thư mục gốc dự án** (cùng cấp với `.env.example`, đã chặn trong `.gitignore`).
+   - **Tuyệt đối không hardcode trong code C#, Razor Views hay `appsettings.json`** (`appsettings*.json` giữ rỗng `{}` và `.env.example` chỉ chứa placeholder mẫu an toàn).
 
 ---
 
@@ -460,6 +469,7 @@ Trước khi commit mã nguồn hoặc tạo Pull Request, lập trình viên h�
 - [ ] **Không Hardcode Error Strings:** Toàn bộ thông báo lỗi phải lấy qua `ErrorCode` và `ErrorMessages.Get()` hoặc `ErrorMessages.Format()`.
 - [ ] **Phân trang chuẩn:** Mặc định `PageItemSize = 10`, hỗ trợ `PageNo = 0` hoặc `1` query từ bản ghi đầu tiên, nhúng partial `_Pagination.cshtml`.
 - [ ] **CSRF Protection:** Mọi Form POST đều có `@Html.AntiForgeryToken()` và Action có `[ValidateAntiForgeryToken]`.
+- [ ] **Không Hardcode Secrets / Keys:** Tất cả key, API, secret và cấu hình nhạy cảm bảo mật bắt buộc đặt trong file `.env` tại thư mục gốc dự án; tuyệt đối không hardcode trong code C# hay `appsettings.json`.
 - [ ] **Biên dịch:** Chạy lệnh `dotnet build` đạt **0 Warning(s), 0 Error(s)**.
 - [ ] **Không tạo file test bừa bãi:** Không tự ý commit unit test vào thư mục mã nguồn khi không được yêu cầu.
 

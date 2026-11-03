@@ -178,6 +178,14 @@ public class AdminBooksController(
         model.Authors = await masterService.GetActiveAuthorsAsync(ct);
         model.Publishers = await masterService.GetActivePublishersAsync(ct);
         model.Shelves = await masterService.GetActiveShelvesAsync(ct);
+
+        if (model.Id.HasValue && model.Id.Value != Guid.Empty && model.ExistingImages.Count == 0)
+        {
+            var latest = await bookService.GetBookForEditAsync(model.Id.Value, ct);
+            if (latest != null)
+            {
+                model.ExistingImages = latest.ExistingImages;
+            }
+        }
     }
 }
-

@@ -1,0 +1,19 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+  <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+  <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="65" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#64748B">Refactoring: Improving the Design of Existing...</text>
+  <line x1="65" y1="92" x2="535" y2="92" stroke="#CBD5E1" stroke-width="1.5"/>
+  <rect x="65" y="122" width="470" height="44" rx="6" fill="#311B47" fill-opacity="0.08"/>
+  <text x="80" y="150" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#311B47">CHƯƠNG 1: DẪN NHẬP &amp; NGUY&#202;N L&#221; CỐT L&#213;I</text>
+  <text x="65" y="215" font-family="Georgia, serif" font-size="16" fill="#334155">1.1. Đặt vấn đề v&#224; bối cảnh ứng dụng trong thực tiễn hiện</text>
+<text x="65" y="243" font-family="Georgia, serif" font-size="16" fill="#334155">đại:</text>
+<text x="65" y="289" font-family="Georgia, serif" font-size="16" fill="#334155">Kỹ nghệ t&#225;i cấu tr&#250;c m&#227; nguồn m&#224; kh&#244;ng l&#224;m thay đổi h&#224;nh</text>
+<text x="65" y="317" font-family="Georgia, serif" font-size="16" fill="#334155">vi b&#234;n ngo&#224;i của hệ thống.</text>
+<text x="65" y="363" font-family="Georgia, serif" font-size="16" fill="#334155">1.2. C&#225;c ti&#234;u chuẩn chất lượng cần tu&#226;n thủ:</text>
+<text x="65" y="409" font-family="Georgia, serif" font-size="16" fill="#334155">• T&#237;nh ch&#237;nh x&#225;c, tường minh v&#224; khả năng mở rộng d&#224;i hạn.</text>
+<text x="65" y="455" font-family="Georgia, serif" font-size="16" fill="#334155">• Tối ưu h&#243;a hiệu năng vận h&#224;nh v&#224; đảm bảo an to&#224;n dữ</text>
+<text x="65" y="483" font-family="Georgia, serif" font-size="16" fill="#334155">liệu.</text>
+
+  <line x1="65" y1="745" x2="535" y2="745" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="300" y="775" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">Trang 12 — Đọc thử</text>
+</svg>

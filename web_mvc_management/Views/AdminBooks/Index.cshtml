@@ -8,7 +8,7 @@
 <div class="staff-page-head">
     <div>
         <h1>Quản lý danh mục đầu sách</h1>
-        <p class="text-muted-ink mb-0">Phân loại theo thể loại, tác giả, nhà xuất bản, năm xuất bản và quản lý số lượng bản sao theo từng đầu sách.</p>
+        <p class="text-muted-ink mb-0">Phân loại theo thể loại, tác giả, nhà xuất bản, năm xuất bản, bộ sưu tập ảnh và quản lý số lượng bản sao theo từng đầu sách.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
         <a class="btn btn-quiet" href="@Screens.GetPath(ScreenId.ManageBookCopies)">
@@ -85,7 +85,7 @@
     <table class="table table-hover data-table">
         <thead>
             <tr>
-                <th scope="col">Đầu sách / ISBN</th>
+                <th scope="col">Đầu sách / Ảnh & ISBN</th>
                 <th scope="col">Thể loại</th>
                 <th scope="col">Tác giả</th>
                 <th scope="col">Nhà xuất bản & Năm</th>
@@ -114,21 +114,41 @@
                 {
                     <tr>
                         <td>
-                            <a href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", item.Id.ToString())" class="fw-medium text-decoration-none">@item.Title</a>
-                            @if (item.Status == EntityStatus.Deleted)
-                            {
-                                <span class="status status--danger ms-1">Đã xóa mềm (DELETED)</span>
-                            }
-                            else if (item.Status == EntityStatus.Inactive)
-                            {
-                                <span class="status status--neutral ms-1">Tạm ẩn</span>
-                            }
-                            <div class="fs-xs text-muted-ink num">
-                                ISBN: @(item.Isbn ?? "—")
-                                @if (!string.IsNullOrWhiteSpace(item.Edition))
+                            <div class="d-flex align-items-center gap-2">
+                                @if (!string.IsNullOrWhiteSpace(item.CoverUrl))
                                 {
-                                    <span> · @item.Edition</span>
+                                    <a href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", item.Id.ToString())" class="flex-shrink-0">
+                                        <img src="@item.CoverUrl" alt="@item.Title" class="rounded border" style="width: 38px; height: 52px; object-fit: cover;" loading="lazy" />
+                                    </a>
                                 }
+                                else
+                                {
+                                    <div class="rounded border bg-light d-flex align-items-center justify-content-center text-muted-ink flex-shrink-0" style="width: 38px; height: 52px;">
+                                        <i class="bi bi-journal-bookmark" aria-hidden="true"></i>
+                                    </div>
+                                }
+                                <div>
+                                    <a href="@Screens.GetPath(ScreenId.BookDetail).Replace("{id}", item.Id.ToString())" class="fw-medium text-decoration-none">@item.Title</a>
+                                    @if (item.Status == EntityStatus.Deleted)
+                                    {
+                                        <span class="status status--danger ms-1">Đã xóa mềm (DELETED)</span>
+                                    }
+                                    else if (item.Status == EntityStatus.Inactive)
+                                    {
+                                        <span class="status status--neutral ms-1">Tạm ẩn</span>
+                                    }
+                                    <div class="fs-xs text-muted-ink num">
+                                        ISBN: @(item.Isbn ?? "—")
+                                        @if (!string.IsNullOrWhiteSpace(item.Edition))
+                                        {
+                                            <span> · @item.Edition</span>
+                                        }
+                                        @if (item.ImageCount > 0)
+                                        {
+                                            <span class="ms-1 badge bg-light text-dark border"><i class="bi bi-images me-1" aria-hidden="true"></i>@item.ImageCount ảnh</span>
+                                        }
+                                    </div>
+                                </div>
                             </div>
                         </td>
                         <td>@item.CategoryName</td>
@@ -205,4 +225,3 @@
 </div>
 
 <partial name="_Pagination" model="Model.PagedBooks" />
-

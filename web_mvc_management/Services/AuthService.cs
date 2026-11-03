@@ -336,7 +336,7 @@ public class AuthService(
         if (staff == null || staff.Status != EntityStatus.Active)
         {
             // SEC-15: Chạy dummy PBKDF2
-            PasswordHasher.VerifyDummyPassword("DummyCheckPassword");
+            PasswordHasher.VerifyDummyPassword(normalizedEmail);
             return ServiceResult<LoginStepResult>.Success(new LoginStepResult
             {
                 RequiresOtp = true,

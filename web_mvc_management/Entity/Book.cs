@@ -30,6 +30,7 @@ public class Book : BaseEntity
     public virtual Publisher? Publisher { get; set; }
     public virtual ICollection<BookAuthor> BookAuthors { get; set; } = [];
     public virtual ICollection<BookCopy> BookCopies { get; set; } = [];
+    public virtual ICollection<BookImage> BookImages { get; set; } = [];
     public virtual ICollection<Reservation> Reservations { get; set; } = [];
 }
 

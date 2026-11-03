@@ -33,8 +33,13 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static string ResolveConnectionString(IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
+        var rawConnectionString = configuration.GetConnectionString("DefaultConnection")
             ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+
+        var connectionString = !string.IsNullOrWhiteSpace(rawConnectionString) &&
+            !rawConnectionString.Contains("your_db_password", StringComparison.OrdinalIgnoreCase)
+            ? rawConnectionString
+            : null;
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -54,7 +59,10 @@ public static class ServiceCollectionExtensions
             var pass = configuration["DatabaseSettings:Password"]
                 ?? Environment.GetEnvironmentVariable("DatabaseSettings__Password");
 
-            if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(db))
+            var hasValidPassword = string.IsNullOrWhiteSpace(user) ||
+                (!string.IsNullOrWhiteSpace(pass) && !pass.Equals("your_db_password", StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(db) && hasValidPassword)
             {
                 var authPart = string.IsNullOrWhiteSpace(user)
                     ? "Trusted_Connection=True;"
@@ -67,8 +75,8 @@ public static class ServiceCollectionExtensions
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                "Không tìm thấy chuỗi kết nối Database hợp lệ. " +
-                "Vui lòng tạo file .env từ .env.example và điền thông tin kết nối DB (ConnectionStrings__DefaultConnection hoặc DatabaseSettings__Host, DatabaseSettings__Database, DatabaseSettings__Username, DatabaseSettings__Password)."
+                "Không tìm thấy chuỗi kết nối Database hợp lệ (hoặc đang giữ giá trị placeholder 'your_db_password'). " +
+                "Vui lòng tạo file .env tại thư mục gốc từ .env.example và điền thông tin kết nối DB thật (ConnectionStrings__DefaultConnection hoặc DatabaseSettings__Password)."
             );
         }
 
@@ -146,8 +154,64 @@ public static class ServiceCollectionExtensions
         if (configuration != null)
         {
             services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+            services.Configure<CloudinarySettings>(configuration.GetSection(CloudinarySettings.SectionName));
         }
 
+        services.PostConfigure<EmailSettings>(options =>
+        {
+            var envHost = Environment.GetEnvironmentVariable("MailSettings__Host");
+            if (string.IsNullOrWhiteSpace(options.Host))
+                options.Host = !string.IsNullOrWhiteSpace(envHost) ? envHost : "smtp.gmail.com";
+
+            if (int.TryParse(Environment.GetEnvironmentVariable("MailSettings__Port"), out var port) && port > 0)
+                options.Port = port;
+
+            var envUser = Environment.GetEnvironmentVariable("MailSettings__Username");
+            if (string.IsNullOrWhiteSpace(options.Username) && !string.IsNullOrWhiteSpace(envUser))
+                options.Username = envUser;
+
+            var envPass = Environment.GetEnvironmentVariable("MailSettings__Password");
+            if (string.IsNullOrWhiteSpace(options.Password) && !string.IsNullOrWhiteSpace(envPass))
+                options.Password = envPass;
+
+            var envSender = Environment.GetEnvironmentVariable("MailSettings__SenderDisplayName");
+            if (!string.IsNullOrWhiteSpace(envSender) &&
+                (string.IsNullOrWhiteSpace(options.SenderDisplayName) || options.SenderDisplayName == "Thư Viện UTC"))
+            {
+                options.SenderDisplayName = envSender;
+            }
+
+            if (bool.TryParse(Environment.GetEnvironmentVariable("MailSettings__Auth"), out var auth))
+                options.Auth = auth;
+            if (bool.TryParse(Environment.GetEnvironmentVariable("MailSettings__StartTls"), out var startTls))
+                options.StartTls = startTls;
+            if (bool.TryParse(Environment.GetEnvironmentVariable("MailSettings__StartTlsRequired"), out var startTlsReq))
+                options.StartTlsRequired = startTlsReq;
+        });
+
+        services.PostConfigure<CloudinarySettings>(options =>
+        {
+            var envCloud = Environment.GetEnvironmentVariable("CloudinarySettings__CloudName");
+            if (string.IsNullOrWhiteSpace(options.CloudName) && !string.IsNullOrWhiteSpace(envCloud))
+                options.CloudName = envCloud;
+
+            var envKey = Environment.GetEnvironmentVariable("CloudinarySettings__ApiKey");
+            if (string.IsNullOrWhiteSpace(options.ApiKey) && !string.IsNullOrWhiteSpace(envKey))
+                options.ApiKey = envKey;
+
+            var envSecret = Environment.GetEnvironmentVariable("CloudinarySettings__ApiSecret");
+            if (string.IsNullOrWhiteSpace(options.ApiSecret) && !string.IsNullOrWhiteSpace(envSecret))
+                options.ApiSecret = envSecret;
+
+            var envFolder = Environment.GetEnvironmentVariable("CloudinarySettings__Folder");
+            if (!string.IsNullOrWhiteSpace(envFolder) &&
+                (string.IsNullOrWhiteSpace(options.Folder) || options.Folder == "library_management/books"))
+            {
+                options.Folder = envFolder;
+            }
+        });
+
+        services.AddScoped<ICloudinaryService, CloudinaryService>();
         services.AddScoped<IOtpService, OtpService>();
         services.AddSingleton<IEmailService, EmailService>();
         services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();

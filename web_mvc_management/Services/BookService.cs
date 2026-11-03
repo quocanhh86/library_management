@@ -15,7 +15,8 @@ namespace web_mvc_management.Services;
 
 public class BookService(
     IUnitOfWork unitOfWork,
-    IDateTimeProvider dateTimeProvider) : IBookService
+    IDateTimeProvider dateTimeProvider,
+    ICloudinaryService cloudinaryService) : IBookService
 {
     // =========================================================================
     // 1. TRA CỨU DANH MỤC SÁCH CÔNG KHAI (PUBLIC & READER PORTAL)
@@ -28,6 +29,7 @@ public class BookService(
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
                 .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookImages.Where(img => img.Status != EntityStatus.Deleted))
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
                 .ThenInclude(bc => bc.Shelf)
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
@@ -81,6 +83,7 @@ public class BookService(
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
                 .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookImages.Where(img => img.Status != EntityStatus.Deleted))
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
                 .ThenInclude(bc => bc.Shelf)
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
@@ -177,6 +180,7 @@ public class BookService(
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
                 .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookImages.Where(img => img.Status != EntityStatus.Deleted))
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted))
                 .ThenInclude(bc => bc.Shelf)
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted))
@@ -250,6 +254,7 @@ public class BookService(
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
                 .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookImages.Where(img => img.Status != EntityStatus.Deleted))
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted))
                 .ThenInclude(bc => bc.Shelf)
             .OrderByDescending(b => b.CreatedAt)
@@ -273,11 +278,22 @@ public class BookService(
                 .Select(ba => ba.Author.FullName)
                 .ToList();
 
+            var activeImages = b.BookImages
+                .Where(img => img.Status != EntityStatus.Deleted)
+                .OrderByDescending(img => img.IsPrimary)
+                .ThenBy(img => img.DisplayOrder)
+                .ToList();
+
+            var resolvedCover = ResolveValidCoverUrl(b.CoverUrl)
+                ?? activeImages.FirstOrDefault()?.ImageUrl;
+
             return new AdminBookListItemViewModel
             {
                 Id = b.Id,
                 Title = b.Title,
                 Isbn = b.Isbn,
+                CoverUrl = resolvedCover,
+                ImageCount = activeImages.Count,
                 CategoryId = b.CategoryId,
                 CategoryName = b.Category?.Name ?? "Chưa phân loại",
                 PublisherId = b.PublisherId,
@@ -304,12 +320,31 @@ public class BookService(
     {
         var book = await unitOfWork.Books.GetQueryable(asNoTracking: true)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
+            .Include(b => b.BookImages.Where(img => img.Status != EntityStatus.Deleted))
             .FirstOrDefaultAsync(b => b.Id == id && b.Status != EntityStatus.Deleted, ct);
 
         if (book == null)
         {
             return null;
         }
+
+        var existingImages = book.BookImages
+            .Where(img => img.Status != EntityStatus.Deleted)
+            .OrderByDescending(img => img.IsPrimary)
+            .ThenBy(img => img.DisplayOrder)
+            .ThenBy(img => img.CreatedAt)
+            .Select(img => new BookImageItemViewModel
+            {
+                Id = img.Id,
+                ImageUrl = img.ImageUrl,
+                PublicId = img.PublicId,
+                ImageType = img.ImageType,
+                ImageTypeLabel = LibraryConstants.BookImageType.GetLabel(img.ImageType),
+                Caption = img.Caption,
+                DisplayOrder = img.DisplayOrder,
+                IsPrimary = img.IsPrimary
+            })
+            .ToList();
 
         return new BookUpsertViewModel
         {
@@ -327,9 +362,11 @@ public class BookService(
             Language = book.Language,
             PageCount = book.PageCount,
             Description = book.Description,
-            CoverUrl = book.CoverUrl,
+            CoverUrl = ResolveValidCoverUrl(book.CoverUrl) ?? existingImages.FirstOrDefault()?.ImageUrl,
             Status = book.Status,
-            InitialCopyCount = 0
+            InitialCopyCount = 0,
+            PrimaryImageId = existingImages.FirstOrDefault(x => x.IsPrimary)?.Id,
+            ExistingImages = existingImages
         };
     }
 
@@ -352,9 +389,42 @@ public class BookService(
             return ServiceResult<Guid>.ValidationError(ErrorCode.ShelfNotFound, "Vui lòng chọn vị trí kệ khi nhập số lượng bản sao ban đầu.");
         }
 
+        // 1. Xử lý upload file ảnh bìa & các ảnh trang sách lên Cloudinary / Local
+        ImageUploadResult? coverUpload = null;
+        if (model.CoverImageFile is { Length: > 0 })
+        {
+            var uploadRes = await cloudinaryService.UploadBookImageAsync(model.CoverImageFile, ct);
+            if (!uploadRes.Succeeded || uploadRes.Data == null)
+            {
+                return ServiceResult<Guid>.ValidationError(ErrorCode.CommonInvalidRequest, uploadRes.Message);
+            }
+
+            coverUpload = uploadRes.Data;
+        }
+
+        var galleryUploads = new List<ImageUploadResult>();
+        if (model.GalleryFiles is { Count: > 0 })
+        {
+            foreach (var file in model.GalleryFiles.Where(f => f is { Length: > 0 }))
+            {
+                var uploadRes = await cloudinaryService.UploadBookImageAsync(file, ct);
+                if (!uploadRes.Succeeded || uploadRes.Data == null)
+                {
+                    return ServiceResult<Guid>.ValidationError(ErrorCode.CommonInvalidRequest, uploadRes.Message);
+                }
+
+                galleryUploads.Add(uploadRes.Data);
+            }
+        }
+
         await unitOfWork.BeginTransactionAsync(ct);
         try
         {
+            var directCoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim();
+            var primaryCoverUrl = coverUpload?.Url
+                ?? directCoverUrl
+                ?? galleryUploads.FirstOrDefault()?.Url;
+
             var book = new Book
             {
                 Id = Guid.NewGuid(),
@@ -367,7 +437,7 @@ public class BookService(
                 Language = model.Language?.Trim(),
                 PageCount = model.PageCount,
                 Description = model.Description?.Trim(),
-                CoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim(),
+                CoverUrl = primaryCoverUrl,
                 Status = model.Status
             };
 
@@ -383,6 +453,69 @@ public class BookService(
                     BookId = book.Id,
                     AuthorId = authorId,
                     AuthorOrder = order++,
+                    Status = EntityStatus.Active
+                }, ct);
+            }
+
+            // Lưu danh sách hình ảnh đầu sách (BookImages)
+            var displayOrder = 0;
+            var hasPrimaryAssigned = false;
+
+            if (coverUpload != null)
+            {
+                await unitOfWork.BookImages.AddAsync(new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = coverUpload.Url,
+                    PublicId = coverUpload.PublicId,
+                    ImageType = LibraryConstants.BookImageType.Cover,
+                    Caption = "Ảnh bìa chính",
+                    DisplayOrder = displayOrder++,
+                    IsPrimary = true,
+                    Status = EntityStatus.Active
+                }, ct);
+                hasPrimaryAssigned = true;
+            }
+            else if (!string.IsNullOrWhiteSpace(directCoverUrl))
+            {
+                await unitOfWork.BookImages.AddAsync(new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = directCoverUrl,
+                    PublicId = null,
+                    ImageType = LibraryConstants.BookImageType.Cover,
+                    Caption = "Ảnh bìa chính",
+                    DisplayOrder = displayOrder++,
+                    IsPrimary = true,
+                    Status = EntityStatus.Active
+                }, ct);
+                hasPrimaryAssigned = true;
+            }
+
+            var galleryType = string.IsNullOrWhiteSpace(model.GalleryImageType)
+                ? LibraryConstants.BookImageType.PreviewPage
+                : model.GalleryImageType;
+
+            for (var idx = 0; idx < galleryUploads.Count; idx++)
+            {
+                var item = galleryUploads[idx];
+                var isFirstPrimary = !hasPrimaryAssigned && idx == 0;
+                var caption = !string.IsNullOrWhiteSpace(model.GalleryCaptionPrefix)
+                    ? (galleryUploads.Count > 1 ? $"{model.GalleryCaptionPrefix.Trim()} - Trang {idx + 1}" : model.GalleryCaptionPrefix.Trim())
+                    : $"{LibraryConstants.BookImageType.GetLabel(galleryType)} #{idx + 1}";
+
+                await unitOfWork.BookImages.AddAsync(new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = item.Url,
+                    PublicId = item.PublicId,
+                    ImageType = galleryType,
+                    Caption = caption,
+                    DisplayOrder = displayOrder++,
+                    IsPrimary = isFirstPrimary,
                     Status = EntityStatus.Active
                 }, ct);
             }
@@ -417,9 +550,11 @@ public class BookService(
 
             await unitOfWork.CommitTransactionAsync(ct);
 
+            var totalImagesUploaded = (coverUpload != null ? 1 : 0) + galleryUploads.Count;
+            var imgNote = totalImagesUploaded > 0 ? $" và {totalImagesUploaded} hình ảnh" : string.Empty;
             var msg = generatedCount > 0
-                ? $"Đã nhập đầu sách \"{book.Title}\" kèm {generatedCount} bản sao sẵn sàng trên kệ."
-                : $"Đã thêm đầu sách \"{book.Title}\".";
+                ? $"Đã nhập đầu sách \"{book.Title}\" kèm {generatedCount} bản sao{imgNote} sẵn sàng trên kệ."
+                : $"Đã thêm đầu sách \"{book.Title}\"{imgNote}.";
 
             return ServiceResult<Guid>.Success(book.Id, msg);
         }
@@ -459,6 +594,36 @@ public class BookService(
             }
         }
 
+        // Upload file ảnh mới nếu có
+        ImageUploadResult? coverUpload = null;
+        if (model.CoverImageFile is { Length: > 0 })
+        {
+            var uploadRes = await cloudinaryService.UploadBookImageAsync(model.CoverImageFile, ct);
+            if (!uploadRes.Succeeded || uploadRes.Data == null)
+            {
+                return ServiceResult.ValidationError(ErrorCode.CommonInvalidRequest, uploadRes.Message);
+            }
+
+            coverUpload = uploadRes.Data;
+        }
+
+        var galleryUploads = new List<ImageUploadResult>();
+        if (model.GalleryFiles is { Count: > 0 })
+        {
+            foreach (var file in model.GalleryFiles.Where(f => f is { Length: > 0 }))
+            {
+                var uploadRes = await cloudinaryService.UploadBookImageAsync(file, ct);
+                if (!uploadRes.Succeeded || uploadRes.Data == null)
+                {
+                    return ServiceResult.ValidationError(ErrorCode.CommonInvalidRequest, uploadRes.Message);
+                }
+
+                galleryUploads.Add(uploadRes.Data);
+            }
+        }
+
+        var publicIdsToCleanup = new List<string>();
+
         await unitOfWork.BeginTransactionAsync(ct);
         try
         {
@@ -471,8 +636,118 @@ public class BookService(
             book.Language = model.Language?.Trim();
             book.PageCount = model.PageCount;
             book.Description = model.Description?.Trim();
-            book.CoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim();
+            book.CoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? book.CoverUrl : model.CoverUrl.Trim();
             book.Status = model.Status;
+
+            // Xử lý danh sách hình ảnh hiện có (BookImages)
+            var existingImages = await unitOfWork.BookImages.FindAsync(
+                img => img.BookId == book.Id && img.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+
+            var deleteSet = model.DeleteImageIds?.ToHashSet() ?? [];
+            foreach (var img in existingImages.Where(x => deleteSet.Contains(x.Id)))
+            {
+                img.Status = EntityStatus.Deleted;
+                img.IsPrimary = false;
+                unitOfWork.BookImages.Update(img);
+                if (!string.IsNullOrWhiteSpace(img.PublicId))
+                {
+                    publicIdsToCleanup.Add(img.PublicId);
+                }
+            }
+
+            var activeImages = existingImages.Where(x => x.Status != EntityStatus.Deleted).ToList();
+
+            // Nếu người dùng tải lên ảnh bìa chính mới
+            if (coverUpload != null)
+            {
+                foreach (var img in activeImages)
+                {
+                    if (img.IsPrimary)
+                    {
+                        img.IsPrimary = false;
+                        unitOfWork.BookImages.Update(img);
+                    }
+                }
+
+                var newCoverImg = new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = coverUpload.Url,
+                    PublicId = coverUpload.PublicId,
+                    ImageType = LibraryConstants.BookImageType.Cover,
+                    Caption = "Ảnh bìa chính",
+                    DisplayOrder = 0,
+                    IsPrimary = true,
+                    Status = EntityStatus.Active
+                };
+
+                await unitOfWork.BookImages.AddAsync(newCoverImg, ct);
+                activeImages.Insert(0, newCoverImg);
+                book.CoverUrl = coverUpload.Url;
+            }
+            else if (model.PrimaryImageId.HasValue)
+            {
+                var chosenPrimary = activeImages.FirstOrDefault(x => x.Id == model.PrimaryImageId.Value);
+                if (chosenPrimary != null)
+                {
+                    foreach (var img in activeImages)
+                    {
+                        var shouldBePrimary = img.Id == chosenPrimary.Id;
+                        if (img.IsPrimary != shouldBePrimary)
+                        {
+                            img.IsPrimary = shouldBePrimary;
+                            unitOfWork.BookImages.Update(img);
+                        }
+                    }
+
+                    book.CoverUrl = chosenPrimary.ImageUrl;
+                }
+            }
+
+            // Thêm các ảnh trang sách / mục lục / bìa sau mới tải lên
+            var nextOrder = activeImages.Count > 0 ? activeImages.Max(x => x.DisplayOrder) + 1 : 1;
+            var galleryType = string.IsNullOrWhiteSpace(model.GalleryImageType)
+                ? LibraryConstants.BookImageType.PreviewPage
+                : model.GalleryImageType;
+
+            for (var idx = 0; idx < galleryUploads.Count; idx++)
+            {
+                var item = galleryUploads[idx];
+                var caption = !string.IsNullOrWhiteSpace(model.GalleryCaptionPrefix)
+                    ? (galleryUploads.Count > 1 ? $"{model.GalleryCaptionPrefix.Trim()} - Trang {idx + 1}" : model.GalleryCaptionPrefix.Trim())
+                    : $"{LibraryConstants.BookImageType.GetLabel(galleryType)} #{nextOrder + idx}";
+
+                var galleryImg = new BookImage
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ImageUrl = item.Url,
+                    PublicId = item.PublicId,
+                    ImageType = galleryType,
+                    Caption = caption,
+                    DisplayOrder = nextOrder + idx,
+                    IsPrimary = false,
+                    Status = EntityStatus.Active
+                };
+
+                await unitOfWork.BookImages.AddAsync(galleryImg, ct);
+                activeImages.Add(galleryImg);
+            }
+
+            // Đảm bảo luôn có 1 ảnh IsPrimary nếu danh sách activeImages không rỗng
+            if (activeImages.Count > 0 && !activeImages.Any(x => x.IsPrimary))
+            {
+                var firstImg = activeImages.OrderBy(x => x.DisplayOrder).First();
+                firstImg.IsPrimary = true;
+                book.CoverUrl = firstImg.ImageUrl;
+            }
+            else if (activeImages.Count == 0 && deleteSet.Count > 0 && coverUpload == null)
+            {
+                book.CoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim();
+            }
 
             unitOfWork.Books.Update(book);
 
@@ -516,6 +791,12 @@ public class BookService(
             }
 
             await unitOfWork.CommitTransactionAsync(ct);
+
+            foreach (var pid in publicIdsToCleanup)
+            {
+                await cloudinaryService.DeleteImageAsync(pid, ct);
+            }
+
             return ServiceResult.Success($"Đã cập nhật thông tin đầu sách \"{book.Title}\".");
         }
         catch
@@ -604,6 +885,17 @@ public class BookService(
         if (authorLinks.Count > 0)
         {
             unitOfWork.BookAuthors.DeleteRange(authorLinks);
+        }
+
+        var bookImages = await unitOfWork.BookImages.FindAsync(img => img.BookId == id, asNoTracking: false, ct);
+        if (bookImages.Count > 0)
+        {
+            foreach (var img in bookImages.Where(x => !string.IsNullOrWhiteSpace(x.PublicId)))
+            {
+                await cloudinaryService.DeleteImageAsync(img.PublicId, ct);
+            }
+
+            unitOfWork.BookImages.DeleteRange(bookImages);
         }
 
         unitOfWork.Books.Delete(book);
@@ -928,6 +1220,22 @@ public class BookService(
         return $"BC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..4].ToUpperInvariant()}";
     }
 
+    private static string? ResolveValidCoverUrl(string? rawUrl)
+    {
+        if (string.IsNullOrWhiteSpace(rawUrl))
+        {
+            return null;
+        }
+
+        // Bỏ qua các đường dẫn ảnh tĩnh mẫu cũ /images/books/*.webp không tồn tại trên đĩa
+        if (rawUrl.StartsWith("/images/books/", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return rawUrl;
+    }
+
     private static BookSummaryViewModel MapToSummaryViewModel(Book b, bool includeCopies)
     {
         var activeCopies = b.BookCopies
@@ -961,11 +1269,39 @@ public class BookService(
         var categoryName = b.Category?.Name ?? "Chuyên ngành chung";
         var categoryKey = ResolveCategoryKey(categoryName);
 
-        // Nếu CoverUrl là đường dẫn ảnh mẫu chưa tồn tại trên đĩa (/images/books/*), trả null để hiển thị bìa chữ nghệ thuật
-        var coverUrl = b.CoverUrl;
-        if (!string.IsNullOrWhiteSpace(coverUrl) && coverUrl.StartsWith("/images/books/", StringComparison.OrdinalIgnoreCase))
+        var imageViewModels = b.BookImages
+            .Where(img => img.Status != EntityStatus.Deleted)
+            .OrderByDescending(img => img.IsPrimary)
+            .ThenBy(img => img.DisplayOrder)
+            .ThenBy(img => img.CreatedAt)
+            .Select(img => new PublicBookImageViewModel
+            {
+                Id = img.Id,
+                ImageUrl = img.ImageUrl,
+                ImageType = img.ImageType,
+                ImageTypeLabel = LibraryConstants.BookImageType.GetLabel(img.ImageType),
+                Caption = img.Caption ?? LibraryConstants.BookImageType.GetLabel(img.ImageType),
+                DisplayOrder = img.DisplayOrder,
+                IsPrimary = img.IsPrimary
+            })
+            .ToList();
+
+        var coverUrl = ResolveValidCoverUrl(b.CoverUrl)
+            ?? imageViewModels.FirstOrDefault(img => img.IsPrimary)?.ImageUrl
+            ?? imageViewModels.FirstOrDefault()?.ImageUrl;
+
+        if (!string.IsNullOrWhiteSpace(coverUrl) && imageViewModels.Count == 0)
         {
-            coverUrl = null;
+            imageViewModels.Add(new PublicBookImageViewModel
+            {
+                Id = Guid.Empty,
+                ImageUrl = coverUrl,
+                ImageType = LibraryConstants.BookImageType.Cover,
+                ImageTypeLabel = LibraryConstants.BookImageType.GetLabel(LibraryConstants.BookImageType.Cover),
+                Caption = "Ảnh bìa chính",
+                DisplayOrder = 0,
+                IsPrimary = true
+            });
         }
 
         var copyViewModels = includeCopies
@@ -1005,7 +1341,8 @@ public class BookService(
             AvailableCopies = availableCount,
             TotalCopies = totalCount,
             EarliestDueDate = earliestDue,
-            Copies = copyViewModels
+            Copies = copyViewModels,
+            Images = imageViewModels
         };
     }
 
@@ -1040,4 +1377,3 @@ public class BookService(
         return "humanities";
     }
 }
-

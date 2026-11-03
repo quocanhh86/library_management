@@ -75,7 +75,7 @@ public class EmailService(
 
         try
         {
-            if (!string.IsNullOrWhiteSpace(_settings.Username) && !string.IsNullOrWhiteSpace(_settings.Password))
+            if (_settings.IsConfigured)
             {
                 using var client = new SmtpClient(_settings.Host, _settings.Port)
                 {

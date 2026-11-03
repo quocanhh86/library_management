@@ -24,6 +24,7 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
     public IBaseRepository<Book> Books => Repository<Book>();
     public IBaseRepository<BookAuthor> BookAuthors => Repository<BookAuthor>();
     public IBaseRepository<BookCopy> BookCopies => Repository<BookCopy>();
+    public IBaseRepository<BookImage> BookImages => Repository<BookImage>();
     public IBaseRepository<BorrowSlip> BorrowSlips => Repository<BorrowSlip>();
     public IBaseRepository<BorrowDetail> BorrowDetails => Repository<BorrowDetail>();
     public IBaseRepository<Fine> Fines => Repository<Fine>();

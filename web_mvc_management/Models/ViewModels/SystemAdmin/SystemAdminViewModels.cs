@@ -56,7 +56,7 @@ public class StaffCreateViewModel
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu khởi tạo.")]
     [StringLength(100, MinimumLength = 6, ErrorMessage = "Mật khẩu ít nhất 6 ký tự.")]
     [Display(Name = "Mật khẩu khởi tạo")]
-    public string Password { get; set; } = "123456";
+    public string Password { get; set; } = string.Empty;
 }
 
 public class StaffEditViewModel
