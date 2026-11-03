@@ -1,6 +1,6 @@
 @{
     var isAdmin = User.IsInRole(AppRoles.Admin);
-    var fullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity?.Name;
+    var fullName = User.FindFirst("FullName")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity?.Name;
     var title = ViewData["Title"] as string;
     // Màn hình hiện tại: View đặt ViewData["Screen"] = ScreenId.X để tô sáng mục menu.
     var current = ViewData["Screen"] as ScreenId?;

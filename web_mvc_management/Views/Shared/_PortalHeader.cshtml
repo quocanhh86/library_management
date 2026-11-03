@@ -1,7 +1,7 @@
 @{
     var authenticated = User.Identity?.IsAuthenticated == true;
     var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Librarian);
-    var fullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity?.Name;
+    var fullName = User.FindFirst("FullName")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity?.Name;
 }
 <header class="portal-header">
     <div class="portal-container portal-header__inner">
