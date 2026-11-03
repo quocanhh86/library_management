@@ -68,6 +68,6 @@
 
     --focus-ring: 2px solid var(--c-indigo);
     --focus-ring-dark: 2px solid var(--c-gold);
-    --staff-sidebar-w: 240px;
+    --staff-sidebar-w: 248px;
     --content-max: 1160px;
 }
