@@ -1,0 +1,160 @@
+@model CirculationDeskViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Trả sách";
+    ViewData["Screen"] = ScreenId.CirculationReturn;
+    var reader = Model.Reader;
+    var hasLoans = reader is not null && Model.Loans.Count > 0;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Trả sách</h1>
+        <p class="text-muted-ink mb-0">Chọn sách nhận trả, ghi tình trạng và gia hạn khi độc giả cần.</p>
+    </div>
+    <div class="staff-page-head__keys">
+        <span class="shortcut-hint"><kbd>F2</kbd> Tìm thẻ</span>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <partial name="_ReaderPanel" model="Model" />
+    </div>
+    <div class="col-lg-8">
+        <section class="panel" aria-labelledby="returnListTitle">
+            <h2 class="h5" id="returnListTitle">Sách đang mượn</h2>
+            @if (reader is null)
+            {
+                <div class="state-block text-center">
+                    <div class="state-block__title">Chưa chọn độc giả</div>
+                    <p class="state-block__text mb-0">Tìm độc giả theo mã thẻ để xem sách đang mượn.</p>
+                </div>
+            }
+            else if (Model.Loans.Count == 0)
+            {
+                <div class="state-block text-center">
+                    <div class="state-block__title">Không có sách đang mượn</div>
+                    <p class="state-block__text mb-0">Độc giả đã trả hết sách.</p>
+                </div>
+            }
+            else
+            {
+                <form id="returnForm" method="post" action="@Screens.GetPath(ScreenId.CirculationReturn)">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ReaderId" value="@reader.Id" />
+                    <input type="hidden" name="card" value="@reader.CardNo" />
+                    <div class="table-frame">
+                        <table class="table data-table mb-0">
+                            <caption class="visually-hidden">Sách đang mượn của @reader.FullName</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col"><input class="form-check-input" type="checkbox" data-return-all aria-label="Chọn tất cả sách" /></th>
+                                    <th scope="col">Tài liệu</th>
+                                    <th scope="col">Hạn trả</th>
+                                    <th scope="col">Tình trạng khi trả</th>
+                                    <th scope="col" class="num">Phạt trễ hạn</th>
+                                    <th scope="col" class="text-end">Gia hạn</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (var i = 0; i < Model.Loans.Count; i++)
+                                {
+                                    var loan = Model.Loans[i];
+                                    var canRenew = loan.DueDate >= Model.Today && loan.RenewCount < Model.MaxRenewals;
+                                    <tr data-return-row data-fine="@loan.OverdueFine.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                                        <td>
+                                            <input type="hidden" name="Items[@i].DetailId" value="@loan.DetailId" />
+                                            <input class="form-check-input" type="checkbox" name="Items[@i].Selected" value="true" data-return-check aria-label="Nhận trả @loan.Title" />
+                                        </td>
+                                        <td>
+                                            <span class="fw-medium">@loan.Title</span>
+                                            <div class="fs-xs text-muted-ink num">@loan.Barcode · mượn @DateTimeHelper.ToVietnameseDateString(loan.BorrowedAt)</div>
+                                        </td>
+                                        <td><partial name="_DueStamp" model="new DueStamp(loan.DueDate, Model.Today)" /></td>
+                                        <td>
+                                            <label class="visually-hidden" for="condition_@i">Tình trạng @loan.Title</label>
+                                            <select class="form-select form-select-sm" id="condition_@i" name="Items[@i].Condition">
+                                                <option value="@LibraryConstants.ReturnCondition.Good">Bình thường</option>
+                                                <option value="@LibraryConstants.ReturnCondition.Damaged">Hỏng</option>
+                                                <option value="@LibraryConstants.ReturnCondition.Lost">Mất</option>
+                                            </select>
+                                            <label class="visually-hidden" for="note_@i">Ghi chú @loan.Title</label>
+                                            <input class="form-control form-control-sm mt-1" id="note_@i" name="Items[@i].Note" maxlength="500" placeholder="Ghi chú" />
+                                        </td>
+                                        <td class="num @(loan.OverdueFine > 0 ? "text-danger" : "")">@CurrencyHelper.ToVnd(loan.OverdueFine)</td>
+                                        <td class="text-end">
+                                            <div class="fs-xs text-muted-ink num mb-1">@loan.RenewCount/@Model.MaxRenewals lần</div>
+                                            @if (canRenew)
+                                            {
+                                                <button type="submit" form="renew_@loan.DetailId" class="btn btn-quiet btn-sm">Gia hạn</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="fs-xs text-muted-ink mt-2 mb-0">Phạt trễ hạn @CurrencyHelper.ToVnd(Model.FinePerDay)/cuốn/ngày. Sách hỏng hoặc mất bị phạt theo phần trăm giá bìa trong quy định mượn trả.</p>
+                </form>
+
+                @foreach (var loan in Model.Loans.Where(l => l.DueDate >= Model.Today && l.RenewCount < Model.MaxRenewals))
+                {
+                    <form id="renew_@loan.DetailId" method="post" action="@Url.Action("Renew", "Circulation")" class="d-none">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="detailId" value="@loan.DetailId" />
+                        <input type="hidden" name="card" value="@reader.CardNo" />
+                    </form>
+                }
+            }
+        </section>
+    </div>
+</div>
+
+@section ActionBar {
+    @if (hasLoans)
+    {
+        <div class="action-bar">
+            <div class="action-bar__summary">
+                <span class="action-bar__total" data-return-count>0</span> cuốn nhận trả
+                · phạt trễ hạn <span class="action-bar__total" data-return-total>0 ₫</span>
+            </div>
+            <div class="action-bar__actions">
+                <button type="submit" form="returnForm" class="btn btn-primary" data-return-submit disabled>Nhận trả sách</button>
+            </div>
+        </div>
+    }
+}
+
+@section Scripts {
+    @if (hasLoans)
+    {
+        <script>
+            (function () {
+                const rows = [...document.querySelectorAll('[data-return-row]')];
+                const all = document.querySelector('[data-return-all]');
+                const format = value => new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
+                function update() {
+                    const selected = rows.filter(row => row.querySelector('[data-return-check]').checked);
+                    document.querySelector('[data-return-count]').textContent = String(selected.length);
+                    document.querySelector('[data-return-total]').textContent = format(selected.reduce((sum, row) => sum + Number(row.dataset.fine), 0));
+                    document.querySelector('[data-return-submit]').disabled = selected.length === 0;
+                    all.checked = selected.length === rows.length;
+                    all.indeterminate = selected.length > 0 && selected.length < rows.length;
+                }
+                rows.forEach(row => row.querySelector('[data-return-check]').addEventListener('change', update));
+                all.addEventListener('change', () => {
+                    rows.forEach(row => row.querySelector('[data-return-check]').checked = all.checked);
+                    update();
+                });
+                update();
+            })();
+        </script>
+    }
+    else
+    {
+        <script>
+            if (window.matchMedia('(pointer: fine)').matches) document.getElementById('readerCard')?.focus();
+        </script>
+    }
+}

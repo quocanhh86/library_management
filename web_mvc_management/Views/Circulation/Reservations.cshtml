@@ -1,0 +1,168 @@
+@model ReservationsPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Đặt trước";
+    ViewData["Screen"] = ScreenId.ManageReservations;
+    var statuses = new[]
+    {
+        (LibraryConstants.ReservationStatus.Pending, "Đang chờ"),
+        (LibraryConstants.ReservationStatus.Ready, "Chờ nhận sách"),
+        (LibraryConstants.ReservationStatus.Fulfilled, "Đã nhận"),
+        (LibraryConstants.ReservationStatus.Cancelled, "Đã hủy"),
+        (LibraryConstants.ReservationStatus.Expired, "Hết hạn giữ"),
+    };
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Đặt trước</h1>
+        <p class="text-muted-ink mb-0">Giữ chỗ đầu sách đang được mượn. Khi có bản trả về, hệ thống giữ cho người đặt sớm nhất.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createReservationModal">
+        <i class="bi bi-bookmark-plus" aria-hidden="true"></i>Đặt trước cho độc giả
+    </button>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.ManageReservations)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label" for="reservationKeyword">Độc giả / mã thẻ / tên sách</label>
+            <input type="search" class="form-control" id="reservationKeyword" name="Keyword" value="@Model.Filter.Keyword" data-search-input />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="reservationStatus">Trạng thái</label>
+            <select class="form-select" id="reservationStatus" name="ReservationStatus">
+                <option value="">Tất cả trạng thái</option>
+                @foreach (var (value, label) in statuses)
+                {
+                    <option value="@value" selected="@(Model.Filter.ReservationStatus == value)">@label</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-quiet w-100">Lọc</button>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || !string.IsNullOrWhiteSpace(Model.Filter.ReservationStatus))
+    {
+        <div class="mt-2"><a href="@Screens.GetPath(ScreenId.ManageReservations)" class="fs-xs">Xóa bộ lọc</a></div>
+    }
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Độc giả</th>
+                <th scope="col">Đầu sách</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col">Hàng đợi / bản giữ</th>
+                <th scope="col" class="num">Ngày đặt</th>
+                <th scope="col" class="text-end"><span class="visually-hidden">Thao tác</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Reservations.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="6">
+                        <div class="state-block text-center">
+                            <div class="state-block__title">Chưa có phiếu đặt trước nào khớp điều kiện</div>
+                            <p class="state-block__text mb-0">Đặt trước chỉ áp dụng cho đầu sách đã hết bản sẵn sàng trong kho.</p>
+                        </div>
+                    </td>
+                </tr>
+            }
+            @foreach (var r in Model.Reservations.Items)
+            {
+                <tr>
+                    <td>
+                        <span class="fw-medium">@r.ReaderName</span>
+                        <div class="fs-xs text-muted-ink num">@r.CardNo</div>
+                    </td>
+                    <td>@r.BookTitle</td>
+                    <td><partial name="_StatusBadge" model="new StatusBadge(StatusKind.Reservation, r.ReservationStatus)" /></td>
+                    <td class="fs-xs">
+                        @if (r.ReservationStatus == LibraryConstants.ReservationStatus.Pending)
+                        {
+                            <span>Thứ @r.QueuePosition trong hàng đợi</span>
+                        }
+                        else if (r.AssignedBarcode is not null && r.ReservationStatus == LibraryConstants.ReservationStatus.Ready)
+                        {
+                            <span class="num">@r.AssignedBarcode</span>
+                            @if (r.ExpiresAt is { } expires)
+                            {
+                                <div class="text-muted-ink">Giữ đến @DateTimeHelper.ToVietnameseDateTimeString(expires)</div>
+                            }
+                        }
+                    </td>
+                    <td class="num">@DateTimeHelper.ToVietnameseDateString(r.ReservedAt)</td>
+                    <td class="text-end">
+                        @if (r.ReservationStatus is LibraryConstants.ReservationStatus.Pending or LibraryConstants.ReservationStatus.Ready)
+                        {
+                            <form method="post" action="@Url.Action("CancelReservation", "Circulation")" class="d-inline"
+                                  data-confirm="Hủy phiếu đặt trước của @r.ReaderName?"
+                                  data-confirm-detail="@(r.ReservationStatus == LibraryConstants.ReservationStatus.Ready ? "Bản sao đang giữ sẽ chuyển cho người đặt kế tiếp hoặc về kho." : "Độc giả sẽ rời khỏi hàng đợi của đầu sách này.")"
+                                  data-confirm-ok="Hủy đặt trước"
+                                  data-confirm-cancel="Giữ lại"
+                                  data-confirm-danger>
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@r.Id" />
+                                <button type="submit" class="btn btn-quiet btn-sm text-danger">Hủy</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.Reservations" />
+
+<div class="modal fade" id="createReservationModal" tabindex="-1" aria-labelledby="createReservationTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Url.Action("CreateReservation", "Circulation")">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h2 class="modal-title" id="createReservationTitle">Đặt trước cho độc giả</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="reserveCardNo">Mã thẻ độc giả</label>
+                        <input class="form-control num" id="reserveCardNo" name="CardNo" maxlength="20" required autocomplete="off" />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="reserveBookId">Đầu sách</label>
+                        @if (Model.ReservableBooks.Count == 0)
+                        {
+                            <p class="fs-xs text-muted-ink mb-0">Hiện không có đầu sách nào cần đặt trước: đầu sách nào cũng còn bản sẵn sàng trong kho.</p>
+                        }
+                        else
+                        {
+                            <select class="form-select" id="reserveBookId" name="BookId" required>
+                                @foreach (var b in Model.ReservableBooks)
+                                {
+                                    <option value="@b.Id">@b.Title</option>
+                                }
+                            </select>
+                            <p class="fs-xs text-muted-ink mt-1 mb-0">Chỉ liệt kê đầu sách đã hết bản sẵn sàng.</p>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-primary" disabled="@(Model.ReservableBooks.Count == 0)">Đặt trước</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('createReservationModal')?.addEventListener('shown.bs.modal', () => document.getElementById('reserveCardNo')?.focus());
+    </script>
+}

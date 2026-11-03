@@ -1,0 +1,5 @@
+@inject web_mvc_management.Infrastructure.IDateTimeProvider Clock
+<header class="admin-topbar">
+    <div class="admin-breadcrumb"><a href="@AdminNavigation.Path(ScreenId.AdminDashboard, ViewData["AdminPreview"] is true, User.IsInRole(AppRoles.Admin) ? AppRoles.Admin : AppRoles.Librarian)">Quản trị thư viện</a><i class="bi bi-chevron-right" aria-hidden="true"></i><span>@ViewData["Title"]</span></div>
+    <div class="admin-topbar__right"><time datetime="@Clock.Today.ToString("yyyy-MM-dd")">@Clock.Today.ToString("dd/MM/yyyy")</time><span class="admin-role"><i class="bi bi-person-badge" aria-hidden="true"></i>@(User.IsInRole(AppRoles.Admin) ? "Quản trị viên" : "Thủ thư")</span></div>
+</header>

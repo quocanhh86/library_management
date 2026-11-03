@@ -7,7 +7,9 @@ public enum StatusKind
     Copy,
     Card,
     Loan,
-    Fine
+    Fine,
+    Reservation,
+    Record
 }
 
 /// <summary>
@@ -29,6 +31,9 @@ public record StatusBadge(StatusKind Kind, string Code)
 
     public (string Label, string Tone, string? Icon) Resolve() => (Kind, Code) switch
     {
+        (StatusKind.Record, "ACTIVE") => ("Hoạt động", "ok", "check-circle"),
+        (StatusKind.Record, "INACTIVE") => ("Ngừng hoạt động", "neutral", null),
+        (StatusKind.Record, "LOCKED") => ("Tạm khóa", "stamp", "lock"),
         (StatusKind.Copy, LibraryConstants.CopyStatus.Available) => ("Sẵn sàng", "ok", "check-circle"),
         (StatusKind.Copy, LibraryConstants.CopyStatus.Borrowed) => ("Đang mượn", "brand", null),
         (StatusKind.Copy, LibraryConstants.CopyStatus.Reserved) => ("Đang giữ chỗ", "brand", null),
@@ -50,6 +55,12 @@ public record StatusBadge(StatusKind Kind, string Code)
         (StatusKind.Fine, LibraryConstants.FineStatus.Paid) => ("Đã nộp", "ok", "check-circle"),
         (StatusKind.Fine, LibraryConstants.FineStatus.Waived) => ("Được miễn", "neutral", null),
         (StatusKind.Fine, LibraryConstants.FineStatus.Cancelled) => ("Đã hủy", "neutral", null),
+
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Pending) => ("Đang chờ", "neutral", "hourglass-split"),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Ready) => ("Chờ nhận sách", "ok", "check-circle"),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Fulfilled) => ("Đã nhận", "brand", null),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Cancelled) => ("Đã hủy", "neutral", null),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Expired) => ("Hết hạn giữ", "stamp", "clock"),
 
         _ => (Code, "neutral", null)
     };

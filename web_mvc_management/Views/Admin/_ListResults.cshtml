@@ -1,0 +1,68 @@
+﻿@model AdminListViewModel
+@using System.Text.Json
+<div class="admin-result-head">
+    <p role="status"><strong>@Model.Results.TotalCount</strong> kết quả <span>trong @Model.UnfilteredCount bản ghi</span></p>
+    <span class="shortcut-hint"><kbd>F2</kbd> Tìm nhanh</span>
+</div>
+@if (Model.Results.TotalCount == 0)
+{
+    <div class="admin-empty">
+        <i class="bi bi-search" aria-hidden="true"></i><h2>Không tìm thấy kết quả phù hợp</h2>
+        <p>Thử rút gọn từ khóa hoặc thay đổi bộ lọc trạng thái.</p>
+        <a href="@AdminNavigation.Path(Model.Screen, ViewData["AdminPreview"] is true, User.IsInRole(AppRoles.Admin) ? AppRoles.Admin : AppRoles.Librarian)">Xem toàn bộ danh sách</a>
+    </div>
+}
+else
+{
+    <div class="admin-table-scroll" tabindex="0" role="region" aria-label="Bảng @Model.Title; cuộn ngang để xem đầy đủ">
+        <table class="admin-table admin-records-table">
+            <caption class="visually-hidden">@Model.Title — trang @Model.Results.PageNo</caption>
+            <thead><tr>
+                @foreach (var column in Model.Columns)
+                {
+                    <th scope="col" class="@(column.Numeric ? "admin-numeric" : "")">@column.Label</th>
+                }
+                <th scope="col">Trạng thái</th><th scope="col" class="admin-action-column">Thao tác</th>
+            </tr></thead>
+            <tbody>
+            @foreach (var record in Model.Results.Items)
+            {
+                var data = JsonSerializer.Serialize(record);
+                <tr>
+                    @foreach (var column in Model.Columns)
+                    {
+                        <td class="@(column.Numeric ? "admin-numeric" : "") @(column.Key == "title" ? "admin-title-cell" : "")">
+                            @if (column.Key == "code")
+                            {
+                                <span class="admin-code">@record.Cells.GetValueOrDefault(column.Key)</span>
+                            }
+                            else if (column.Key == "title")
+                            {
+                                <button type="button" class="admin-table-link" data-admin-detail-record="@data" data-status-label="@record.Badge.Resolve().Label" data-bs-toggle="modal" data-bs-target="#adminDetails">@record.Cells.GetValueOrDefault(column.Key)</button>
+                                @if (record.Subtitle is not null){<small>@record.Subtitle</small>}
+                            }
+                            else
+                            {
+                                @record.Cells.GetValueOrDefault(column.Key)
+                            }
+                        </td>
+                    }
+                    <td><partial name="_StatusBadge" model="record.Badge" /></td>
+                    <td class="admin-action-column">
+                        @if (Model.Fields.Count > 0)
+                        {
+                            var actionLabel = Model.Module == "fines" ? "Lập phiếu thu cho" : "Sửa";
+                            <button class="admin-icon-button" type="button" data-admin-edit="@data" data-bs-toggle="modal" data-bs-target="#adminEditor" aria-label="@actionLabel @record.Cells.GetValueOrDefault("title")"><i class="bi @(Model.Module == "fines" ? "bi-cash-coin" : "bi-pencil-square")" aria-hidden="true"></i></button>
+                        }
+                        else
+                        {
+                            <button class="admin-icon-button" type="button" data-admin-detail-record="@data" data-status-label="@record.Badge.Resolve().Label" data-bs-toggle="modal" data-bs-target="#adminDetails" aria-label="Xem chi tiết @record.Id"><i class="bi bi-eye" aria-hidden="true"></i></button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <div class="admin-pagination"><partial name="_Pagination" model="Model.Results" /></div>
+}

@@ -1,0 +1,50 @@
+@model AdminCirculationViewModel
+@{
+    var preview = ViewData["AdminPreview"] is true;
+    var role = User.IsInRole(AppRoles.Admin) ? AppRoles.Admin : AppRoles.Librarian;
+    string Link(ScreenId screen, string? query = null) => AdminNavigation.Path(screen, preview, role, query);
+    var reader = Model.Reader;
+}
+<div class="admin-page-head"><div><p class="admin-eyebrow">Nghiệp vụ tại quầy</p><h1>@(Model.Returning ? "Trả sách" : "Lập phiếu mượn")</h1><p>@(Model.Returning ? "Tìm độc giả, đối chiếu tài liệu và kiểm tra khoản phạt dự kiến." : "Kiểm tra thẻ độc giả trước khi quét mã bản sao vào phiếu.")</p></div><a class="btn btn-quiet" href="@Link(Model.Returning ? ScreenId.CirculationBorrow : ScreenId.CirculationReturn)"><i class="bi @(Model.Returning ? "bi-box-arrow-up-right" : "bi-box-arrow-in-down-left")" aria-hidden="true"></i>@(Model.Returning ? "Chuyển sang mượn sách" : "Chuyển sang trả sách")</a></div>
+<div class="admin-circulation" data-admin-circulation data-returning="@Model.Returning.ToString().ToLowerInvariant()" data-limit="@(reader is null ? 0 : reader.Limit - reader.Borrowed)" data-due="@Model.Today.AddDays(Model.LoanDays).ToString("dd/MM/yyyy")">
+    <aside class="admin-panel admin-reader-lookup">
+        <div class="admin-panel__head"><h2><span class="admin-step">1</span>Kiểm tra độc giả</h2><kbd>F2</kbd></div>
+        <form method="get" action="@Context.Request.Path" class="admin-reader-search">
+            @if(preview){<input type="hidden" name="role" value="@role" />}
+            <label class="form-label" for="readerCard">Mã thẻ độc giả</label><input class="form-control" type="search" id="readerCard" name="card" value="@Model.Card" placeholder="Nhập hoặc quét mã thẻ" list="sampleReaderCards" data-shortcut-focus="F2" autocomplete="off" required />
+            <datalist id="sampleReaderCards">@foreach(var r in Model.Readers){<option value="@r.Code">@r.Name</option>}</datalist><button class="btn btn-primary" type="submit">Tìm độc giả</button><p class="admin-help">Thẻ mẫu: <a href="@Link(Model.Returning ? ScreenId.CirculationReturn : ScreenId.CirculationBorrow, "card=2022000456")">2022000456</a>. Có thể chọn mã khác trong gợi ý.</p>
+        </form>
+        @if(Model.Error is not null){<p class="admin-inline-error" role="alert">@Model.Error</p>}
+        @if(reader is not null)
+        {
+            <div class="admin-reader-card @(!Model.Returning && !Model.CanBorrow ? "admin-reader-card--blocked" : "")"><div class="admin-reader-avatar" aria-hidden="true">@reader.Name.Split(' ').Last()[0]</div><h3>@reader.Name</h3><p class="admin-inline-code">@reader.Code</p><partial name="_StatusBadge" model="new StatusBadge(StatusKind.Card, reader.Status)" /><dl><dt>Loại độc giả</dt><dd>@reader.Type</dd><dt>Hạn thẻ</dt><dd>@reader.Expiry.ToString("dd/MM/yyyy")</dd><dt>Đang mượn</dt><dd>@reader.Borrowed/@reader.Limit cuốn</dd><dt>Nợ phạt dự kiến</dt><dd class="@(reader.Fine > 0 ? "admin-danger" : "")">@CurrencyHelper.ToVnd(reader.Fine)</dd></dl>
+            @if(!Model.Returning && !Model.CanBorrow)
+            {
+                <p class="admin-inline-error" role="alert">@if(reader.Status == "LOCKED"){<span>Thẻ đang bị khóa. Liên hệ thủ thư để kiểm tra trước khi cho mượn.</span>}else if(reader.Expiry < Model.Today){<span>Thẻ đã hết hạn ngày @reader.Expiry.ToString("dd/MM/yyyy"). Gia hạn thẻ trước khi cho mượn.</span>}else if(reader.Fine > 0){<span>Độc giả còn khoản phạt cần đối chiếu. Xử lý khoản phạt trước khi cho mượn.</span>}else{<span>Độc giả đã đạt hạn mức mượn. Trả bớt sách trước khi mượn thêm.</span>}</p><a href="@Link(ScreenId.CirculationReturn, "card=" + reader.Code)">Kiểm tra sách đang mượn</a>
+            }
+            </div>
+        }
+        else{<div class="admin-reader-placeholder"><i class="bi bi-person-vcard" aria-hidden="true"></i><p>Thông tin thẻ và hạn mức mượn sẽ xuất hiện sau khi tìm độc giả.</p></div>}
+    </aside>
+    <section class="admin-panel admin-draft"><div class="admin-panel__head"><h2><span class="admin-step">2</span>@(Model.Returning ? "Đối chiếu sách trả" : "Thêm bản sao vào phiếu")</h2><span class="admin-muted">@(Model.Returning ? "Chọn tài liệu nhận trả" : "Giữ focus để quét liên tiếp")</span></div>
+    @if(Model.Returning)
+    {
+        @if(reader is null){<div class="admin-empty"><i class="bi bi-journal-arrow-down" aria-hidden="true"></i><h3>Chọn độc giả để nhận trả sách</h3><p>Danh sách tài liệu đang mượn sẽ được hiển thị tại đây.</p></div>}
+        else if(Model.Loans.Count == 0){<div class="admin-empty"><i class="bi bi-check-circle" aria-hidden="true"></i><h3>Không có tài liệu đang mượn</h3><p>Độc giả này không có phiếu đang mở trong dữ liệu mẫu.</p></div>}
+        else
+        {
+            <div class="admin-table-scroll"><table class="admin-table admin-return-table"><caption class="visually-hidden">Tài liệu đang mượn của @reader.Name</caption><thead><tr><th scope="col"><input class="form-check-input" type="checkbox" data-return-all aria-label="Chọn tất cả tài liệu trả" /></th><th scope="col">Tài liệu / mã vạch</th><th scope="col">Hạn trả</th><th scope="col">Tình trạng nhận</th><th scope="col" class="admin-numeric">Phạt trả trễ</th></tr></thead><tbody>@foreach(var loan in Model.Loans){var fee = Math.Max(0, Model.Today.DayNumber-loan.DueOn.DayNumber)*Model.FinePerDay;<tr data-return-row data-fine="@fee.ToString(System.Globalization.CultureInfo.InvariantCulture)"><td><input type="checkbox" class="form-check-input" data-return-check aria-label="Nhận trả @loan.BookTitle" /></td><td><strong>@loan.BookTitle</strong><small class="admin-code">@loan.Barcode</small></td><td><partial name="_DueStamp" model="new DueStamp(loan.DueOn,Model.Today)" /></td><td><label class="visually-hidden" for="condition_@loan.Code">Tình trạng @loan.BookTitle</label><select id="condition_@loan.Code" class="form-select" data-return-condition><option value="normal">Bình thường</option><option value="damaged">Hỏng</option><option value="lost">Mất</option></select></td><td class="admin-numeric">@CurrencyHelper.ToVnd(fee)<small data-condition-note hidden>Phạt hỏng/mất: chờ xác nhận</small></td></tr>}</tbody></table></div><p class="admin-help admin-return-note">Phạt trả trễ dự kiến: @CurrencyHelper.ToVnd(Model.FinePerDay)/bản/ngày. Phạt hỏng hoặc mất cần được xác nhận riêng.</p>
+        }
+    }
+    else
+    {
+        <form data-draft-add class="admin-scan-form"><fieldset disabled="@(!Model.CanBorrow)"><label class="form-label" for="copyBarcode">Mã vạch bản sao <kbd>F4</kbd></label><div><input class="form-control" id="copyBarcode" name="barcode" list="sampleBookCopies" autocomplete="off" placeholder="Quét mã hoặc chọn bản sao mẫu" data-shortcut-focus="F4" /><button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i>Thêm vào phiếu</button></div><datalist id="sampleBookCopies">@{var offset=1;}@foreach(var book in Model.Books){var code=$"BC-{offset:D6}";offset+=book.TotalCopies;@if(book.AvailableCopies > 0){<option value="@code" data-title="@book.Title" data-call="@book.CallNumber">@book.Title</option>}}</datalist></fieldset><p role="alert" class="admin-inline-error" hidden data-draft-error></p><p class="admin-help">@(reader is null ? "Tìm độc giả để mở ô quét bản sao." : Model.CanBorrow ? $"Có thể mượn thêm {reader.Limit-reader.Borrowed} cuốn. Bấm Enter sau mỗi mã vạch." : "Ô quét đang khóa vì thẻ chưa đủ điều kiện mượn.")</p></form>
+        <div class="admin-table-scroll"><table class="admin-table"><caption class="visually-hidden">Tài liệu trong phiếu mượn xem thử</caption><thead><tr><th scope="col">Mã vạch</th><th scope="col">Tài liệu</th><th scope="col">Hạn trả dự kiến</th><th scope="col"><span class="visually-hidden">Bỏ khỏi phiếu</span></th></tr></thead><tbody data-draft-rows></tbody></table></div><div class="admin-empty" data-draft-empty><i class="bi bi-upc-scan" aria-hidden="true"></i><h3>Phiếu chưa có tài liệu</h3><p>Quét mã bản sao để thêm sách và xem hạn trả dự kiến.</p></div>
+    }
+    <p class="admin-validation-result admin-draft-result" role="status" hidden data-draft-result></p>
+    </section>
+</div>
+@section ActionBar
+{
+    <div class="action-bar admin-circulation-bar"><div><span class="admin-muted">@(Model.Returning ? "Tài liệu nhận trả" : "Tài liệu trong phiếu")</span><strong><span data-draft-count>0</span> cuốn</strong></div>@if(Model.Returning){<div><span class="admin-muted">Phạt trả trễ dự kiến</span><strong data-return-total>0 ₫</strong></div>}else{<span class="admin-help">Phiếu xem thử; chưa ghi nhận mượn sách.</span>}<button type="button" class="btn btn-primary" data-draft-validate disabled>@(Model.Returning ? "Kiểm tra trả sách" : "Kiểm tra phiếu mượn")</button></div>
+}
