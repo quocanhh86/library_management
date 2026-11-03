@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
+using System.Net;
 using web_mvc_management.Infrastructure;
 
 namespace web_mvc_management.Services;
 
 /// <summary>
 /// Triển khai dịch vụ giới hạn tần suất request theo IP (SEC-17: IP Rate Limiting).
-/// Áp dụng thuật toán Sliding Window 60 giây an toàn đa luồng.
+/// Áp dụng thuật toán Sliding Window 60 giây an toàn đa luồng và chống giả mạo X-Forwarded-For từ client.
 /// </summary>
 public class IpRateLimiterService(IDateTimeProvider dateTimeProvider) : IIpRateLimiterService
 {
@@ -16,33 +17,54 @@ public class IpRateLimiterService(IDateTimeProvider dateTimeProvider) : IIpRateL
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        // 1. Cloudflare header
-        var cfIp = httpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(cfIp))
-        {
-            return cfIp.Trim();
-        }
+        var remoteIp = httpContext.Connection.RemoteIpAddress;
 
-        // 2. X-Forwarded-For (lấy IP đầu tiên của chuỗi client, proxy1, proxy2)
-        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(forwardedFor))
+        // Chỉ tin tưởng các header Proxy (CF-Connecting-IP, X-Forwarded-For, X-Real-IP)
+        // khi kết nối vật lý đến từ Reverse Proxy nội bộ (Loopback), chống Client tự chèn header giả mạo để vượt Rate Limit
+        if (remoteIp == null || IPAddress.IsLoopback(remoteIp))
         {
-            var firstIp = forwardedFor.Split(',')[0].Trim();
-            if (!string.IsNullOrWhiteSpace(firstIp))
+            var cfIp = httpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault();
+            if (TryNormalizeIp(cfIp, out var validCfIp))
             {
-                return firstIp;
+                return validCfIp;
+            }
+
+            var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(forwardedFor))
+            {
+                var firstIp = forwardedFor.Split(',')[0].Trim();
+                if (TryNormalizeIp(firstIp, out var validForwardedIp))
+                {
+                    return validForwardedIp;
+                }
+            }
+
+            var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
+            if (TryNormalizeIp(realIp, out var validRealIp))
+            {
+                return validRealIp;
             }
         }
 
-        // 3. X-Real-IP
-        var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(realIp))
+        return remoteIp?.ToString() ?? "127.0.0.1";
+    }
+
+    private static bool TryNormalizeIp(string? rawIp, out string normalizedIp)
+    {
+        normalizedIp = string.Empty;
+        if (string.IsNullOrWhiteSpace(rawIp))
         {
-            return realIp.Trim();
+            return false;
         }
 
-        // 4. RemoteIpAddress fallback
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        var candidate = rawIp.Trim();
+        if (IPAddress.TryParse(candidate, out var parsed))
+        {
+            normalizedIp = parsed.ToString();
+            return true;
+        }
+
+        return false;
     }
 
     public bool IsAllowed(string ipAddress, string actionType, int maxRequestsPerMinute)

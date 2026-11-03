@@ -33,6 +33,16 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
 });
 
+// Cấu hình Antiforgery Cookie bảo mật (HttpOnly, SameSite=Lax, Header X-CSRF-TOKEN cho AJAX)
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = ".LibraryManagement.Antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
+
 // Database & Cookie Authentication (Ưu tiên cấu hình phân cấp từ .env)
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddCookieAuthentication();
@@ -69,6 +79,16 @@ if (!app.Environment.IsDevelopment())
 
 // Global Exception Handling
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// HTTP Security Headers (Chống Clickjacking, MIME-Sniffing, rò rỉ Referrer)
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none';";
+    await next();
+});
 
 if (!app.Environment.IsDevelopment())
 {

@@ -1,0 +1,58 @@
+@model web_mvc_management.Models.ViewModels.Reader.ReaderPortalPageViewModel
+@{
+    ViewData["Title"] = "Lịch sử mượn trả sách";
+}
+
+<section class="portal-section">
+    <div class="portal-container">
+        <div class="portal-section__head">
+            <div>
+                <p class="portal-kicker">Không gian bạn đọc</p>
+                <h1>Lịch sử mượn trả sách</h1>
+                <p class="portal-section__description">Theo dõi toàn bộ các lượt mượn và trả tài liệu của thẻ @Model.CardNo.</p>
+            </div>
+            <a class="btn btn-quiet" href="@Screens.GetPath(ScreenId.ReaderProfile)">Về thẻ thư viện</a>
+        </div>
+
+        <div class="table-frame">
+            <table class="table data-table">
+                <thead>
+                    <tr>
+                        <th>Mã phiếu</th>
+                        <th>Mã vạch</th>
+                        <th>Tài liệu</th>
+                        <th>Ngày mượn</th>
+                        <th>Hạn trả</th>
+                        <th>Ngày trả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.BorrowHistory.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted-ink">Chưa phát sinh lịch sử mượn trả sách.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.BorrowHistory)
+                        {
+                            <tr>
+                                <td class="num">@item.SlipNo</td>
+                                <td class="num">@item.Barcode</td>
+                                <td>
+                                    <div class="fw-medium">@item.BookTitle</div>
+                                    <div class="fs-xs text-muted-ink">@item.Authors</div>
+                                </td>
+                                <td class="num">@item.BorrowedAt.ToString(AppConstants.DefaultDateFormat)</td>
+                                <td class="num">@item.DueDate.ToString(AppConstants.DefaultDateFormat)</td>
+                                <td class="num">@(item.ReturnedAt?.ToString(AppConstants.DefaultDateFormat) ?? "Đang mượn")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
