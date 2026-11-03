@@ -27,10 +27,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Đảm bảo các biến môi trường phân cấp (__) từ .env được nạp đầy đủ vào IConfiguration
 builder.Configuration.AddEnvironmentVariables();
 
-// Add services to the container (Tự động bảo vệ chống CSRF cho các phương thức POST/PUT/DELETE)
+// Add services to the container:
+// 1. Tự động bảo vệ chống CSRF (AutoValidateAntiforgeryTokenAttribute)
+// 2. Tự động làm sạch (Sanitize) & chặn mã độc HTML/JS/SQLi/Emoji/File giả mạo khi bị can thiệp F12 (InputSanitizationActionFilter)
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+    options.Filters.Add<InputSanitizationActionFilter>();
 });
 
 // Cấu hình Antiforgery Cookie bảo mật (HttpOnly, SameSite=Lax, Header X-CSRF-TOKEN cho AJAX)
@@ -41,6 +44,16 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
+
+// Cấu hình CORS nghiêm ngặt: mặc định khóa toàn bộ Cross-Origin từ domain lạ
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.SetIsOriginAllowed(_ => false)
+              .WithMethods("GET", "POST");
+    });
 });
 
 // Database & Cookie Authentication (Ưu tiên cấu hình phân cấp từ .env)
@@ -80,15 +93,8 @@ if (!app.Environment.IsDevelopment())
 // Global Exception Handling
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// HTTP Security Headers (Chống Clickjacking, MIME-Sniffing, rò rỉ Referrer)
-app.Use(async (context, next) =>
-{
-    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    context.Response.Headers["X-Frame-Options"] = "DENY";
-    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none';";
-    await next();
-});
+// Bảo vệ tầng HTTP Request/Response: Security Headers (CSP, X-Frame-Options, nosniff), chặn Cross-Site POST (Sec-Fetch-Site/Origin), chặn Path Traversal & Null-byte
+app.UseMiddleware<RequestSecurityMiddleware>();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -96,6 +102,8 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStaticFiles();
 app.UseRouting();
+
+app.UseCors();
 
 // Stateful Session và Xác thực Cookie Authentication
 app.UseSession();
