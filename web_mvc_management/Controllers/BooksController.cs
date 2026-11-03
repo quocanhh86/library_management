@@ -1,41 +1,46 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Services;
-using web_mvc_management.Models.ViewModels.Catalog;
-using web_mvc_management.Util;
 
 namespace web_mvc_management.Controllers;
 
 public class BooksController(IBookService bookService) : BaseController
 {
-    // Presentation over the existing UI catalog service; no persistence changes.
     [HttpGet]
-    public async Task<IActionResult> Index(string? keyword, string? category, int? year, bool available = false, int page = 1, CancellationToken ct = default)
+    public async Task<IActionResult> Index(
+        string? keyword,
+        string? category,
+        Guid? authorId,
+        Guid? publisherId,
+        int? year,
+        bool available = false,
+        int page = 1,
+        CancellationToken ct = default)
     {
-        var books = await bookService.GetNewArrivalsAsync(int.MaxValue, ct);
-        var term = StringUtil.RemoveVietnameseSigns(keyword?.Trim() ?? string.Empty).ToLowerInvariant();
-        var filtered = books.Where(b =>
-            (term.Length == 0 || StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors} {b.Isbn}").ToLowerInvariant().Contains(term)) &&
-            (string.IsNullOrEmpty(category) || b.CategoryKey == category) &&
-            (year == null || b.PublicationYear == year) &&
-            (!available || b.AvailableCopies > 0)).ToList();
-        const int pageSize = 10;
-        var pages = Math.Max(1, (int)Math.Ceiling(filtered.Count / (double)pageSize));
-        page = Math.Clamp(page, 1, pages);
-        return View(new CatalogViewModel
-        {
-            Books = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
-            Topics = await bookService.GetTopicsAsync(ct),
-            Keyword = keyword, Category = category, Year = year, Available = available,
-            Page = page, TotalCount = filtered.Count, TotalPages = pages
-        });
+        var model = await bookService.GetPublicCatalogAsync(
+            keyword,
+            category,
+            authorId,
+            publisherId,
+            year,
+            available,
+            page,
+            ct);
+
+        return View(model);
     }
 
     [HttpGet]
     public async Task<IActionResult> Detail(Guid id, CancellationToken ct)
     {
-        var books = await bookService.GetNewArrivalsAsync(int.MaxValue, ct);
-        var book = books.FirstOrDefault(b => b.Id == id);
-        if (book is null) return NotFound();
+        var book = await bookService.GetPublicBookDetailAsync(id, ct);
+        if (book is null)
+        {
+            return NotFound();
+        }
+
         return View(book);
     }
 

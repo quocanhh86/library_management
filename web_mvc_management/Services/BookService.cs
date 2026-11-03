@@ -1,0 +1,1037 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using web_mvc_management.Common;
+using web_mvc_management.Constant;
+using web_mvc_management.Entity;
+using web_mvc_management.Extensions;
+using web_mvc_management.Helper;
+using web_mvc_management.Infrastructure;
+using web_mvc_management.Models.ViewModels.AdminCatalog;
+using web_mvc_management.Models.ViewModels.Catalog;
+using web_mvc_management.Models.ViewModels.Home;
+using web_mvc_management.Repositories;
+using web_mvc_management.Util;
+
+namespace web_mvc_management.Services;
+
+public class BookService(
+    IUnitOfWork unitOfWork,
+    IDateTimeProvider dateTimeProvider) : IBookService
+{
+    // =========================================================================
+    // 1. TRA CỨU DANH MỤC SÁCH CÔNG KHAI (PUBLIC & READER PORTAL)
+    // =========================================================================
+    public async Task<IReadOnlyList<BookSummaryViewModel>> GetNewArrivalsAsync(int count, CancellationToken ct = default)
+    {
+        var books = await unitOfWork.Books.GetQueryable(asNoTracking: true)
+            .AsSplitQuery()
+            .Include(b => b.Category)
+            .Include(b => b.Publisher)
+            .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
+                .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
+                .ThenInclude(bc => bc.Shelf)
+            .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
+                .ThenInclude(bc => bc.BorrowDetails.Where(bd => bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted))
+            .Where(b => b.Status == EntityStatus.Active)
+            .OrderByDescending(b => b.CreatedAt)
+            .ThenByDescending(b => b.PublicationYear)
+            .Take(count)
+            .ToListAsync(ct);
+
+        return books.Select(b => MapToSummaryViewModel(b, includeCopies: false)).ToList();
+    }
+
+    public async Task<IReadOnlyList<TopicViewModel>> GetTopicsAsync(CancellationToken ct = default)
+    {
+        var categories = await unitOfWork.Categories.GetQueryable(asNoTracking: true)
+            .Where(c => c.Status == EntityStatus.Active)
+            .OrderBy(c => c.Name)
+            .ToListAsync(ct);
+
+        return categories
+            .Select(c => new TopicViewModel(c.Id.ToString(), c.Name))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<BookSummaryViewModel>> SuggestAsync(string keyword, int limit = 6, CancellationToken ct = default)
+    {
+        var term = StringUtil.RemoveVietnameseSigns(keyword.Trim()).ToLowerInvariant();
+        if (term.Length < 2)
+        {
+            return [];
+        }
+
+        var allActive = await GetNewArrivalsAsync(200, ct);
+        return allActive
+            .Where(b => StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors} {b.Isbn}").ToLowerInvariant().Contains(term))
+            .Take(limit)
+            .ToList();
+    }
+
+    public async Task<CatalogViewModel> GetPublicCatalogAsync(
+        string? keyword,
+        string? category,
+        Guid? authorId,
+        Guid? publisherId,
+        int? year,
+        bool available,
+        int page,
+        CancellationToken ct = default)
+    {
+        var query = unitOfWork.Books.GetQueryable(asNoTracking: true)
+            .AsSplitQuery()
+            .Include(b => b.Category)
+            .Include(b => b.Publisher)
+            .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
+                .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
+                .ThenInclude(bc => bc.Shelf)
+            .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
+                .ThenInclude(bc => bc.BorrowDetails.Where(bd => bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted))
+            .Where(b => b.Status == EntityStatus.Active);
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            if (Guid.TryParse(category, out var categoryGuid))
+            {
+                query = query.Where(b => b.CategoryId == categoryGuid);
+            }
+        }
+
+        if (authorId.HasValue)
+        {
+            query = query.Where(b => b.BookAuthors.Any(ba => ba.AuthorId == authorId.Value && ba.Status != EntityStatus.Deleted));
+        }
+
+        if (publisherId.HasValue)
+        {
+            query = query.Where(b => b.PublisherId == publisherId.Value);
+        }
+
+        if (year.HasValue)
+        {
+            query = query.Where(b => b.PublicationYear == (short)year.Value);
+        }
+
+        var books = await query
+            .OrderByDescending(b => b.CreatedAt)
+            .ToListAsync(ct);
+
+        var mapped = books.Select(b => MapToSummaryViewModel(b, includeCopies: false)).ToList();
+
+        if (!string.IsNullOrWhiteSpace(category) && !Guid.TryParse(category, out _))
+        {
+            mapped = mapped.Where(b => b.CategoryKey.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var term = StringUtil.RemoveVietnameseSigns(keyword.Trim()).ToLowerInvariant();
+            mapped = mapped.Where(b =>
+                StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors} {b.Publisher} {b.Isbn}").ToLowerInvariant().Contains(term)).ToList();
+        }
+
+        if (available)
+        {
+            mapped = mapped.Where(b => b.AvailableCopies > 0).ToList();
+        }
+
+        const int pageSize = 10;
+        var totalCount = mapped.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+        var safePage = Math.Clamp(page <= 0 ? 1 : page, 1, totalPages);
+
+        var topics = await GetTopicsAsync(ct);
+        var authors = await unitOfWork.Authors.GetQueryable(asNoTracking: true)
+            .Where(a => a.Status == EntityStatus.Active)
+            .OrderBy(a => a.FullName)
+            .Select(a => new SelectOptionViewModel(a.Id, a.FullName))
+            .ToListAsync(ct);
+
+        var publishers = await unitOfWork.Publishers.GetQueryable(asNoTracking: true)
+            .Where(p => p.Status == EntityStatus.Active)
+            .OrderBy(p => p.Name)
+            .Select(p => new SelectOptionViewModel(p.Id, p.Name))
+            .ToListAsync(ct);
+
+        return new CatalogViewModel
+        {
+            Books = mapped.Skip((safePage - 1) * pageSize).Take(pageSize).ToList(),
+            Topics = topics,
+            Authors = authors,
+            Publishers = publishers,
+            Keyword = keyword,
+            Category = category,
+            AuthorId = authorId,
+            PublisherId = publisherId,
+            Year = year,
+            Available = available,
+            Page = safePage,
+            TotalCount = totalCount,
+            TotalPages = totalPages
+        };
+    }
+
+    public async Task<BookSummaryViewModel?> GetPublicBookDetailAsync(Guid id, CancellationToken ct = default)
+    {
+        var book = await unitOfWork.Books.GetQueryable(asNoTracking: true)
+            .AsSplitQuery()
+            .Include(b => b.Category)
+            .Include(b => b.Publisher)
+            .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
+                .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted))
+                .ThenInclude(bc => bc.Shelf)
+            .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted))
+                .ThenInclude(bc => bc.BorrowDetails.Where(bd => bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted))
+            .FirstOrDefaultAsync(b => b.Id == id && b.Status != EntityStatus.Deleted, ct);
+
+        if (book == null)
+        {
+            return null;
+        }
+
+        return MapToSummaryViewModel(book, includeCopies: true);
+    }
+
+    // =========================================================================
+    // 2. QUẢN TRỊ ĐẦU SÁCH & NHẬP SÁCH MỚI (/Admin/Books)
+    // =========================================================================
+    public async Task<PagedResult<AdminBookListItemViewModel>> GetAdminBooksPagedAsync(AdminBookFilter filter, CancellationToken ct = default)
+    {
+        var query = unitOfWork.Books.GetQueryable(asNoTracking: true);
+
+        if (filter.Status == EntityStatus.Deleted)
+        {
+            query = query.Where(b => b.Status == EntityStatus.Deleted);
+        }
+        else
+        {
+            query = query.Where(b => b.Status != EntityStatus.Deleted);
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+            {
+                query = query.Where(b => b.Status == filter.Status);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Keyword))
+        {
+            var kw = filter.Keyword.ToLower();
+            query = query.Where(b =>
+                b.Title.ToLower().Contains(kw) ||
+                (b.Isbn != null && b.Isbn.ToLower().Contains(kw)) ||
+                b.BookAuthors.Any(ba => ba.Status != EntityStatus.Deleted && ba.Author.FullName.ToLower().Contains(kw)));
+        }
+
+        if (filter.CategoryId.HasValue)
+        {
+            query = query.Where(b => b.CategoryId == filter.CategoryId.Value);
+        }
+
+        if (filter.AuthorId.HasValue)
+        {
+            query = query.Where(b => b.BookAuthors.Any(ba => ba.AuthorId == filter.AuthorId.Value && ba.Status != EntityStatus.Deleted));
+        }
+
+        if (filter.PublisherId.HasValue)
+        {
+            query = query.Where(b => b.PublisherId == filter.PublisherId.Value);
+        }
+
+        if (filter.PublicationYear.HasValue)
+        {
+            query = query.Where(b => b.PublicationYear == filter.PublicationYear.Value);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var pageNo = filter.NormalizedPageNo;
+        var pageSize = filter.PageItemSize;
+
+        var rawItems = await query
+            .AsSplitQuery()
+            .Include(b => b.Category)
+            .Include(b => b.Publisher)
+            .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
+                .ThenInclude(ba => ba.Author)
+            .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted))
+                .ThenInclude(bc => bc.Shelf)
+            .OrderByDescending(b => b.CreatedAt)
+            .Skip(filter.SkipCount)
+            .Take(filter.TakeCount)
+            .ToListAsync(ct);
+
+        var items = rawItems.Select(b =>
+        {
+            var activeCopies = b.BookCopies.Where(c => c.Status != EntityStatus.Deleted).ToList();
+            var nonDisposed = activeCopies.Where(c => c.CopyStatus != LibraryConstants.CopyStatus.Disposed).ToList();
+            var shelves = nonDisposed
+                .Where(c => c.Shelf != null)
+                .Select(c => c.Shelf!.Code)
+                .Distinct()
+                .ToList();
+
+            var authors = b.BookAuthors
+                .Where(ba => ba.Status != EntityStatus.Deleted && ba.Author != null)
+                .OrderBy(ba => ba.AuthorOrder)
+                .Select(ba => ba.Author.FullName)
+                .ToList();
+
+            return new AdminBookListItemViewModel
+            {
+                Id = b.Id,
+                Title = b.Title,
+                Isbn = b.Isbn,
+                CategoryId = b.CategoryId,
+                CategoryName = b.Category?.Name ?? "Chưa phân loại",
+                PublisherId = b.PublisherId,
+                PublisherName = b.Publisher?.Name ?? "Chưa rõ NXB",
+                AuthorsText = authors.Count > 0 ? string.Join(", ", authors) : "Chưa gán tác giả",
+                PublicationYear = b.PublicationYear,
+                Edition = b.Edition,
+                Language = b.Language,
+                Status = b.Status,
+                TotalCopies = nonDisposed.Count,
+                AvailableCopies = nonDisposed.Count(c => c.CopyStatus == LibraryConstants.CopyStatus.Available),
+                BorrowedCopies = nonDisposed.Count(c => c.CopyStatus == LibraryConstants.CopyStatus.Borrowed || c.CopyStatus == LibraryConstants.CopyStatus.Reserved),
+                DamagedOrLostCopies = nonDisposed.Count(c => c.CopyStatus == LibraryConstants.CopyStatus.Damaged || c.CopyStatus == LibraryConstants.CopyStatus.Lost),
+                DisposedCopies = activeCopies.Count(c => c.CopyStatus == LibraryConstants.CopyStatus.Disposed),
+                ShelfSummary = shelves.Count > 0 ? string.Join(", ", shelves) : "—",
+                CreatedAt = b.CreatedAt
+            };
+        }).ToList();
+
+        return new PagedResult<AdminBookListItemViewModel>(items, totalCount, pageNo, pageSize);
+    }
+
+    public async Task<BookUpsertViewModel?> GetBookForEditAsync(Guid id, CancellationToken ct = default)
+    {
+        var book = await unitOfWork.Books.GetQueryable(asNoTracking: true)
+            .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
+            .FirstOrDefaultAsync(b => b.Id == id && b.Status != EntityStatus.Deleted, ct);
+
+        if (book == null)
+        {
+            return null;
+        }
+
+        return new BookUpsertViewModel
+        {
+            Id = book.Id,
+            Title = book.Title,
+            Isbn = book.Isbn,
+            CategoryId = book.CategoryId,
+            PublisherId = book.PublisherId,
+            AuthorIds = book.BookAuthors
+                .Where(ba => ba.Status != EntityStatus.Deleted)
+                .OrderBy(ba => ba.AuthorOrder)
+                .Select(ba => ba.AuthorId)
+                .ToList(),
+            PublicationYear = book.PublicationYear,
+            Edition = book.Edition,
+            Language = book.Language,
+            PageCount = book.PageCount,
+            Description = book.Description,
+            CoverUrl = book.CoverUrl,
+            Status = book.Status,
+            InitialCopyCount = 0
+        };
+    }
+
+    public async Task<ServiceResult<Guid>> CreateBookWithCopiesAsync(BookUpsertViewModel model, CancellationToken ct = default)
+    {
+        var isbnTrim = string.IsNullOrWhiteSpace(model.Isbn) ? null : model.Isbn.Trim();
+        if (isbnTrim != null)
+        {
+            var exists = await unitOfWork.Books.ExistsAsync(
+                b => b.Status != EntityStatus.Deleted && b.Isbn == isbnTrim,
+                ct);
+            if (exists)
+            {
+                return ServiceResult<Guid>.ValidationError(ErrorCode.BookIsbnAlreadyExists);
+            }
+        }
+
+        if (model.InitialCopyCount > 0 && (!model.ShelfId.HasValue || model.ShelfId.Value == Guid.Empty))
+        {
+            return ServiceResult<Guid>.ValidationError(ErrorCode.ShelfNotFound, "Vui lòng chọn vị trí kệ khi nhập số lượng bản sao ban đầu.");
+        }
+
+        await unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            var book = new Book
+            {
+                Id = Guid.NewGuid(),
+                Title = model.Title.Trim(),
+                Isbn = isbnTrim,
+                CategoryId = model.CategoryId,
+                PublisherId = model.PublisherId,
+                PublicationYear = model.PublicationYear,
+                Edition = model.Edition?.Trim(),
+                Language = model.Language?.Trim(),
+                PageCount = model.PageCount,
+                Description = model.Description?.Trim(),
+                CoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim(),
+                Status = model.Status
+            };
+
+            await unitOfWork.Books.AddAsync(book, ct);
+
+            // Liên kết danh sách tác giả
+            var distinctAuthors = model.AuthorIds.Distinct().ToList();
+            short order = 1;
+            foreach (var authorId in distinctAuthors)
+            {
+                await unitOfWork.BookAuthors.AddAsync(new BookAuthor
+                {
+                    BookId = book.Id,
+                    AuthorId = authorId,
+                    AuthorOrder = order++,
+                    Status = EntityStatus.Active
+                }, ct);
+            }
+
+            // Tự động sinh N bản sao vật lý kèm mã vạch nếu có yêu cầu nhập kho
+            var generatedCount = 0;
+            if (model.InitialCopyCount > 0)
+            {
+                var acquired = model.AcquiredDate ?? dateTimeProvider.Today;
+                var generatedBarcodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                for (int i = 0; i < model.InitialCopyCount; i++)
+                {
+                    var barcode = await GenerateUniqueBarcodeAsync(generatedBarcodes, ct);
+                    generatedBarcodes.Add(barcode);
+
+                    await unitOfWork.BookCopies.AddAsync(new BookCopy
+                    {
+                        Id = Guid.NewGuid(),
+                        BookId = book.Id,
+                        ShelfId = model.ShelfId,
+                        Barcode = barcode,
+                        CopyStatus = LibraryConstants.CopyStatus.Available,
+                        Price = model.CopyPrice,
+                        AcquiredDate = acquired,
+                        Note = model.CopyNote?.Trim(),
+                        Status = EntityStatus.Active
+                    }, ct);
+                    generatedCount++;
+                }
+            }
+
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            var msg = generatedCount > 0
+                ? $"Đã nhập đầu sách \"{book.Title}\" kèm {generatedCount} bản sao sẵn sàng trên kệ."
+                : $"Đã thêm đầu sách \"{book.Title}\".";
+
+            return ServiceResult<Guid>.Success(book.Id, msg);
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task<ServiceResult> UpdateBookAsync(BookUpsertViewModel model, CancellationToken ct = default)
+    {
+        if (!model.Id.HasValue || model.Id.Value == Guid.Empty)
+        {
+            return ServiceResult.Failure(ErrorCode.BookNotFound);
+        }
+
+        var book = await unitOfWork.Books.FirstOrDefaultAsync(
+            b => b.Id == model.Id.Value && b.Status != EntityStatus.Deleted,
+            asNoTracking: false,
+            ct);
+
+        if (book == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookNotFound);
+        }
+
+        var isbnTrim = string.IsNullOrWhiteSpace(model.Isbn) ? null : model.Isbn.Trim();
+        if (isbnTrim != null)
+        {
+            var duplicateIsbn = await unitOfWork.Books.ExistsAsync(
+                b => b.Status != EntityStatus.Deleted && b.Isbn == isbnTrim && b.Id != book.Id,
+                ct);
+            if (duplicateIsbn)
+            {
+                return ServiceResult.ValidationError(ErrorCode.BookIsbnAlreadyExists);
+            }
+        }
+
+        await unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            book.Title = model.Title.Trim();
+            book.Isbn = isbnTrim;
+            book.CategoryId = model.CategoryId;
+            book.PublisherId = model.PublisherId;
+            book.PublicationYear = model.PublicationYear;
+            book.Edition = model.Edition?.Trim();
+            book.Language = model.Language?.Trim();
+            book.PageCount = model.PageCount;
+            book.Description = model.Description?.Trim();
+            book.CoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim();
+            book.Status = model.Status;
+
+            unitOfWork.Books.Update(book);
+
+            // Đồng bộ lại danh sách tác giả (BookAuthors) bằng Xóa mềm (Soft Delete)
+            var existingLinks = await unitOfWork.BookAuthors.FindAsync(
+                ba => ba.BookId == book.Id,
+                asNoTracking: false,
+                ct);
+
+            var distinctAuthors = model.AuthorIds.Distinct().ToList();
+            var existingByAuthorId = existingLinks.ToDictionary(ba => ba.AuthorId);
+
+            foreach (var link in existingLinks)
+            {
+                if (!distinctAuthors.Contains(link.AuthorId) && link.Status != EntityStatus.Deleted)
+                {
+                    link.Status = EntityStatus.Deleted;
+                    unitOfWork.BookAuthors.Update(link);
+                }
+            }
+
+            short order = 1;
+            foreach (var authorId in distinctAuthors)
+            {
+                if (existingByAuthorId.TryGetValue(authorId, out var existingLink))
+                {
+                    existingLink.AuthorOrder = order++;
+                    existingLink.Status = EntityStatus.Active;
+                    unitOfWork.BookAuthors.Update(existingLink);
+                }
+                else
+                {
+                    await unitOfWork.BookAuthors.AddAsync(new BookAuthor
+                    {
+                        BookId = book.Id,
+                        AuthorId = authorId,
+                        AuthorOrder = order++,
+                        Status = EntityStatus.Active
+                    }, ct);
+                }
+            }
+
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã cập nhật thông tin đầu sách \"{book.Title}\".");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task<ServiceResult> DeleteBookAsync(Guid id, CancellationToken ct = default)
+    {
+        var book = await unitOfWork.Books.FirstOrDefaultAsync(
+            b => b.Id == id && b.Status != EntityStatus.Deleted,
+            asNoTracking: false,
+            ct);
+
+        if (book == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookNotFound);
+        }
+
+        var hasActiveCopies = await unitOfWork.BookCopies.ExistsAsync(
+            c => c.BookId == id &&
+                 c.Status != EntityStatus.Deleted &&
+                 (c.CopyStatus == LibraryConstants.CopyStatus.Borrowed || c.CopyStatus == LibraryConstants.CopyStatus.Reserved),
+            ct);
+
+        if (hasActiveCopies)
+        {
+            return ServiceResult.Failure(ErrorCode.BookHasBorrowedCopies);
+        }
+
+        book.Status = EntityStatus.Deleted;
+        unitOfWork.Books.Update(book);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult.Success($"Đã xóa mềm đầu sách \"{book.Title}\" (chuyển sang DELETED).");
+    }
+
+    public async Task<ServiceResult> RestoreBookAsync(Guid id, CancellationToken ct = default)
+    {
+        var book = await unitOfWork.Books.FirstOrDefaultAsync(
+            b => b.Id == id && b.Status == EntityStatus.Deleted,
+            asNoTracking: false,
+            ct);
+
+        if (book == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookNotFound);
+        }
+
+        book.Status = EntityStatus.Active;
+        unitOfWork.Books.Update(book);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult.Success($"Đã khôi phục đầu sách \"{book.Title}\" về trạng thái hoạt động.");
+    }
+
+    public async Task<ServiceResult> HardDeleteBookAsync(Guid id, string? confirmCode, CancellationToken ct = default)
+    {
+        var book = await unitOfWork.Books.GetByIdAsync(id, ct);
+        if (book == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookNotFound);
+        }
+
+        if (book.Status != EntityStatus.Deleted)
+        {
+            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+        }
+
+        if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
+        {
+            return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
+        }
+
+        var hasCopiesOrReservations = await unitOfWork.BookCopies.ExistsAsync(c => c.BookId == id, ct) ||
+                                      await unitOfWork.Reservations.ExistsAsync(r => r.BookId == id, ct);
+
+        if (hasCopiesOrReservations)
+        {
+            return ServiceResult.Failure(
+                ErrorCode.CommonRecordInUse,
+                "Không thể xóa vĩnh viễn đầu sách vì vẫn còn bản sao vật lý hoặc lịch sử đặt trước liên kết. Vui lòng xóa vĩnh viễn các bản sao trước.");
+        }
+
+        var authorLinks = await unitOfWork.BookAuthors.FindAsync(ba => ba.BookId == id, asNoTracking: false, ct);
+        if (authorLinks.Count > 0)
+        {
+            unitOfWork.BookAuthors.DeleteRange(authorLinks);
+        }
+
+        unitOfWork.Books.Delete(book);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult.Success($"Đã xóa vĩnh viễn đầu sách \"{book.Title}\" khỏi cơ sở dữ liệu.");
+    }
+
+    // =========================================================================
+    // 3. QUẢN LÝ BẢN SAO / MÃ VẠCH & THANH LÝ, HỦY SÁCH HỎNG/MẤT (/Admin/BookCopies)
+    // =========================================================================
+    public async Task<PagedResult<AdminBookCopyListItemViewModel>> GetBookCopiesPagedAsync(AdminBookCopyFilter filter, CancellationToken ct = default)
+    {
+        var query = unitOfWork.BookCopies.GetQueryable(asNoTracking: true);
+
+        if (filter.Status == EntityStatus.Deleted)
+        {
+            query = query.Where(c => c.Status == EntityStatus.Deleted);
+        }
+        else
+        {
+            query = query.Where(c => c.Status != EntityStatus.Deleted && c.Book.Status != EntityStatus.Deleted);
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+            {
+                query = query.Where(c => c.Status == filter.Status);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Keyword))
+        {
+            var kw = filter.Keyword.ToLower();
+            query = query.Where(c =>
+                c.Barcode.ToLower().Contains(kw) ||
+                c.Book.Title.ToLower().Contains(kw) ||
+                (c.Book.Isbn != null && c.Book.Isbn.ToLower().Contains(kw)));
+        }
+
+        if (filter.BookId.HasValue)
+        {
+            query = query.Where(c => c.BookId == filter.BookId.Value);
+        }
+
+        if (filter.ShelfId.HasValue)
+        {
+            query = query.Where(c => c.ShelfId == filter.ShelfId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.CopyStatus))
+        {
+            query = query.Where(c => c.CopyStatus == filter.CopyStatus);
+        }
+
+        return await query
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenBy(c => c.Barcode)
+            .Select(c => new AdminBookCopyListItemViewModel
+            {
+                Id = c.Id,
+                BookId = c.BookId,
+                BookTitle = c.Book.Title,
+                Isbn = c.Book.Isbn,
+                Barcode = c.Barcode,
+                ShelfId = c.ShelfId,
+                ShelfCode = c.Shelf != null ? c.Shelf.Code : "Chưa xếp kệ",
+                CopyStatus = c.CopyStatus,
+                Status = c.Status,
+                Price = c.Price,
+                AcquiredDate = c.AcquiredDate,
+                DisposedAt = c.DisposedAt,
+                DisposalReason = c.DisposalReason,
+                Note = c.Note
+            })
+            .ToPagedResultAsync(filter, ct);
+    }
+
+    public async Task<ServiceResult<int>> CreateBookCopiesBatchAsync(BookCopyBatchCreateViewModel model, CancellationToken ct = default)
+    {
+        var book = await unitOfWork.Books.FirstOrDefaultAsync(
+            b => b.Id == model.BookId && b.Status != EntityStatus.Deleted,
+            asNoTracking: true,
+            ct);
+
+        if (book == null)
+        {
+            return ServiceResult<int>.Failure(ErrorCode.BookNotFound);
+        }
+
+        var shelfExists = await unitOfWork.Shelves.ExistsAsync(
+            s => s.Id == model.ShelfId && s.Status != EntityStatus.Deleted,
+            ct);
+
+        if (!shelfExists)
+        {
+            return ServiceResult<int>.Failure(ErrorCode.ShelfNotFound);
+        }
+
+        if (model.Quantity == 1 && !string.IsNullOrWhiteSpace(model.CustomBarcode))
+        {
+            var customTrim = model.CustomBarcode.Trim().ToUpperInvariant();
+            if (await unitOfWork.BookCopies.ExistsAsync(c => c.Barcode.ToUpper() == customTrim, ct))
+            {
+                return ServiceResult<int>.ValidationError(ErrorCode.BookCopyBarcodeAlreadyExists);
+            }
+
+            await unitOfWork.BookCopies.AddAsync(new BookCopy
+            {
+                Id = Guid.NewGuid(),
+                BookId = book.Id,
+                ShelfId = model.ShelfId,
+                Barcode = customTrim,
+                CopyStatus = LibraryConstants.CopyStatus.Available,
+                Price = model.Price,
+                AcquiredDate = model.AcquiredDate ?? dateTimeProvider.Today,
+                Note = model.Note?.Trim(),
+                Status = EntityStatus.Active
+            }, ct);
+
+            await unitOfWork.SaveChangesAsync(ct);
+            return ServiceResult<int>.Success(1, $"Đã nhập bản sao mã vạch {customTrim} cho sách \"{book.Title}\".");
+        }
+
+        var generatedBarcodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var acquiredDate = model.AcquiredDate ?? dateTimeProvider.Today;
+
+        for (int i = 0; i < model.Quantity; i++)
+        {
+            var barcode = await GenerateUniqueBarcodeAsync(generatedBarcodes, ct);
+            generatedBarcodes.Add(barcode);
+
+            await unitOfWork.BookCopies.AddAsync(new BookCopy
+            {
+                Id = Guid.NewGuid(),
+                BookId = book.Id,
+                ShelfId = model.ShelfId,
+                Barcode = barcode,
+                CopyStatus = LibraryConstants.CopyStatus.Available,
+                Price = model.Price,
+                AcquiredDate = acquiredDate,
+                Note = model.Note?.Trim(),
+                Status = EntityStatus.Active
+            }, ct);
+        }
+
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult<int>.Success(model.Quantity, $"Đã nhập bổ sung {model.Quantity} bản sao mới cho đầu sách \"{book.Title}\".");
+    }
+
+    public async Task<ServiceResult> UpdateBookCopyAsync(BookCopyUpdateViewModel model, CancellationToken ct = default)
+    {
+        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+            c => c.Id == model.Id && c.Status != EntityStatus.Deleted,
+            asNoTracking: false,
+            ct);
+
+        if (copy == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+        }
+
+        copy.ShelfId = model.ShelfId;
+        copy.Price = model.Price;
+        copy.Note = model.Note?.Trim();
+
+        if (model.RestoreToAvailable)
+        {
+            if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed)
+            {
+                return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+            }
+
+            copy.CopyStatus = LibraryConstants.CopyStatus.Available;
+            copy.DisposedAt = null;
+            copy.DisposalReason = null;
+        }
+
+        unitOfWork.BookCopies.Update(copy);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult.Success($"Đã cập nhật bản sao mã vạch {copy.Barcode}.");
+    }
+
+    public async Task<ServiceResult> DisposeOrMarkCopyAsync(BookCopyDisposeViewModel model, CancellationToken ct = default)
+    {
+        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+            c => c.Id == model.CopyId && c.Status != EntityStatus.Deleted,
+            asNoTracking: false,
+            ct);
+
+        if (copy == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+        }
+
+        if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed)
+        {
+            return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+        }
+
+        var validStatuses = new[]
+        {
+            LibraryConstants.CopyStatus.Damaged,
+            LibraryConstants.CopyStatus.Lost,
+            LibraryConstants.CopyStatus.Disposed
+        };
+
+        if (!validStatuses.Contains(model.TargetStatus))
+        {
+            return ServiceResult.Failure(ErrorCode.CommonInvalidRequest);
+        }
+
+        copy.CopyStatus = model.TargetStatus;
+        copy.DisposedAt = dateTimeProvider.UtcNow;
+        copy.DisposalReason = model.DisposalReason.Trim();
+        if (!string.IsNullOrWhiteSpace(model.Note))
+        {
+            copy.Note = model.Note.Trim();
+        }
+
+        unitOfWork.BookCopies.Update(copy);
+        await unitOfWork.SaveChangesAsync(ct);
+
+        var actionName = model.TargetStatus switch
+        {
+            LibraryConstants.CopyStatus.Damaged => "ghi nhận hư hỏng",
+            LibraryConstants.CopyStatus.Lost => "ghi nhận mất",
+            _ => "thanh lý"
+        };
+
+        return ServiceResult.Success($"Đã {actionName} bản sao mã vạch {copy.Barcode}.");
+    }
+
+    public async Task<ServiceResult> SoftDeleteBookCopyAsync(Guid id, CancellationToken ct = default)
+    {
+        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+            c => c.Id == id && c.Status != EntityStatus.Deleted,
+            asNoTracking: false,
+            ct);
+
+        if (copy == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+        }
+
+        if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed)
+        {
+            return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+        }
+
+        copy.Status = EntityStatus.Deleted;
+        unitOfWork.BookCopies.Update(copy);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult.Success($"Đã xóa mềm bản sao mã vạch {copy.Barcode} (chuyển sang DELETED).");
+    }
+
+    public async Task<ServiceResult> RestoreBookCopyAsync(Guid id, CancellationToken ct = default)
+    {
+        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+            c => c.Id == id && c.Status == EntityStatus.Deleted,
+            asNoTracking: false,
+            ct);
+
+        if (copy == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+        }
+
+        copy.Status = EntityStatus.Active;
+        unitOfWork.BookCopies.Update(copy);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult.Success($"Đã khôi phục bản sao mã vạch {copy.Barcode} về trạng thái hoạt động.");
+    }
+
+    public async Task<ServiceResult> HardDeleteBookCopyAsync(Guid id, string? confirmCode, CancellationToken ct = default)
+    {
+        var copy = await unitOfWork.BookCopies.GetByIdAsync(id, ct);
+        if (copy == null)
+        {
+            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+        }
+
+        if (copy.Status != EntityStatus.Deleted)
+        {
+            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+        }
+
+        if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
+        {
+            return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
+        }
+
+        var hasBorrowHistory = await unitOfWork.BorrowDetails.ExistsAsync(bd => bd.CopyId == id, ct);
+        if (hasBorrowHistory)
+        {
+            return ServiceResult.Failure(
+                ErrorCode.CommonRecordInUse,
+                "Không thể xóa vĩnh viễn bản sao đã phát sinh lịch sử mượn trả.");
+        }
+
+        unitOfWork.BookCopies.Delete(copy);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ServiceResult.Success($"Đã xóa vĩnh viễn bản sao mã vạch {copy.Barcode} khỏi cơ sở dữ liệu.");
+    }
+
+    // =========================================================================
+    // HELPER METHODS
+    // =========================================================================
+    private async Task<string> GenerateUniqueBarcodeAsync(HashSet<string> batchSet, CancellationToken ct)
+    {
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            var candidate = BarcodeHelper.GenerateBarcode();
+            if (batchSet.Contains(candidate))
+            {
+                continue;
+            }
+
+            var existsInDb = await unitOfWork.BookCopies.ExistsAsync(c => c.Barcode == candidate, ct);
+            if (!existsInDb)
+            {
+                return candidate;
+            }
+        }
+
+        return $"BC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..4].ToUpperInvariant()}";
+    }
+
+    private static BookSummaryViewModel MapToSummaryViewModel(Book b, bool includeCopies)
+    {
+        var activeCopies = b.BookCopies
+            .Where(c => c.Status != EntityStatus.Deleted && c.CopyStatus != LibraryConstants.CopyStatus.Disposed)
+            .ToList();
+
+        var availableCount = activeCopies.Count(c => c.CopyStatus == LibraryConstants.CopyStatus.Available);
+        var totalCount = activeCopies.Count;
+
+        var earliestDue = activeCopies
+            .SelectMany(c => c.BorrowDetails)
+            .Where(bd => bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted)
+            .OrderBy(bd => bd.DueDate)
+            .Select(bd => (DateOnly?)bd.DueDate)
+            .FirstOrDefault();
+
+        var authorsList = b.BookAuthors
+            .Where(ba => ba.Status != EntityStatus.Deleted && ba.Author != null)
+            .OrderBy(ba => ba.AuthorOrder)
+            .ToList();
+
+        var authorsText = authorsList.Count > 0
+            ? string.Join(", ", authorsList.Select(ba => ba.Author.FullName))
+            : "Nhiều tác giả";
+
+        var primaryShelf = activeCopies
+            .Where(c => c.Shelf != null)
+            .Select(c => c.Shelf!.Code)
+            .FirstOrDefault() ?? "KHO-CHUNG";
+
+        var categoryName = b.Category?.Name ?? "Chuyên ngành chung";
+        var categoryKey = ResolveCategoryKey(categoryName);
+
+        // Nếu CoverUrl là đường dẫn ảnh mẫu chưa tồn tại trên đĩa (/images/books/*), trả null để hiển thị bìa chữ nghệ thuật
+        var coverUrl = b.CoverUrl;
+        if (!string.IsNullOrWhiteSpace(coverUrl) && coverUrl.StartsWith("/images/books/", StringComparison.OrdinalIgnoreCase))
+        {
+            coverUrl = null;
+        }
+
+        var copyViewModels = includeCopies
+            ? b.BookCopies
+                .Where(c => c.Status != EntityStatus.Deleted)
+                .OrderBy(c => c.Barcode)
+                .Select(c => new PublicBookCopyViewModel
+                {
+                    Id = c.Id,
+                    Barcode = c.Barcode,
+                    ShelfCode = c.Shelf?.Code ?? "Chưa xếp kệ",
+                    ShelfDescription = c.Shelf?.Description ?? string.Empty,
+                    CopyStatus = c.CopyStatus
+                })
+                .ToList()
+            : [];
+
+        return new BookSummaryViewModel
+        {
+            Id = b.Id,
+            Title = b.Title,
+            Authors = authorsText,
+            AuthorIds = authorsList.Select(ba => ba.AuthorId).ToList(),
+            Publisher = b.Publisher?.Name ?? "NXB Đại học",
+            PublisherId = b.PublisherId,
+            PublicationYear = b.PublicationYear,
+            CoverUrl = coverUrl,
+            Isbn = b.Isbn,
+            Edition = b.Edition,
+            Language = b.Language,
+            PageCount = b.PageCount,
+            Description = b.Description,
+            CallNumber = primaryShelf,
+            CategoryId = b.CategoryId,
+            CategoryName = categoryName,
+            CategoryKey = categoryKey,
+            AvailableCopies = availableCount,
+            TotalCopies = totalCount,
+            EarliestDueDate = earliestDue,
+            Copies = copyViewModels
+        };
+    }
+
+    private static string ResolveCategoryKey(string categoryName)
+    {
+        var norm = StringUtil.RemoveVietnameseSigns(categoryName).ToLowerInvariant();
+        if (norm.Contains("cong nghe") || norm.Contains("lap trinh") || norm.Contains("co so du lieu") || norm.Contains("he thong"))
+            return "it";
+        if (norm.Contains("giao thong") || norm.Contains("cau duong") || norm.Contains("xay dung"))
+            return "civil";
+        if (norm.Contains("kinh te") || norm.Contains("logistics") || norm.Contains("quan tri"))
+            return "logistics";
+        if (norm.Contains("toan") || norm.Contains("khoa hoc"))
+            return "science";
+        if (norm.Contains("trac dia"))
+            return "survey";
+        return "humanities";
+    }
+}
+
