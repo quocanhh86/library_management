@@ -8,6 +8,7 @@ public enum StatusKind
     Card,
     Loan,
     Fine,
+    Reservation,
     Record
 }
 
@@ -54,6 +55,12 @@ public record StatusBadge(StatusKind Kind, string Code)
         (StatusKind.Fine, LibraryConstants.FineStatus.Paid) => ("Đã nộp", "ok", "check-circle"),
         (StatusKind.Fine, LibraryConstants.FineStatus.Waived) => ("Được miễn", "neutral", null),
         (StatusKind.Fine, LibraryConstants.FineStatus.Cancelled) => ("Đã hủy", "neutral", null),
+
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Pending) => ("Đang chờ", "neutral", "hourglass-split"),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Ready) => ("Chờ nhận sách", "ok", "check-circle"),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Fulfilled) => ("Đã nhận", "brand", null),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Cancelled) => ("Đã hủy", "neutral", null),
+        (StatusKind.Reservation, LibraryConstants.ReservationStatus.Expired) => ("Hết hạn giữ", "stamp", "clock"),
 
         _ => (Code, "neutral", null)
     };

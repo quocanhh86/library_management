@@ -162,7 +162,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILibraryInfoService, LibraryInfoService>();
         services.AddScoped<ICatalogMasterService, CatalogMasterService>();
         services.AddScoped<ISystemAdminService, SystemAdminService>();
-        services.AddScoped<IBorrowService, Services.Mock.MockBorrowService>();
+        services.AddScoped<ICirculationService, CirculationService>();
+        services.AddScoped<IBorrowService, CirculationService>();
         services.AddScoped<IAdminPortalService, Services.Mock.MockAdminPortalService>();
 
         return services;

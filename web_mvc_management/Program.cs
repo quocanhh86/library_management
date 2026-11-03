@@ -24,7 +24,6 @@ builder.Services.AddCookieAuthentication();
 
 // Common Infrastructure, Repositories & Application Services
 builder.Services.AddInfrastructureServices();
-builder.Services.AddCookieAuthentication();
 builder.Services.AddRepositories();
 builder.Services.AddApplicationServices(builder.Configuration);
 

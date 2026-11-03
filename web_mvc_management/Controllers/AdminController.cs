@@ -67,25 +67,9 @@ public class AdminController(IAdminPortalService service) : AdminPortalControlle
     [HttpGet("/Admin/{module:regex(^(Books|BookCopies|Authors|Categories|Publishers|Shelves|Readers|ReaderTypes)$)}")]
     public Task<IActionResult> Index(string module, string? keyword, string? status, string? group, int pageNo = 1, int pageItemSize = 10, CancellationToken ct = default) => ListPage(module, keyword, status, group, pageNo, pageItemSize, ct);
 
-    [HttpGet("/System/Staff")]
-    [Authorize(Roles = AppRoles.Admin)]
-    public Task<IActionResult> Staff(string? keyword, string? status, string? group, int pageNo = 1, int pageItemSize = 10, CancellationToken ct = default) => ListPage("staff", keyword, status, group, pageNo, pageItemSize, ct);
-
-    [HttpGet("/System/Settings")]
-    [Authorize(Roles = AppRoles.Admin)]
-    public Task<IActionResult> Settings(CancellationToken ct) => SettingsPage(ct);
-
-    [HttpGet("/Circulation/Borrow")]
-    public Task<IActionResult> Borrow(string? card, CancellationToken ct) => CirculationPage(false, card, ct);
-
-    [HttpGet("/Circulation/Return")]
-    public Task<IActionResult> Return(string? card, CancellationToken ct) => CirculationPage(true, card, ct);
-
+    // Mượn, trả, thu phạt, đặt trước: CirculationController. Người dùng, quy định: SystemAdminController.
     [HttpGet("/Circulation/History")]
     public Task<IActionResult> History(string? keyword, string? status, int pageNo = 1, int pageItemSize = 10, CancellationToken ct = default) => ListPage("history", keyword, status, null, pageNo, pageItemSize, ct);
-
-    [HttpGet("/Fines")]
-    public Task<IActionResult> Fines(string? keyword, string? status, int pageNo = 1, int pageItemSize = 10, CancellationToken ct = default) => ListPage("fines", keyword, status, null, pageNo, pageItemSize, ct);
 
     [HttpGet("/Reports")]
     public Task<IActionResult> Reports(CancellationToken ct) => DashboardPage(true, ct);
