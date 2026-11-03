@@ -1,28 +1,30 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Constant;
-using web_mvc_management.Data;
 using web_mvc_management.Entity;
 using web_mvc_management.Infrastructure;
+using web_mvc_management.Repositories;
 
 namespace web_mvc_management.Services;
 
 /// <summary>
 /// Triển khai dịch vụ OTP Engine chuẩn an ninh:
 /// - SEC-04: OTP Verification Brute-Force Defense & OTP Burning Engine (giới hạn 5 lần sai).
-/// - SEC-08: Persistent Database Storage (lưu SQL Server, an toàn cụm phân tán).
+/// - SEC-08: Persistent Database Storage (lưu SQL Server thông qua IUnitOfWork).
 /// - SEC-12: OTP Purpose & Namespace Isolation.
 /// - SEC-14: Concurrency Race Condition Defense.
 /// </summary>
-public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTimeProvider) : IOtpService
+public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvider) : IOtpService
 {
     public const int MaxFailedAttempts = 5;
     public static readonly TimeSpan DefaultValidity = TimeSpan.FromMinutes(5);
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> ConcurrencyLocks = new();
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> ConcurrencyLocks = new();
 
     public async Task<string> GenerateOtpAsync(string email, string purpose, TimeSpan? validity = null, CancellationToken cancellationToken = default)
     {
@@ -34,9 +36,10 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
         var expiresAt = now.Add(validity ?? DefaultValidity);
 
         // Vô hiệu hóa mọi OTP còn hiệu lực trước đó của email và purpose này (chống Replay)
-        var oldOtps = await context.Otps
-            .Where(x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed && x.ExpiresAt > now)
-            .ToListAsync(cancellationToken);
+        var oldOtps = await unitOfWork.Otps.FindAsync(
+            x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed && x.ExpiresAt > now,
+            asNoTracking: false,
+            cancellationToken: cancellationToken);
 
         foreach (var old in oldOtps)
         {
@@ -59,8 +62,8 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
             CreatedAt = now
         };
 
-        await context.Otps.AddAsync(otpEntry, cancellationToken);
-        await context.SaveChangesAsync(cancellationToken);
+        await unitOfWork.Otps.AddAsync(otpEntry, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return otpCode;
     }
@@ -83,7 +86,8 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
         try
         {
             // Tìm bản ghi OTP mới nhất chưa sử dụng cho email và purpose
-            var entry = await context.Otps
+            var entry = await unitOfWork.Otps
+                .GetQueryable(asNoTracking: false)
                 .Where(x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed)
                 .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
@@ -97,18 +101,18 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
             if (entry.ExpiresAt <= now)
             {
                 entry.IsUsed = true;
-                await context.SaveChangesAsync(cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
                 return OtpVerificationResult.Expired(ErrorMessages.Get(ErrorCode.OtpExpired));
             }
 
-            // Kiểm tra mã OTP đúng hay sai
+            // Kiểm tra mã OTP đúng hay sai bằng FixedTimeEquals chống Timing Attack
             if (CryptographicOperations.FixedTimeEquals(
-                    System.Text.Encoding.UTF8.GetBytes(entry.OtpCode),
-                    System.Text.Encoding.UTF8.GetBytes(normalizedCode)))
+                    Encoding.UTF8.GetBytes(entry.OtpCode),
+                    Encoding.UTF8.GetBytes(normalizedCode)))
             {
                 // SEC-04: Đúng mã -> Đánh dấu đã dùng ngay lập tức chống tấn công phát lại (Replay Attack)
                 entry.IsUsed = true;
-                await context.SaveChangesAsync(cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
                 return OtpVerificationResult.Success();
             }
 
@@ -118,13 +122,13 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
             // SEC-04: Đạt ngưỡng 5 lần sai -> ĐỐT HỦY MÃ (BURN OTP) NGAY LẬP TỨC
             if (entry.FailedAttempts >= MaxFailedAttempts)
             {
-                entry.IsUsed = true; // Vô hiệu hóa vĩnh viễn
-                await context.SaveChangesAsync(cancellationToken);
+                entry.IsUsed = true;
+                await unitOfWork.SaveChangesAsync(cancellationToken);
                 return OtpVerificationResult.Burned(
                     ErrorMessages.Format(ErrorCode.OtpBurned, MaxFailedAttempts));
             }
 
-            await context.SaveChangesAsync(cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
             var remaining = MaxFailedAttempts - entry.FailedAttempts;
             return OtpVerificationResult.Incorrect(remaining, ErrorMessages.Format(ErrorCode.OtpInvalid, remaining));
         }
@@ -137,9 +141,10 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
     public async Task InvalidateOtpAsync(string email, string purpose, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
-        var otps = await context.Otps
-            .Where(x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed)
-            .ToListAsync(cancellationToken);
+        var otps = await unitOfWork.Otps.FindAsync(
+            x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed,
+            asNoTracking: false,
+            cancellationToken: cancellationToken);
 
         foreach (var otp in otps)
         {
@@ -148,7 +153,7 @@ public class OtpService(ApplicationDbContext context, IDateTimeProvider dateTime
 
         if (otps.Count > 0)
         {
-            await context.SaveChangesAsync(cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
         }
     }
 }

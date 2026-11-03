@@ -1,0 +1,297 @@
+@model web_mvc_management.Models.ViewModels.SystemAdmin.StaffPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Tài khoản cán bộ & phân quyền";
+    ViewData["Screen"] = ScreenId.SystemStaff;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Quản lý tài khoản cán bộ & phân quyền</h1>
+        <p class="text-muted-ink mb-0">Quản lý tài khoản Quản trị viên (Admin) và Thủ thư (Librarian), cấp quyền và thu hồi phiên đăng nhập.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-quiet" href="@Screens.GetPath(ScreenId.ManageReaders)">
+            <i class="bi bi-person-vcard" aria-hidden="true"></i>Tài khoản Độc giả
+        </a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createStaffModal">
+            <i class="bi bi-person-plus" aria-hidden="true"></i>Thêm cán bộ mới
+        </button>
+    </div>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.SystemStaff)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label" for="staffKeyword">Tìm kiếm cán bộ <kbd>/</kbd></label>
+            <input type="search" class="form-control" id="staffKeyword" name="Keyword" value="@Model.Filter.Keyword" data-search-input placeholder="Họ tên, email, tên đăng nhập..." />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="staffRole">Vai trò phân quyền</label>
+            <select class="form-select" id="staffRole" name="Role">
+                <option value="">Tất cả vai trò</option>
+                <option value="@AppRoles.Admin" selected="@(Model.Filter.Role == AppRoles.Admin)">Quản trị viên (Admin)</option>
+                <option value="@AppRoles.Librarian" selected="@(Model.Filter.Role == AppRoles.Librarian)">Thủ thư (Librarian)</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="staffStatus">Trạng thái</label>
+            <select class="form-select" id="staffStatus" name="Status">
+                <option value="">Đang dùng (Mặc định)</option>
+                <option value="@EntityStatus.Active" selected="@(Model.Filter.Status == EntityStatus.Active)">Đang hoạt động (ACTIVE)</option>
+                <option value="@EntityStatus.Inactive" selected="@(Model.Filter.Status == EntityStatus.Inactive)">Vô hiệu hóa (INACTIVE)</option>
+                <option value="@EntityStatus.Deleted" selected="@(Model.Filter.Status == EntityStatus.Deleted)">Đã xóa mềm (DELETED)</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Lọc</button>
+        </div>
+    </div>
+</form>
+
+<div class="table-frame mb-2">
+    <table class="table table-hover data-table">
+        <thead>
+            <tr>
+                <th scope="col">Họ tên cán bộ</th>
+                <th scope="col">Tài khoản / Email OTP</th>
+                <th scope="col">Vai trò (Role)</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="num">Đăng nhập gần nhất</th>
+                <th scope="col" class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in Model.PagedStaff.Items)
+            {
+                var isSelf = Model.CurrentUserId.HasValue && Model.CurrentUserId.Value == s.Id;
+                var isLockedOut = s.LockedUntil.HasValue && s.LockedUntil.Value > DateTimeOffset.UtcNow;
+                <tr>
+                    <td>
+                        <div class="fw-medium">
+                            @s.FullName
+                            @if (isSelf)
+                            {
+                                <span class="status status--neutral ms-1">Bạn</span>
+                            }
+                        </div>
+                        <div class="fs-xs text-muted-ink num">SĐT: @(s.Phone ?? "—")</div>
+                    </td>
+                    <td>
+                        <div class="num fw-medium">@s.Email</div>
+                        <div class="fs-xs text-muted-ink num">Username: @s.Username</div>
+                    </td>
+                    <td>
+                        @if (s.Role == AppRoles.Admin)
+                        {
+                            <span class="status status--brand"><i class="bi bi-shield-check" aria-hidden="true"></i>Quản trị viên (Admin)</span>
+                        }
+                        else
+                        {
+                            <span class="status status--neutral">Thủ thư (Librarian)</span>
+                        }
+                    </td>
+                    <td>
+                        @if (s.Status == EntityStatus.Deleted)
+                        {
+                            <span class="status status--danger">Đã xóa mềm (DELETED)</span>
+                        }
+                        else if (isLockedOut)
+                        {
+                            <span class="status status--stamp">Tạm khóa OTP</span>
+                        }
+                        else if (s.Status == EntityStatus.Active)
+                        {
+                            <span class="status status--ok"><i class="bi bi-check-circle" aria-hidden="true"></i>Hoạt động</span>
+                        }
+                        else
+                        {
+                            <span class="status status--stamp"><i class="bi bi-lock" aria-hidden="true"></i>Vô hiệu hóa</span>
+                        }
+                    </td>
+                    <td class="num">
+                        @(s.LastLoginAt.HasValue ? DateTimeHelper.ToVietnamTimeString(s.LastLoginAt.Value) : "Chưa đăng nhập")
+                    </td>
+                    <td class="text-end">
+                        <div class="d-inline-flex gap-1">
+                            @if (s.Status == EntityStatus.Deleted)
+                            {
+                                <form method="post" action="@Screens.GetPath(ScreenId.SystemStaff)/Restore/@s.Id" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-quiet btn-sm">Khôi phục</button>
+                                </form>
+                                <form method="post" action="@Screens.GetPath(ScreenId.SystemStaff)/HardDelete/@s.Id" class="d-inline"
+                                      data-hard-delete="Tài khoản cán bộ '@s.FullName (@s.Username)'"
+                                      data-hard-delete-detail="Chỉ xóa vĩnh viễn được khi cán bộ này chưa từng phát sinh lịch sử lập phiếu mượn, nhận trả sách hoặc xử lý tiền phạt.">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-danger btn-sm">Xóa vĩnh viễn</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-quiet btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editStaffModal"
+                                        data-id="@s.Id"
+                                        data-name="@s.FullName"
+                                        data-email="@s.Email"
+                                        data-phone="@s.Phone"
+                                        data-role="@s.Role"
+                                        data-status="@s.Status"
+                                        data-self="@(isSelf ? "1" : "0")">
+                                    Phân quyền / Sửa
+                                </button>
+                                @if (isLockedOut || s.Status != EntityStatus.Active)
+                                {
+                                    <form method="post" action="@Screens.GetPath(ScreenId.SystemStaff)/Unlock/@s.Id" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm">Mở khóa</button>
+                                    </form>
+                                }
+                                @if (!isSelf)
+                                {
+                                    <form method="post" action="@Screens.GetPath(ScreenId.SystemStaff)/Delete/@s.Id" class="d-inline"
+                                          data-confirm="Bước 1: Xóa mềm tài khoản cán bộ '@s.FullName'?"
+                                          data-confirm-detail="Tài khoản sẽ chuyển sang trạng thái DELETED (xóa mềm) và thu hồi phiên đăng nhập."
+                                          data-confirm-ok="Xóa mềm (DELETED)"
+                                          data-confirm-cancel="Giữ lại"
+                                          data-confirm-danger>
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-quiet btn-sm text-danger">Xóa mềm</button>
+                                    </form>
+                                }
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.PagedStaff" />
+
+<!-- MODAL THÊM CÁN BỘ MỚI -->
+<div class="modal fade" id="createStaffModal" tabindex="-1" aria-labelledby="createStaffModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.SystemStaff)/Create">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h2 class="modal-title" id="createStaffModalTitle">Cấp tài khoản cán bộ mới</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="newStaffName">Họ và tên cán bộ</label>
+                        <input type="text" class="form-control" id="newStaffName" name="FullName" required maxlength="150" />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="newStaffUsername">Tên đăng nhập</label>
+                            <input type="text" class="form-control num" id="newStaffUsername" name="Username" required minlength="3" maxlength="50" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="newStaffPhone">Số điện thoại</label>
+                            <input type="text" class="form-control num" id="newStaffPhone" name="Phone" maxlength="20" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="newStaffEmail">Địa chỉ Email (Dùng nhận mã OTP đăng nhập)</label>
+                        <input type="email" class="form-control" id="newStaffEmail" name="Email" required maxlength="255" placeholder="name@gmail.com hoặc canbo@library.utc.edu.vn" />
+                    </div>
+                    <div class="row g-3 mb-0">
+                        <div class="col-md-6">
+                            <label class="form-label" for="newStaffRole">Vai trò phân quyền</label>
+                            <select class="form-select" id="newStaffRole" name="Role">
+                                <option value="@AppRoles.Librarian">Thủ thư (Librarian)</option>
+                                <option value="@AppRoles.Admin">Quản trị viên (Admin)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="newStaffPass">Mật khẩu khởi tạo</label>
+                            <input type="text" class="form-control num" id="newStaffPass" name="Password" value="123456" required minlength="6" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Tạo tài khoản</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CẬP NHẬT & PHÂN QUYỀN CÁN BỘ -->
+<div class="modal fade" id="editStaffModal" tabindex="-1" aria-labelledby="editStaffModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Screens.GetPath(ScreenId.SystemStaff)/Update">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="editStaffId" />
+                <div class="modal-header">
+                    <h2 class="modal-title" id="editStaffModalTitle">Cập nhật & Phân quyền cán bộ</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="editStaffName">Họ và tên</label>
+                        <input type="text" class="form-control" id="editStaffName" name="FullName" required />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label" for="editStaffEmail">Email nhận OTP</label>
+                            <input type="email" class="form-control" id="editStaffEmail" name="Email" required />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="editStaffPhone">Điện thoại</label>
+                            <input type="text" class="form-control num" id="editStaffPhone" name="Phone" />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="editStaffRole">Vai trò phân quyền</label>
+                            <select class="form-select" id="editStaffRole" name="Role">
+                                <option value="@AppRoles.Librarian">Thủ thư (Librarian)</option>
+                                <option value="@AppRoles.Admin">Quản trị viên (Admin)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="editStaffStatus">Trạng thái tài khoản</label>
+                            <select class="form-select" id="editStaffStatus" name="Status">
+                                <option value="@EntityStatus.Active">Đang hoạt động (ACTIVE)</option>
+                                <option value="@EntityStatus.Inactive">Vô hiệu hóa (INACTIVE)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="editStaffPass">Đặt lại mật khẩu mới (tùy chọn)</label>
+                        <input type="password" class="form-control" id="editStaffPass" name="NewPassword" placeholder="Để trống nếu giữ nguyên mật khẩu hiện tại" />
+                        <div class="form-text">Khi đổi quyền hoặc vô hiệu hóa, hệ thống tự động làm mới SecurityStamp để thu hồi phiên đăng nhập cũ.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('editStaffModal')?.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            document.getElementById('editStaffId').value = btn.dataset.id || '';
+            document.getElementById('editStaffName').value = btn.dataset.name || '';
+            document.getElementById('editStaffEmail').value = btn.dataset.email || '';
+            document.getElementById('editStaffPhone').value = btn.dataset.phone || '';
+            document.getElementById('editStaffRole').value = btn.dataset.role || 'Librarian';
+            document.getElementById('editStaffStatus').value = btn.dataset.status || 'ACTIVE';
+            document.getElementById('editStaffPass').value = '';
+        });
+    </script>
+}

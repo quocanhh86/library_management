@@ -1,0 +1,223 @@
+@model web_mvc_management.Models.ViewModels.AdminCatalog.BookUpsertViewModel
+@{
+    Layout = "_StaffLayout";
+    var isEdit = Model.Id.HasValue && Model.Id.Value != Guid.Empty;
+    ViewData["Title"] = isEdit ? "Cập nhật đầu sách" : "Nhập đầu sách mới";
+    ViewData["Screen"] = ScreenId.ManageBooks;
+    var formAction = isEdit
+        ? $"{Screens.GetPath(ScreenId.ManageBooks)}/Edit/{Model.Id}"
+        : $"{Screens.GetPath(ScreenId.ManageBooks)}/Create";
+}
+
+<div class="staff-page-head">
+    <div>
+        <a href="@Screens.GetPath(ScreenId.ManageBooks)" class="fs-xs text-decoration-none">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i> Quay lại danh sách đầu sách
+        </a>
+        <h1 class="mt-1">@ViewData["Title"]</h1>
+    </div>
+    <div class="staff-page-head__keys">
+        <span class="shortcut-hint"><kbd>F9</kbd> Lưu thông tin</span>
+    </div>
+</div>
+
+<form method="post" action="@formAction" novalidate>
+    @Html.AntiForgeryToken()
+    @if (isEdit)
+    {
+        <input type="hidden" asp-for="Id" />
+    }
+
+    <div asp-validation-summary="ModelOnly" class="inline-error mb-3"></div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="panel">
+                <h2 class="mb-3">1. Thông tin biên mục đầu sách (Book)</h2>
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label asp-for="Title" class="form-label"></label>
+                        <input asp-for="Title" class="form-control" placeholder="Nhập tên đầy đủ của đầu sách..." autofocus />
+                        <span asp-validation-for="Title" class="field-validation-error"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="Isbn" class="form-label"></label>
+                        <input asp-for="Isbn" class="form-control num" placeholder="978-604-..." />
+                        <span asp-validation-for="Isbn" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <label asp-for="CategoryId" class="form-label"></label>
+                            <a href="@Screens.GetPath(ScreenId.ManageCategories)" class="fs-xs">+ Quản lý thể loại</a>
+                        </div>
+                        <select asp-for="CategoryId" class="form-select">
+                            <option value="">-- Chọn thể loại sách --</option>
+                            @foreach (var c in Model.Categories)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                        <span asp-validation-for="CategoryId" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <label asp-for="PublisherId" class="form-label"></label>
+                            <a href="@Screens.GetPath(ScreenId.ManagePublishers)" class="fs-xs">+ Quản lý NXB</a>
+                        </div>
+                        <select asp-for="PublisherId" class="form-select">
+                            <option value="">-- Chọn nhà xuất bản --</option>
+                            @foreach (var p in Model.Publishers)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                        <span asp-validation-for="PublisherId" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <label class="form-label">Tác giả (chọn một hoặc nhiều tác giả)</label>
+                            <a href="@Screens.GetPath(ScreenId.ManageAuthors)" class="fs-xs">+ Quản lý tác giả</a>
+                        </div>
+                        <div class="p-3 border rounded bg-white" style="max-height: 180px; overflow-y: auto;">
+                            <div class="row g-2">
+                                @foreach (var a in Model.Authors)
+                                {
+                                    var isChecked = Model.AuthorIds != null && Model.AuthorIds.Contains(a.Id);
+                                    <div class="col-md-6">
+                                        <label class="form-check d-flex align-items-center gap-2 mb-0">
+                                            <input class="form-check-input mt-0" type="checkbox" name="AuthorIds" value="@a.Id" checked="@isChecked" />
+                                            <span>@a.Name</span>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <span asp-validation-for="AuthorIds" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label asp-for="PublicationYear" class="form-label"></label>
+                        <input asp-for="PublicationYear" type="number" class="form-control num" min="1800" max="2100" />
+                        <span asp-validation-for="PublicationYear" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label asp-for="Edition" class="form-label"></label>
+                        <input asp-for="Edition" class="form-control" placeholder="VD: Tái bản lần 2" />
+                        <span asp-validation-for="Edition" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label asp-for="Language" class="form-label"></label>
+                        <input asp-for="Language" class="form-control" placeholder="Tiếng Việt" />
+                        <span asp-validation-for="Language" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label asp-for="PageCount" class="form-label"></label>
+                        <input asp-for="PageCount" type="number" class="form-control num" min="1" max="10000" />
+                        <span asp-validation-for="PageCount" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-12">
+                        <label asp-for="Description" class="form-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="3" placeholder="Mô tả nội dung chính, đối tượng bạn đọc phù hợp..."></textarea>
+                        <span asp-validation-for="Description" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-8">
+                        <label asp-for="CoverUrl" class="form-label"></label>
+                        <input asp-for="CoverUrl" class="form-control" placeholder="Để trống nếu dùng bìa chữ tiêu chuẩn của thư viện" />
+                        <span asp-validation-for="CoverUrl" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="Status" class="form-label"></label>
+                        <select asp-for="Status" class="form-select">
+                            <option value="@EntityStatus.Active">Đang lưu hành (ACTIVE)</option>
+                            <option value="@EntityStatus.Inactive">Tạm ẩn (INACTIVE)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            @if (!isEdit)
+            {
+                <div class="panel">
+                    <h2 class="mb-2">2. Nhập lô bản sao vật lý (BookCopy)</h2>
+                    <p class="fs-xs text-muted-ink mb-3">
+                        Mỗi cuốn sách vật lý sẽ được tự động cấp một <strong>mã vạch (Barcode)</strong> riêng biệt theo chuẩn <code>BC-YYYYMMDD-XXXX</code> và xếp vào vị trí kệ đã chọn.
+                    </p>
+
+                    <div class="mb-3">
+                        <label asp-for="InitialCopyCount" class="form-label"></label>
+                        <input asp-for="InitialCopyCount" type="number" class="form-control num" min="0" max="100" />
+                        <div class="form-text">Nhập 0 nếu chỉ tạo thông tin đầu sách trước.</div>
+                        <span asp-validation-for="InitialCopyCount" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-baseline">
+                            <label asp-for="ShelfId" class="form-label"></label>
+                            <a href="@Screens.GetPath(ScreenId.ManageShelves)" class="fs-xs">+ Quản lý kệ</a>
+                        </div>
+                        <select asp-for="ShelfId" class="form-select">
+                            <option value="">-- Chọn vị trí kệ sách --</option>
+                            @foreach (var s in Model.Shelves)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        </select>
+                        <span asp-validation-for="ShelfId" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="CopyPrice" class="form-label"></label>
+                        <input asp-for="CopyPrice" type="number" step="1000" class="form-control num" />
+                        <div class="form-text">Dùng làm căn cứ tính đền bù khi sách bị hỏng/mất.</div>
+                        <span asp-validation-for="CopyPrice" class="field-validation-error"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="AcquiredDate" class="form-label"></label>
+                        <input asp-for="AcquiredDate" type="date" class="form-control num" />
+                    </div>
+
+                    <div class="mb-0">
+                        <label asp-for="CopyNote" class="form-label"></label>
+                        <input asp-for="CopyNote" class="form-control" placeholder="VD: Lô nhập đợt 1 năm 2026" />
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="panel">
+                    <h2 class="mb-2">Quản lý bản sao vật lý</h2>
+                    <p class="fs-xs text-muted-ink mb-3">
+                        Để nhập thêm bản sao mới, đổi vị trí kệ hoặc thanh lý/báo hỏng từng cuốn theo mã vạch của đầu sách này, mở màn hình Quản lý bản sao.
+                    </p>
+                    <a href="@Screens.GetPath(ScreenId.ManageBookCopies)?BookId=@Model.Id" class="btn btn-quiet w-100">
+                        <i class="bi bi-upc-scan" aria-hidden="true"></i>Xem & quản lý các bản sao
+                    </a>
+                </div>
+            }
+
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <a href="@Screens.GetPath(ScreenId.ManageBooks)" class="btn btn-quiet">Hủy</a>
+                <button type="submit" class="btn btn-primary" data-shortcut-click="F9">
+                    <i class="bi bi-check-lg" aria-hidden="true"></i>@(isEdit ? "Lưu cập nhật" : "Nhập sách vào kho") <kbd>F9</kbd>
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+

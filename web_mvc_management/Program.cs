@@ -9,7 +9,7 @@ Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Đảm bảo các biến môi trường từ .env được nạp đầy đủ vào IConfiguration
+// Đảm bảo các biến môi trường phân cấp (__) từ .env được nạp đầy đủ vào IConfiguration
 builder.Configuration.AddEnvironmentVariables();
 
 // Add services to the container (Tự động bảo vệ chống CSRF cho các phương thức POST/PUT/DELETE)
@@ -18,14 +18,15 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
 });
 
-// Database (Ưu tiên cấu hình từ .env)
+// Database & Cookie Authentication (Ưu tiên cấu hình phân cấp từ .env)
 builder.Services.AddDatabase(builder.Configuration);
+builder.Services.AddCookieAuthentication();
 
-// Common Infrastructure & Repositories
+// Common Infrastructure, Repositories & Application Services
 builder.Services.AddInfrastructureServices();
 builder.Services.AddCookieAuthentication();
 builder.Services.AddRepositories();
-builder.Services.AddApplicationServices();
+builder.Services.AddApplicationServices(builder.Configuration);
 
 var app = builder.Build();
 
@@ -35,7 +36,8 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await DbInitializer.InitializeAsync(context);
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        await DbInitializer.InitializeAsync(context, configuration);
     }
     catch (Exception ex)
     {
@@ -48,7 +50,6 @@ using (var scope = app.Services.CreateScope())
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
