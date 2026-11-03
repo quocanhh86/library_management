@@ -10,6 +10,7 @@
         <partial name="~/Views/Account/_AuthHead.cshtml" model='("Đăng ký thẻ thư viện", 1, (string?)null)' />
 
         <form asp-action="Register" method="post" novalidate>
+            @Html.AntiForgeryToken()
             <div class="row g-3">
                 <div class="col-md-6">
                     <label asp-for="FullName" class="form-label"></label>

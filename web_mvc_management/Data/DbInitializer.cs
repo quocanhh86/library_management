@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using web_mvc_management.Constant;
 using web_mvc_management.Entity;
 using web_mvc_management.Util;
@@ -10,7 +11,7 @@ namespace web_mvc_management.Data;
 /// </summary>
 public static class DbInitializer
 {
-    public static async Task InitializeAsync(ApplicationDbContext context)
+    public static async Task InitializeAsync(ApplicationDbContext context, IConfiguration? configuration = null)
     {
         // 1. Cấu hình quy định thư viện (LibrarySettings)
         if (!await context.LibrarySettings.AnyAsync())
@@ -97,7 +98,9 @@ public static class DbInitializer
         await context.SaveChangesAsync();
 
         // 3. Nhân viên & Quản trị viên (Staff)
-        var defaultPassword = Environment.GetEnvironmentVariable("DEFAULT_SEED_PASSWORD") ?? "123456";
+        var defaultPassword = configuration?["SeedSettings:DefaultPassword"]
+            ?? Environment.GetEnvironmentVariable("SeedSettings__DefaultPassword")
+            ?? "123456";
         var defaultPasswordHash = PasswordHasher.HashPassword(defaultPassword);
 
         if (!await context.Staff.AnyAsync())
@@ -136,12 +139,12 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        // Nạp cấu hình 3 tài khoản hạt giống từ biến môi trường .env (Email, Role, Mật khẩu tùy biến)
+        // Nạp cấu hình 3 tài khoản hạt giống từ IConfiguration (SeedSettings:Users) / biến môi trường .env
         var seedUsers = new List<SeedUserSetting>
         {
-            GetSeedUser(1, "anhnqth01267@fpt.edu.vn", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin FPT)", "anhnq_admin", "GV20268881", "GV8881"),
-            GetSeedUser(2, "quocanhn352@gmail.com", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin Tổng)", "quocanh_admin", "SV20268888", "SV8888"),
-            GetSeedUser(3, "attendancestudent86@gmail.com", AppRoles.Librarian, defaultPassword, "Cán Bộ Thủ Thư (Attendance)", "attendance_librarian", "SV20268889", "SV8889")
+            GetSeedUser(configuration, 0, "anhnqth01267@fpt.edu.vn", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin FPT)", "anhnq_admin", "GV20268881", "GV8881"),
+            GetSeedUser(configuration, 1, "quocanhn352@gmail.com", AppRoles.Admin, defaultPassword, "Nguyễn Quốc Anh (Admin Tổng)", "quocanh_admin", "SV20268888", "SV8888"),
+            GetSeedUser(configuration, 2, "attendancestudent86@gmail.com", AppRoles.Librarian, defaultPassword, "Cán Bộ Thủ Thư (Attendance)", "attendance_librarian", "SV20268889", "SV8889")
         };
 
         // Đồng bộ 3 tài khoản vào bảng Staff
@@ -726,7 +729,8 @@ public static class DbInitializer
         string MemberCode);
 
     private static SeedUserSetting GetSeedUser(
-        int index,
+        IConfiguration? configuration,
+        int zeroBasedIndex,
         string defaultEmail,
         string defaultRole,
         string defaultPassword,
@@ -735,20 +739,23 @@ public static class DbInitializer
         string defaultCardNo,
         string defaultMemberCode)
     {
-        var email = Environment.GetEnvironmentVariable($"SEED_USER_{index}_EMAIL");
+        var email = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:Email"]
+            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__Email");
         email = string.IsNullOrWhiteSpace(email) ? defaultEmail : email.Trim().ToLowerInvariant();
 
-        var role = Environment.GetEnvironmentVariable($"SEED_USER_{index}_ROLE");
+        var role = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:Role"]
+            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__Role");
         role = string.IsNullOrWhiteSpace(role) ? defaultRole : role.Trim();
         role = string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
             ? AppRoles.Admin
             : AppRoles.Librarian;
 
-        var defaultPass = Environment.GetEnvironmentVariable("DEFAULT_SEED_PASSWORD") ?? "123456";
-        var password = Environment.GetEnvironmentVariable($"SEED_USER_{index}_PASSWORD");
-        password = string.IsNullOrWhiteSpace(password) ? defaultPass : password.Trim();
+        var password = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:Password"]
+            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__Password");
+        password = string.IsNullOrWhiteSpace(password) ? defaultPassword : password.Trim();
 
-        var fullName = Environment.GetEnvironmentVariable($"SEED_USER_{index}_NAME");
+        var fullName = configuration?[$"SeedSettings:Users:{zeroBasedIndex}:FullName"]
+            ?? Environment.GetEnvironmentVariable($"SeedSettings__Users__{zeroBasedIndex}__FullName");
         fullName = string.IsNullOrWhiteSpace(fullName) ? defaultFullName : fullName.Trim();
 
         return new SeedUserSetting(

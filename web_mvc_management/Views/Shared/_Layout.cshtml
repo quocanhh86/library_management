@@ -1,7 +1,9 @@
 @{
     var isAuthenticated = User.Identity?.IsAuthenticated == true;
     var isStaff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Librarian);
-    var fullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity?.Name;
+    var fullName = User.FindFirst("FullName")?.Value
+        ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+        ?? User.Identity?.Name;
     var title = ViewData["Title"] as string;
     // Trang chủ có dải tìm riêng; trang xác thực không cần ô tìm và nút đăng nhập trên header.
     var isHome = ViewData["IsHome"] as bool? == true;
@@ -93,6 +95,7 @@
                             <li><hr class="dropdown-divider" /></li>
                             <li>
                                 <form asp-controller="Account" asp-action="Logout" method="post">
+                                    @Html.AntiForgeryToken()
                                     <button type="submit" class="dropdown-item">Đăng xuất</button>
                                 </form>
                             </li>

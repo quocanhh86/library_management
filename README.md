@@ -32,22 +32,24 @@ cp .env.example .env
 Cập nhật thông tin kết nối CSDL và gửi mail trong `.env`:
 
 ```env
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=1433
-DB_NAME=library_management
-DB_USER=sa
-DB_PASSWORD=YourStrongPassword!
+# Database Configuration (ASP.NET Core Hierarchical IConfiguration)
+ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=library_management;User Id=sa;Password=123456;TrustServerCertificate=True;"
+DatabaseSettings__Host=localhost
+DatabaseSettings__Port=1433
+DatabaseSettings__Database=library_management
+DatabaseSettings__Username=sa
+DatabaseSettings__Password=123456
 
-# Mail SMTP Configuration
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=your_email@gmail.com
-MAIL_PASSWORD=your_app_password
-MAIL_PROTOCOL=smtp
-MAIL_SMTP_AUTH=true
-MAIL_SMTP_STARTTLS=true
-MAIL_SMTP_STARTTLS_REQUIRED=true
+# Mail SMTP Configuration (Binds to MailSettings section)
+MailSettings__Host=smtp.gmail.com
+MailSettings__Port=587
+MailSettings__Username=your_email@gmail.com
+MailSettings__Password=your_app_password
+MailSettings__SenderDisplayName="Thư Viện UTC"
+MailSettings__Protocol=smtp
+MailSettings__Auth=true
+MailSettings__StartTls=true
+MailSettings__StartTlsRequired=true
 ```
 
 ### 3. Cập Nhật Migration & Cơ Sở Dữ Liệu

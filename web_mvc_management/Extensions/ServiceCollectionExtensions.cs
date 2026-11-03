@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using web_mvc_management.Constant;
 using web_mvc_management.Data;
 using web_mvc_management.Infrastructure;
+using web_mvc_management.Models;
 using web_mvc_management.Repositories;
 using web_mvc_management.Services;
 
@@ -32,7 +33,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Trích xuất chuỗi kết nối an toàn từ IConfiguration hoặc biến môi trường .env.
+    /// Trích xuất chuỗi kết nối an toàn từ IConfiguration theo chuẩn phân cấp ASP.NET Core (ConnectionStrings / DatabaseSettings).
     /// </summary>
     private static string ResolveConnectionString(IConfiguration configuration)
     {
@@ -41,11 +42,21 @@ public static class ServiceCollectionExtensions
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            var host = configuration["DB_HOST"] ?? Environment.GetEnvironmentVariable("DB_HOST");
-            var port = configuration["DB_PORT"] ?? Environment.GetEnvironmentVariable("DB_PORT") ?? "1433";
-            var db = configuration["DB_NAME"] ?? Environment.GetEnvironmentVariable("DB_NAME");
-            var user = configuration["DB_USER"] ?? Environment.GetEnvironmentVariable("DB_USER");
-            var pass = configuration["DB_PASSWORD"] ?? Environment.GetEnvironmentVariable("DB_PASSWORD");
+            var host = configuration["DatabaseSettings:Host"]
+                ?? Environment.GetEnvironmentVariable("DatabaseSettings__Host");
+
+            var port = configuration["DatabaseSettings:Port"]
+                ?? Environment.GetEnvironmentVariable("DatabaseSettings__Port")
+                ?? "1433";
+
+            var db = configuration["DatabaseSettings:Database"]
+                ?? Environment.GetEnvironmentVariable("DatabaseSettings__Database");
+
+            var user = configuration["DatabaseSettings:Username"]
+                ?? Environment.GetEnvironmentVariable("DatabaseSettings__Username");
+
+            var pass = configuration["DatabaseSettings:Password"]
+                ?? Environment.GetEnvironmentVariable("DatabaseSettings__Password");
 
             if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(db))
             {
@@ -61,7 +72,7 @@ public static class ServiceCollectionExtensions
         {
             throw new InvalidOperationException(
                 "Không tìm thấy chuỗi kết nối Database hợp lệ. " +
-                "Vui lòng tạo file .env từ .env.example và điền thông tin kết nối DB (ConnectionStrings__DefaultConnection hoặc DB_HOST, DB_NAME, DB_USER, DB_PASSWORD)."
+                "Vui lòng tạo file .env từ .env.example và điền thông tin kết nối DB (ConnectionStrings__DefaultConnection hoặc DatabaseSettings__Host, DatabaseSettings__Database, DatabaseSettings__Username, DatabaseSettings__Password)."
             );
         }
 
@@ -132,19 +143,25 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Đăng ký các application services (sẽ mở rộng ở các module chức năng).
+    /// Đăng ký các application services và cấu hình IOptions.
     /// </summary>
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration? configuration = null)
     {
+        if (configuration != null)
+        {
+            services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+        }
+
         services.AddScoped<IOtpService, OtpService>();
         services.AddSingleton<IEmailService, EmailService>();
         services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
         services.AddScoped<IAuthService, AuthService>();
 
-        // dữ liệu mock cho giai đoạn dựng UI, đổi sang bản EF Core khi nối DB
+        // Dữ liệu mock cho giai đoạn dựng UI, đổi sang bản EF Core khi nối DB
         services.AddScoped<IBookService, Services.Mock.MockBookService>();
         services.AddScoped<ILibraryInfoService, Services.Mock.MockLibraryInfoService>();
         services.AddScoped<IBorrowService, Services.Mock.MockBorrowService>();
+
         return services;
     }
 }
