@@ -4,6 +4,30 @@ using System.ComponentModel.DataAnnotations;
 namespace web_mvc_management.Models.ViewModels.Auth;
 
 /// <summary>
+/// ViewModel hiển thị tùy chọn loại độc giả trên dropdown đăng ký (Strict ViewModel - không lộ Entity ra View).
+/// </summary>
+public class ReaderTypeOptionViewModel
+{
+    public Guid Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int MaxBorrowBooks { get; set; }
+    public int LoanDays { get; set; }
+}
+
+/// <summary>
+/// Kết quả trả về sau khi hoàn tất đăng ký mở thẻ độc giả.
+/// </summary>
+public class RegisteredReaderViewModel
+{
+    public Guid Id { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string CardNo { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// ViewModel đăng ký tài khoản độc giả (SEC-18: Strict DTO Mass Assignment Defense).
 /// </summary>
 public class ReaderRegisterViewModel

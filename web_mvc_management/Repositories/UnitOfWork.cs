@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore.Storage;
 using web_mvc_management.Data;
+using web_mvc_management.Entity;
 
 namespace web_mvc_management.Repositories;
 
@@ -12,6 +13,23 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
     private readonly ApplicationDbContext _context = context;
     private readonly ConcurrentDictionary<Type, object> _repositories = new();
     private IDbContextTransaction? _currentTransaction;
+
+    public IBaseRepository<Staff> Staff => Repository<Staff>();
+    public IBaseRepository<ReaderType> ReaderTypes => Repository<ReaderType>();
+    public IBaseRepository<Reader> Readers => Repository<Reader>();
+    public IBaseRepository<Category> Categories => Repository<Category>();
+    public IBaseRepository<Publisher> Publishers => Repository<Publisher>();
+    public IBaseRepository<Author> Authors => Repository<Author>();
+    public IBaseRepository<Shelf> Shelves => Repository<Shelf>();
+    public IBaseRepository<Book> Books => Repository<Book>();
+    public IBaseRepository<BookAuthor> BookAuthors => Repository<BookAuthor>();
+    public IBaseRepository<BookCopy> BookCopies => Repository<BookCopy>();
+    public IBaseRepository<BorrowSlip> BorrowSlips => Repository<BorrowSlip>();
+    public IBaseRepository<BorrowDetail> BorrowDetails => Repository<BorrowDetail>();
+    public IBaseRepository<Fine> Fines => Repository<Fine>();
+    public IBaseRepository<Reservation> Reservations => Repository<Reservation>();
+    public IBaseRepository<LibrarySetting> LibrarySettings => Repository<LibrarySetting>();
+    public IBaseRepository<OtpEntry> Otps => Repository<OtpEntry>();
 
     public IBaseRepository<TEntity> Repository<TEntity>() where TEntity : class
     {
@@ -99,4 +117,3 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         GC.SuppressFinalize(this);
     }
 }
-

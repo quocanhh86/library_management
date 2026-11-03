@@ -38,7 +38,9 @@
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Reader";
-                            var fullName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? User.Identity.Name;
+                            var fullName = User.FindFirst("FullName")?.Value
+                                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                                ?? User.Identity.Name;
                             var roleBadgeClass = role switch
                             {
                                 "Admin" => "bg-danger",
@@ -107,6 +109,14 @@
             <div class="alert alert-danger alert-dismissible fade show mt-3 shadow-sm d-flex align-items-center" role="alert">
                 <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
                 <div>@TempData["ErrorMessage"]</div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        @if (TempData["WarningMessage"] != null)
+        {
+            <div class="alert alert-warning alert-dismissible fade show mt-3 shadow-sm d-flex align-items-center" role="alert">
+                <i class="bi bi-exclamation-circle-fill me-2 fs-5"></i>
+                <div>@TempData["WarningMessage"]</div>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore.Storage;
+using web_mvc_management.Entity;
 
 namespace web_mvc_management.Repositories;
 
@@ -7,6 +8,23 @@ namespace web_mvc_management.Repositories;
 /// </summary>
 public interface IUnitOfWork : IDisposable, IAsyncDisposable
 {
+    IBaseRepository<Staff> Staff { get; }
+    IBaseRepository<ReaderType> ReaderTypes { get; }
+    IBaseRepository<Reader> Readers { get; }
+    IBaseRepository<Category> Categories { get; }
+    IBaseRepository<Publisher> Publishers { get; }
+    IBaseRepository<Author> Authors { get; }
+    IBaseRepository<Shelf> Shelves { get; }
+    IBaseRepository<Book> Books { get; }
+    IBaseRepository<BookAuthor> BookAuthors { get; }
+    IBaseRepository<BookCopy> BookCopies { get; }
+    IBaseRepository<BorrowSlip> BorrowSlips { get; }
+    IBaseRepository<BorrowDetail> BorrowDetails { get; }
+    IBaseRepository<Fine> Fines { get; }
+    IBaseRepository<Reservation> Reservations { get; }
+    IBaseRepository<LibrarySetting> LibrarySettings { get; }
+    IBaseRepository<OtpEntry> Otps { get; }
+
     /// <summary>
     /// Lấy instance Repository generic cho thực thể tương ứng.
     /// </summary>
@@ -32,4 +50,3 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     /// </summary>
     Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
 }
-

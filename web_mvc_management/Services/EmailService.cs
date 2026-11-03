@@ -4,9 +4,9 @@ using System.Net;
 using System.Net.Mail;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using web_mvc_management.Common;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models;
@@ -16,50 +16,19 @@ namespace web_mvc_management.Services;
 /// <summary>
 /// Dịch vụ gửi email xác thực chuẩn an ninh:
 /// - SEC-17: Cooldown Engine 60 giây chống Mail Toll Fraud & Spam DoS.
-/// - Tích hợp Gmail SMTP bảo mật với TLS (Port 587).
+/// - Tích hợp Gmail SMTP bảo mật với TLS (Port 587) qua IOptions&lt;EmailSettings&gt;.
 /// - Fallback thông minh ghi log console trong môi trường dev nếu mất kết nối mạng.
 /// </summary>
-public class EmailService : IEmailService
+public class EmailService(
+    IOptions<EmailSettings> emailOptions,
+    IDateTimeProvider dateTimeProvider,
+    ILogger<EmailService> logger,
+    IHostEnvironment env) : IEmailService
 {
     public const int CooldownSeconds = 60;
     private static readonly ConcurrentDictionary<string, DateTimeOffset> CooldownTracker = new();
 
-    private readonly EmailSettings _settings;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly ILogger<EmailService> _logger;
-    private readonly IHostEnvironment _env;
-
-    public EmailService(
-        IConfiguration configuration,
-        IDateTimeProvider dateTimeProvider,
-        ILogger<EmailService> logger,
-        IHostEnvironment env)
-    {
-        _dateTimeProvider = dateTimeProvider;
-        _logger = logger;
-        _env = env;
-
-        _settings = new EmailSettings();
-        configuration.GetSection("MailSettings").Bind(_settings);
-
-        // Fallback đọc từ biến môi trường nếu có
-        _settings.Host = configuration["MAIL_HOST"] ?? _settings.Host;
-        if (int.TryParse(configuration["MAIL_PORT"], out var port))
-        {
-            _settings.Port = port;
-        }
-        _settings.Username = configuration["MAIL_USERNAME"] ?? _settings.Username;
-        _settings.Password = configuration["MAIL_PASSWORD"] ?? _settings.Password;
-        _settings.SenderDisplayName = configuration["MAIL_SENDER_DISPLAY_NAME"] ?? _settings.SenderDisplayName;
-        if (bool.TryParse(configuration["MAIL_SMTP_STARTTLS"] ?? configuration["MAIL_STARTTLS"], out var startTls))
-        {
-            _settings.StartTls = startTls;
-        }
-        if (bool.TryParse(configuration["MAIL_SMTP_AUTH"] ?? configuration["MAIL_AUTH"], out var auth))
-        {
-            _settings.Auth = auth;
-        }
-    }
+    private readonly EmailSettings _settings = emailOptions.Value;
 
     public int GetRemainingCooldownSeconds(string email)
     {
@@ -71,7 +40,7 @@ public class EmailService : IEmailService
         var key = email.Trim().ToLowerInvariant();
         if (CooldownTracker.TryGetValue(key, out var lastSent))
         {
-            var elapsed = _dateTimeProvider.UtcNow - lastSent;
+            var elapsed = dateTimeProvider.UtcNow - lastSent;
             var remaining = CooldownSeconds - (int)elapsed.TotalSeconds;
             return remaining > 0 ? remaining : 0;
         }
@@ -122,26 +91,26 @@ public class EmailService : IEmailService
                 message.To.Add(normalizedEmail);
 
                 await client.SendMailAsync(message, cancellationToken);
-                _logger.LogInformation("Đã gửi email OTP thành công tới: {Email} cho mục đích: {Purpose}", normalizedEmail, purpose);
+                logger.LogInformation("Đã gửi email OTP thành công tới: {Email} cho mục đích: {Purpose}", normalizedEmail, purpose);
             }
             else
             {
-                _logger.LogWarning("Chưa cấu hình tài khoản SMTP, giả lập gửi OTP tới {Email}: {Code}", normalizedEmail, otpCode);
+                logger.LogWarning("Chưa cấu hình tài khoản SMTP, giả lập gửi OTP tới {Email}: {Code}", normalizedEmail, otpCode);
             }
 
             // Cập nhật mốc thời gian Cooldown
-            CooldownTracker[normalizedEmail] = _dateTimeProvider.UtcNow;
+            CooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
             return ServiceResult.Success("Mã OTP đã được gửi đến email của bạn.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lỗi khi gửi email OTP tới {Email} qua SMTP server {Host}:{Port}", normalizedEmail, _settings.Host, _settings.Port);
+            logger.LogError(ex, "Lỗi khi gửi email OTP tới {Email} qua SMTP server {Host}:{Port}", normalizedEmail, _settings.Host, _settings.Port);
 
             // Trong môi trường dev, nếu gửi mail thất bại (do mạng/tường lửa), ghi log rõ OTP để lập trình viên test
-            if (_env.IsDevelopment())
+            if (env.IsDevelopment())
             {
-                _logger.LogWarning("[DEV FALLBACK] Mã OTP cho {Email} [{Purpose}]: {Code}", normalizedEmail, purpose, otpCode);
-                CooldownTracker[normalizedEmail] = _dateTimeProvider.UtcNow;
+                logger.LogWarning("[DEV FALLBACK] Mã OTP cho {Email} [{Purpose}]: {Code}", normalizedEmail, purpose, otpCode);
+                CooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
                 return ServiceResult.Success("Mã OTP đã được gửi (Dev mode: kiểm tra console logger).");
             }
 
