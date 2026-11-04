@@ -18,7 +18,7 @@ namespace web_mvc_management.Services;
 public class CirculationService(
     IUnitOfWork unitOfWork,
     IUserContext userContext,
-    IDateTimeProvider dateTimeProvider) : ICirculationService, IBorrowService
+    IDateTimeProvider dateTimeProvider) : ICirculationService
 {
     // ===== Quầy mượn / trả =====
 
@@ -505,31 +505,6 @@ public class CirculationService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return ServiceResult.Success($"Đã miễn khoản phạt {CurrencyHelper.ToVnd(fine.Fine.Amount)}.");
-    }
-
-    // ===== Trang chủ độc giả (IBorrowService) =====
-
-    public async Task<ReaderLoansViewModel> GetReaderLoansAsync(Guid readerId, CancellationToken ct = default)
-    {
-        var loans = await OpenLoans(readerId)
-            .OrderBy(d => d.DueDate)
-            .Select(d => new
-            {
-                d.BookCopy.Book.Title,
-                Authors = d.BookCopy.Book.BookAuthors
-                    .Where(ba => ba.Status != EntityStatus.Deleted)
-                    .OrderBy(ba => ba.AuthorOrder)
-                    .Select(ba => ba.Author.FullName)
-                    .ToList(),
-                d.DueDate
-            })
-            .ToListAsync(ct);
-
-        return new ReaderLoansViewModel
-        {
-            Loans = loans.Select(l => new CurrentLoanViewModel(l.Title, string.Join(", ", l.Authors), l.DueDate)).ToList(),
-            UnpaidFines = await UnpaidFinesAsync(readerId, ct)
-        };
     }
 
     // ===== Dùng chung =====

@@ -186,11 +186,18 @@ public class AuthService(
         }
 
         // SEC-11: Kiểm tra khóa tài khoản do Brute-force
-        if (reader.LockedUntil.HasValue && reader.LockedUntil.Value > now)
+        if (reader.LockedUntil.HasValue)
         {
-            var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
-            return ServiceResult<LoginStepResult>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
+            if (reader.LockedUntil.Value > now)
+            {
+                var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
+                return ServiceResult<LoginStepResult>.Failure(
+                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
+            }
+
+            // Nếu thời gian khóa đã hết hạn, reset bộ đếm để cấp lại chu kỳ thử mới
+            reader.LockedUntil = null;
+            reader.FailedLoginAttempts = 0;
         }
 
         // Kiểm tra trạng thái hoạt động của độc giả
@@ -268,11 +275,25 @@ public class AuthService(
         }
 
         var now = dateTimeProvider.UtcNow;
-        if (reader.LockedUntil.HasValue && reader.LockedUntil.Value > now)
+        if (reader.LockedUntil.HasValue)
         {
-            var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
+            if (reader.LockedUntil.Value > now)
+            {
+                var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
+                return ServiceResult<ClaimsPrincipal>.Failure(
+                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
+            }
+
+            reader.LockedUntil = null;
+            reader.FailedLoginAttempts = 0;
+        }
+
+        if (reader.Status != EntityStatus.Active || reader.CardStatus == LibraryConstants.CardStatus.Locked)
+        {
             return ServiceResult<ClaimsPrincipal>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
+                reader.CardStatus == LibraryConstants.CardStatus.Locked
+                    ? ErrorMessages.Format(ErrorCode.AuthCardLocked, reader.LockReason ?? "Liên hệ thủ thư để được hỗ trợ")
+                    : ErrorMessages.Get(ErrorCode.AuthAccountInactive));
         }
 
         // SEC-04: Xác thực OTP
@@ -329,7 +350,7 @@ public class AuthService(
 
         var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
             x => x.Email.ToLower() == normalizedEmail,
-            asNoTracking: true,
+            asNoTracking: false,
             cancellationToken: ct);
 
         // SEC-09: Account Enumeration Defense - Không báo email không tồn tại!
@@ -348,11 +369,18 @@ public class AuthService(
         }
 
         // SEC-11: Kiểm tra khóa tài khoản
-        if (staff.LockedUntil.HasValue && staff.LockedUntil.Value > now)
+        if (staff.LockedUntil.HasValue)
         {
-            var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
-            return ServiceResult<LoginStepResult>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
+            if (staff.LockedUntil.Value > now)
+            {
+                var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
+                return ServiceResult<LoginStepResult>.Failure(
+                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
+            }
+
+            staff.LockedUntil = null;
+            staff.FailedLoginAttempts = 0;
+            await unitOfWork.SaveChangesAsync(ct);
         }
 
         // Sinh OTP & Gửi Gmail
@@ -392,17 +420,23 @@ public class AuthService(
             asNoTracking: false,
             cancellationToken: ct);
 
-        if (staff == null)
+        if (staff == null || staff.Status != EntityStatus.Active)
         {
             return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.AuthStaffNotFound);
         }
 
         var now = dateTimeProvider.UtcNow;
-        if (staff.LockedUntil.HasValue && staff.LockedUntil.Value > now)
+        if (staff.LockedUntil.HasValue)
         {
-            var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
-            return ServiceResult<ClaimsPrincipal>.Failure(
-                ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
+            if (staff.LockedUntil.Value > now)
+            {
+                var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
+                return ServiceResult<ClaimsPrincipal>.Failure(
+                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
+            }
+
+            staff.LockedUntil = null;
+            staff.FailedLoginAttempts = 0;
         }
 
         // SEC-04 & SEC-12: Xác thực OTP với Purpose = STAFF_LOGIN

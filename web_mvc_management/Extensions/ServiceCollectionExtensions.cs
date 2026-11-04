@@ -223,8 +223,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICatalogMasterService, CatalogMasterService>();
         services.AddScoped<ISystemAdminService, SystemAdminService>();
         services.AddScoped<ICirculationService, CirculationService>();
-        services.AddScoped<IBorrowService, CirculationService>();
-        services.AddScoped<IAdminPortalService, Services.Mock.MockAdminPortalService>();
 
         return services;
     }
