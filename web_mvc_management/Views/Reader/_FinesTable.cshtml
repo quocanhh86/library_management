@@ -1,0 +1,142 @@
+@model web_mvc_management.Models.ViewModels.Reader.ReaderPortalPageViewModel
+@using web_mvc_management.Models.ViewModels.Shared
+@{
+    var items = Model.PagedFines?.Items ?? Model.Fines;
+    var filter = Model.FineFilter;
+    var totalCount = Model.PagedFines?.TotalCount ?? items.Count;
+    var totalPages = Model.PagedFines?.TotalPages ?? 1;
+}
+
+@if (items.Count == 0)
+{
+    <div class="reader-empty-box">
+        <h3 class="reader-empty-box__title">Không có khoản tiền phạt nào</h3>
+        <p class="reader-empty-box__desc">
+            @if (!string.IsNullOrWhiteSpace(filter.FineStatus) || !string.IsNullOrWhiteSpace(filter.FineType) || !string.IsNullOrWhiteSpace(filter.Keyword))
+            {
+                <span>Không tìm thấy phiếu phạt nào khớp với điều kiện lọc hiện tại.</span>
+            }
+            else
+            {
+                <span>Tài khoản bạn đọc của bạn hoàn toàn trong sạch, không phát sinh khoản tiền phạt nào.</span>
+            }
+        </p>
+        @if (!string.IsNullOrWhiteSpace(filter.FineStatus) || !string.IsNullOrWhiteSpace(filter.FineType) || !string.IsNullOrWhiteSpace(filter.Keyword))
+        {
+            <a class="btn btn-outline-secondary btn-sm" asp-controller="Reader" asp-action="Fines">
+                Xem tất cả phiếu phạt
+            </a>
+        }
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Mã phiếu / Barcode</th>
+                    <th>Tài liệu liên quan</th>
+                    <th>Loại phạt &amp; Lý do</th>
+                    <th class="num">Số tiền</th>
+                    <th>Ngày lập</th>
+                    <th>Thông tin thanh toán</th>
+                    <th>Trạng thái</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var fine in items)
+                {
+                    <tr>
+                        <td>
+                            <div class="d-flex flex-column gap-1">
+                                <span class="reader-code-chip">@fine.SlipNo</span>
+                                <span class="mono text-muted" style="font-size: var(--fs-xs);">
+                                    <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@fine.Barcode
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            @if (fine.BookId != Guid.Empty)
+                            {
+                                <a class="reader-book-title"
+                                   asp-controller="Books"
+                                   asp-action="Detail"
+                                   asp-route-id="@fine.BookId">
+                                    @fine.BookTitle
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="reader-book-title">@fine.BookTitle</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(fine.Authors))
+                            {
+                                <span class="reader-book-meta">@fine.Authors</span>
+                            }
+                            <small class="d-block text-muted mt-1" style="font-size: var(--fs-xs);">
+                                Hạn trả: <span class="mono">@fine.DueDate.ToString("dd/MM/yyyy")</span>
+                                @if (fine.ReturnedAt.HasValue)
+                                {
+                                    <span> · Đã trả: <span class="mono">@fine.ReturnedAt.Value.ToString("dd/MM/yyyy")</span></span>
+                                }
+                            </small>
+                        </td>
+                        <td>
+                            <div class="fw-medium" style="font-size: var(--fs-sm);">
+                                @fine.FineTypeLabel
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(fine.Note))
+                            {
+                                <small class="d-block text-muted">@fine.Note</small>
+                            }
+                        </td>
+                        <td class="num">
+                            <span class="fw-semibold @(fine.FineStatus == "UNPAID" ? "text-danger" : "")"
+                                  style="font-size: var(--fs-sm);">
+                                @fine.Amount.ToString("N0") đ
+                            </span>
+                        </td>
+                        <td class="mono" style="font-size: var(--fs-sm);">
+                            @fine.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                        </td>
+                        <td style="font-size: var(--fs-sm);">
+                            @if (fine.PaidAt.HasValue)
+                            {
+                                <div class="mono">@fine.PaidAt.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                                @if (!string.IsNullOrWhiteSpace(fine.PaymentMethodLabel))
+                                {
+                                    <small class="text-muted">Hình thức: @fine.PaymentMethodLabel</small>
+                                }
+                            }
+                            else if (fine.FineStatus == "WAIVED")
+                            {
+                                <span class="text-muted">Được miễn giảm</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Nộp trực tiếp tại quầy</span>
+                            }
+                        </td>
+                        <td>
+                            @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Fine, fine.FineStatus))
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.PagedFines != null && totalPages > 1)
+    {
+        <div class="p-3 border-top">
+            @await Html.PartialAsync("_Pagination", Model.PagedFines)
+        </div>
+    }
+    else
+    {
+        <div class="reader-card-footer">
+            <span>Hiển thị <strong>@items.Count</strong> / <strong>@totalCount</strong> khoản phạt</span>
+        </div>
+    }
+}
