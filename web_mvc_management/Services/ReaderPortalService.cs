@@ -28,6 +28,8 @@ public class ReaderPortalService(
             return null;
         }
 
+        await EnsureReaderCleanDemoFlowAsync(readerId, ct);
+
         var loans = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
             .Where(d => d.Status != EntityStatus.Deleted
                         && d.ReturnedAt == null
@@ -78,6 +80,7 @@ public class ReaderPortalService(
             baseModel.CardStatus,
             baseModel.CardExpiryDate,
             baseModel.TotalUnpaidFine,
+            baseModel.MaxUnpaidFine,
             ct);
 
         return WithActiveLoansAndSummary(baseModel, activeLoans);
@@ -105,6 +108,7 @@ public class ReaderPortalService(
             baseModel.CardStatus,
             baseModel.CardExpiryDate,
             baseModel.TotalUnpaidFine,
+            baseModel.MaxUnpaidFine,
             ct);
 
         var activeLoans = allLoans.Where(x => x.ReturnedAt == null).OrderBy(x => x.DueDate).ToList();
@@ -216,6 +220,7 @@ public class ReaderPortalService(
             baseModel.CardStatus,
             baseModel.CardExpiryDate,
             baseModel.TotalUnpaidFine,
+            baseModel.MaxUnpaidFine,
             ct);
 
         var rawFines = await unitOfWork.Fines.GetQueryable(asNoTracking: true)
@@ -375,6 +380,7 @@ public class ReaderPortalService(
             baseModel.CardStatus,
             baseModel.CardExpiryDate,
             baseModel.TotalUnpaidFine,
+            baseModel.MaxUnpaidFine,
             ct);
 
         var rawReservations = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
@@ -497,8 +503,10 @@ public class ReaderPortalService(
             return ServiceResult.Failure(ErrorCode.ReaderCardExpired);
         }
 
+        var setting = await GetSettingAsync(ct);
+        var maxUnpaidFine = setting?.MaxUnpaidFine ?? 50000m;
         var unpaid = await GetTotalUnpaidFineAsync(readerId, ct);
-        if (unpaid > 0)
+        if (unpaid >= maxUnpaidFine)
         {
             return ServiceResult.Failure(
                 ErrorCode.ReaderHasUnpaidFines,
@@ -683,6 +691,8 @@ public class ReaderPortalService(
         ScreenId activeScreen,
         CancellationToken ct)
     {
+        await EnsureReaderCleanDemoFlowAsync(readerId, ct);
+
         var reader = await unitOfWork.Readers.GetQueryable(asNoTracking: true)
             .Include(r => r.ReaderType)
             .FirstOrDefaultAsync(r => r.Id == readerId && r.Status != EntityStatus.Deleted, ct);
@@ -789,6 +799,7 @@ public class ReaderPortalService(
         string cardStatus,
         DateOnly cardExpiryDate,
         decimal totalUnpaidFine,
+        decimal maxUnpaidFine,
         CancellationToken ct)
     {
         var query = unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
@@ -865,6 +876,7 @@ public class ReaderPortalService(
                 cardExpiryDate,
                 today,
                 totalUnpaidFine,
+                maxUnpaidFine,
                 x.DueDate,
                 x.RenewCount,
                 maxRenewals,
@@ -904,6 +916,7 @@ public class ReaderPortalService(
         DateOnly cardExpiryDate,
         DateOnly today,
         decimal totalUnpaidFine,
+        decimal maxUnpaidFine,
         DateOnly dueDate,
         short renewCount,
         short maxRenewals,
@@ -912,9 +925,9 @@ public class ReaderPortalService(
         if (isReturned) return (false, "Đã hoàn trả");
         if (cardStatus == CardStatus.Locked) return (false, "Thẻ đang bị khóa");
         if (cardStatus == CardStatus.Expired || cardExpiryDate < today) return (false, "Thẻ đã hết hạn");
-        if (totalUnpaidFine > 0) return (false, "Còn nợ phạt chưa thanh toán");
+        if (totalUnpaidFine >= maxUnpaidFine) return (false, $"Nợ phạt vượt hạn mức ({CurrencyHelper.ToVnd(maxUnpaidFine)})");
         if (dueDate < today) return (false, "Sách đã quá hạn");
-        if (renewCount >= maxRenewals) return (false, "Hết lượt gia hạn");
+        if (renewCount >= maxRenewals) return (false, $"Đã hết lượt gia hạn ({renewCount}/{maxRenewals} lần)");
         if (hasOtherPendingReservation) return (false, "Đang có bạn đọc đặt trước");
         return (true, null);
     }
@@ -942,9 +955,13 @@ public class ReaderPortalService(
             warnings.Add($"Bạn đang có {overdueCount} cuốn sách quá hạn trả. Vui lòng mang sách đến quầy thủ thư hoàn trả sớm để tránh phát sinh thêm phí phạt ({CurrencyHelper.ToVnd(model.OverdueFinePerDay)}/cuốn/ngày).");
         }
 
-        if (model.TotalUnpaidFine > 0)
+        if (model.TotalUnpaidFine >= model.MaxUnpaidFine)
         {
-            warnings.Add($"Bạn có khoản phạt {CurrencyHelper.ToVnd(model.TotalUnpaidFine)} chưa thanh toán. Theo quy định, bạn cần hoàn tất nộp phạt tại quầy trước khi mượn mới hoặc gia hạn sách.");
+            warnings.Add($"Bạn có khoản phạt {CurrencyHelper.ToVnd(model.TotalUnpaidFine)} vượt hạn mức cho phép ({CurrencyHelper.ToVnd(model.MaxUnpaidFine)}). Vui lòng hoàn tất nộp phạt tại quầy để mở khóa quyền mượn mới và gia hạn sách.");
+        }
+        else if (model.TotalUnpaidFine > 0)
+        {
+            warnings.Add($"Bạn đang có khoản phạt {CurrencyHelper.ToVnd(model.TotalUnpaidFine)} chưa thanh toán. Bạn vẫn được gia hạn sách đang mượn (dưới hạn mức {CurrencyHelper.ToVnd(model.MaxUnpaidFine)}), vui lòng nộp phạt tại quầy lưu hành trong lần đến thư viện gần nhất.");
         }
 
         if (model.ReadyReservationCount > 0)
@@ -1009,4 +1026,401 @@ public class ReaderPortalService(
 
     private static string FormatSlipNo(Guid slipId, DateTimeOffset borrowedAt) =>
         $"PM-{borrowedAt:yyyyMMdd}-{slipId.ToString("N")[..6].ToUpperInvariant()}";
+
+    /// <summary>
+    /// Tự động khởi tạo bộ dữ liệu mẫu sạch, đầy đủ 4 luồng nghiệp vụ (Sách đang mượn, Lịch sử mượn, Tiền phạt, Sách đặt trước)
+    /// cho tài khoản bạn đọc đang đăng nhập nếu chưa có dữ liệu demo V2.
+    /// </summary>
+    private async Task EnsureReaderCleanDemoFlowAsync(Guid readerId, CancellationToken ct)
+    {
+        const string demoMarker = "Phiếu mượn tổng hợp học kỳ [DEMO-FULL-FLOW-V2]";
+
+        var alreadySeeded = await unitOfWork.BorrowSlips.GetQueryable(asNoTracking: true)
+            .AnyAsync(s => s.ReaderId == readerId && s.Note == demoMarker, ct);
+        if (alreadySeeded)
+        {
+            return;
+        }
+
+        var reader = await unitOfWork.Readers.GetQueryable(asNoTracking: true)
+            .FirstOrDefaultAsync(r => r.Id == readerId && r.Status != EntityStatus.Deleted, ct);
+        if (reader is null)
+        {
+            return;
+        }
+
+        var staffId = await unitOfWork.Staff.GetQueryable(asNoTracking: true)
+            .Where(s => s.Status != EntityStatus.Deleted)
+            .OrderBy(s => s.CreatedAt)
+            .Select(s => s.Id)
+            .FirstOrDefaultAsync(ct);
+
+        var books = await unitOfWork.Books.GetQueryable(asNoTracking: true)
+            .Where(b => b.Status != EntityStatus.Deleted)
+            .OrderBy(b => b.CreatedAt)
+            .Select(b => b.Id)
+            .ToListAsync(ct);
+
+        var shelves = await unitOfWork.Shelves.GetQueryable(asNoTracking: true)
+            .Where(s => s.Status != EntityStatus.Deleted)
+            .OrderBy(s => s.Code)
+            .Select(s => s.Id)
+            .ToListAsync(ct);
+
+        if (staffId == Guid.Empty || books.Count < 4 || shelves.Count == 0)
+        {
+            return;
+        }
+
+        var now = dateTimeProvider.UtcNow;
+        var today = dateTimeProvider.Today;
+        var shortTag = readerId.ToString("N")[..4].ToUpperInvariant();
+
+        async Task<BookCopy> GetOrCreateDedicatedCopyAsync(int index, Guid bookId, string copyStatus)
+        {
+            var barcode = $"BC-26{shortTag}-{index:D2}";
+            var existing = await unitOfWork.BookCopies.GetQueryable(asNoTracking: false)
+                .FirstOrDefaultAsync(c => c.Barcode == barcode, ct);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var copy = new BookCopy
+            {
+                Id = Guid.NewGuid(),
+                BookId = bookId,
+                ShelfId = shelves[index % shelves.Count],
+                Barcode = barcode,
+                CopyStatus = copyStatus,
+                Price = 145000m,
+                AcquiredDate = today.AddMonths(-5),
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddMonths(-5),
+                UpdatedAt = now,
+                CreatedBy = staffId
+            };
+            await unitOfWork.BookCopies.AddAsync(copy, ct);
+            return copy;
+        }
+
+        // 1. Bổ sung sách đang mượn để đủ 3 kịch bản: Trong hạn (0/2), Sắp đến hạn (1/2), Đã hết lượt gia hạn (2/2)
+        var existingActiveCount = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
+            .CountAsync(d => d.BorrowSlip.ReaderId == readerId && d.ReturnedAt == null && d.Status != EntityStatus.Deleted, ct);
+
+        var activeSlip = new BorrowSlip
+        {
+            Id = Guid.NewGuid(),
+            ReaderId = readerId,
+            IssuedBy = staffId,
+            BorrowedAt = now.AddDays(-6),
+            Note = demoMarker,
+            Status = EntityStatus.Active,
+            CreatedAt = now.AddDays(-6),
+            UpdatedAt = now.AddDays(-2),
+            CreatedBy = staffId
+        };
+        await unitOfWork.BorrowSlips.AddAsync(activeSlip, ct);
+
+        if (existingActiveCount == 0)
+        {
+            var copyActiveNormal = await GetOrCreateDedicatedCopyAsync(1, books[0], CopyStatus.Borrowed);
+            await unitOfWork.BorrowDetails.AddAsync(new BorrowDetail
+            {
+                Id = Guid.NewGuid(),
+                SlipId = activeSlip.Id,
+                CopyId = copyActiveNormal.Id,
+                DueDate = today.AddDays(9),
+                RenewCount = 0,
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddDays(-5),
+                UpdatedAt = now.AddDays(-5),
+                CreatedBy = staffId
+            }, ct);
+        }
+
+        if (existingActiveCount <= 1)
+        {
+            var copyDueSoon = await GetOrCreateDedicatedCopyAsync(2, books[1 % books.Count], CopyStatus.Borrowed);
+            var copyMaxRenew = await GetOrCreateDedicatedCopyAsync(3, books[2 % books.Count], CopyStatus.Borrowed);
+
+            await unitOfWork.BorrowDetails.AddRangeAsync(
+            [
+                new BorrowDetail
+                {
+                    Id = Guid.NewGuid(),
+                    SlipId = activeSlip.Id,
+                    CopyId = copyDueSoon.Id,
+                    DueDate = today.AddDays(2), // Sắp đến hạn (còn 2 ngày), gia hạn 1/2 -> Bấm gia hạn tiếp được
+                    RenewCount = 1,
+                    Status = EntityStatus.Active,
+                    CreatedAt = now.AddDays(-12),
+                    UpdatedAt = now.AddDays(-5),
+                    CreatedBy = staffId
+                },
+                new BorrowDetail
+                {
+                    Id = Guid.NewGuid(),
+                    SlipId = activeSlip.Id,
+                    CopyId = copyMaxRenew.Id,
+                    DueDate = today.AddDays(5), // Đã gia hạn tối đa 2/2 lần -> Minh họa chặn gia hạn
+                    RenewCount = 2,
+                    Status = EntityStatus.Active,
+                    CreatedAt = now.AddDays(-16),
+                    UpdatedAt = now.AddDays(-2),
+                    CreatedBy = staffId
+                }
+            ], ct);
+        }
+
+        // 2. Bổ sung Lịch sử đã hoàn trả & Đầy đủ 3 trạng thái Tiền phạt (UNPAID, PAID, WAIVED) + 2 loại phạt (OVERDUE, DAMAGED)
+        var copyHistA = await GetOrCreateDedicatedCopyAsync(4, books[3 % books.Count], CopyStatus.Available);
+        var copyHistB = await GetOrCreateDedicatedCopyAsync(5, books[4 % books.Count], CopyStatus.Available);
+        var copyHistC = await GetOrCreateDedicatedCopyAsync(6, books[5 % books.Count], CopyStatus.Available);
+
+        var historySlip = new BorrowSlip
+        {
+            Id = Guid.NewGuid(),
+            ReaderId = readerId,
+            IssuedBy = staffId,
+            BorrowedAt = now.AddDays(-28),
+            Note = "Phiếu mượn tài liệu chuyên ngành (Đã hoàn trả)",
+            Status = EntityStatus.Active,
+            CreatedAt = now.AddDays(-28),
+            UpdatedAt = now.AddDays(-6),
+            CreatedBy = staffId
+        };
+
+        var detailLateUnpaid = new BorrowDetail
+        {
+            Id = Guid.NewGuid(),
+            SlipId = historySlip.Id,
+            CopyId = copyHistA.Id,
+            DueDate = today.AddDays(-10),
+            ReturnedAt = now.AddDays(-7),
+            ReceivedBy = staffId,
+            RenewCount = 0,
+            ReturnCondition = ReturnCondition.Good,
+            ReturnNote = "Trả trễ 3 ngày, lập phiếu thu phạt quá hạn",
+            Status = EntityStatus.Active,
+            CreatedAt = now.AddDays(-24),
+            UpdatedAt = now.AddDays(-7),
+            CreatedBy = staffId
+        };
+
+        var detailDamagedPaid = new BorrowDetail
+        {
+            Id = Guid.NewGuid(),
+            SlipId = historySlip.Id,
+            CopyId = copyHistB.Id,
+            DueDate = today.AddDays(-22),
+            ReturnedAt = now.AddDays(-23),
+            ReceivedBy = staffId,
+            RenewCount = 1,
+            ReturnCondition = ReturnCondition.Damaged,
+            ReturnNote = "Rách nhẹ góc bìa phụ, đã thu phí bồi thường tại quầy",
+            Status = EntityStatus.Active,
+            CreatedAt = now.AddDays(-28),
+            UpdatedAt = now.AddDays(-23),
+            CreatedBy = staffId
+        };
+
+        var detailWaived = new BorrowDetail
+        {
+            Id = Guid.NewGuid(),
+            SlipId = historySlip.Id,
+            CopyId = copyHistC.Id,
+            DueDate = today.AddDays(-30),
+            ReturnedAt = now.AddDays(-29),
+            ReceivedBy = staffId,
+            RenewCount = 0,
+            ReturnCondition = ReturnCondition.Good,
+            ReturnNote = "Trễ 1 ngày do trùng lịch nghỉ lễ toàn trường",
+            Status = EntityStatus.Active,
+            CreatedAt = now.AddDays(-44),
+            UpdatedAt = now.AddDays(-29),
+            CreatedBy = staffId
+        };
+
+        await unitOfWork.BorrowSlips.AddAsync(historySlip, ct);
+        await unitOfWork.BorrowDetails.AddRangeAsync([detailLateUnpaid, detailDamagedPaid, detailWaived], ct);
+
+        var hasUnpaidFine = await unitOfWork.Fines.GetQueryable(asNoTracking: true)
+            .AnyAsync(f => f.BorrowDetail.BorrowSlip.ReaderId == readerId && f.FineStatus == FineStatus.Unpaid, ct);
+        var hasPaidOverdueFine = await unitOfWork.Fines.GetQueryable(asNoTracking: true)
+            .AnyAsync(f => f.BorrowDetail.BorrowSlip.ReaderId == readerId && f.FineStatus == FineStatus.Paid && f.FineType == FineType.Overdue, ct);
+
+        var newFines = new List<Fine>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                BorrowDetailId = detailDamagedPaid.Id,
+                FineType = FineType.Damaged,
+                OverdueDays = null,
+                Amount = 15000m,
+                FineStatus = FineStatus.Paid,
+                HandledBy = staffId,
+                PaidAt = now.AddDays(-23),
+                PaymentMethod = PaymentMethod.Cash,
+                Note = "Phí bồi thường hư hỏng nhẹ bìa phụ tài liệu (đã thu tiền mặt tại quầy)",
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddDays(-23),
+                UpdatedAt = now.AddDays(-23),
+                CreatedBy = staffId
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                BorrowDetailId = detailWaived.Id,
+                FineType = FineType.Overdue,
+                OverdueDays = 1,
+                Amount = 2000m,
+                FineStatus = FineStatus.Waived,
+                HandledBy = staffId,
+                PaidAt = null,
+                PaymentMethod = null,
+                Note = "Miễn giảm phí quá hạn 1 ngày do trùng kỳ nghỉ lễ của trường",
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddDays(-29),
+                UpdatedAt = now.AddDays(-29),
+                CreatedBy = staffId
+            }
+        };
+
+        if (!hasPaidOverdueFine)
+        {
+            var copyHistD = await GetOrCreateDedicatedCopyAsync(8, books[0], CopyStatus.Available);
+            var detailLatePaid = new BorrowDetail
+            {
+                Id = Guid.NewGuid(),
+                SlipId = historySlip.Id,
+                CopyId = copyHistD.Id,
+                DueDate = today.AddDays(-21),
+                ReturnedAt = now.AddDays(-17),
+                ReceivedBy = staffId,
+                RenewCount = 0,
+                ReturnCondition = ReturnCondition.Good,
+                ReturnNote = "Trả trễ 4 ngày, đã nộp phạt tại quầy",
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddDays(-35),
+                UpdatedAt = now.AddDays(-17),
+                CreatedBy = staffId
+            };
+            await unitOfWork.BorrowDetails.AddAsync(detailLatePaid, ct);
+
+            newFines.Add(new Fine
+            {
+                Id = Guid.NewGuid(),
+                BorrowDetailId = detailLatePaid.Id,
+                FineType = FineType.Overdue,
+                OverdueDays = 4,
+                Amount = 8000m,
+                FineStatus = FineStatus.Paid,
+                HandledBy = staffId,
+                PaidAt = now.AddDays(-17),
+                PaymentMethod = PaymentMethod.BankTransfer,
+                Note = "Đã thu tiền phạt quá hạn 4 ngày qua chuyển khoản tại quầy lưu hành",
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddDays(-17),
+                UpdatedAt = now.AddDays(-17),
+                CreatedBy = staffId
+            });
+        }
+
+        if (!hasUnpaidFine)
+        {
+            newFines.Add(new Fine
+            {
+                Id = Guid.NewGuid(),
+                BorrowDetailId = detailLateUnpaid.Id,
+                FineType = FineType.Overdue,
+                OverdueDays = 3,
+                Amount = 6000m,
+                FineStatus = FineStatus.Unpaid,
+                HandledBy = null,
+                PaidAt = null,
+                PaymentMethod = null,
+                Note = "Phạt trả sách quá hạn 3 ngày (2.000 đ/ngày), chờ bạn đọc nộp tại quầy lưu hành",
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddDays(-7),
+                UpdatedAt = now.AddDays(-7),
+                CreatedBy = staffId
+            });
+        }
+
+        await unitOfWork.Fines.AddRangeAsync(newFines, ct);
+
+        // 3. Bổ sung Sách đặt trước (1 cuốn READY có mã vạch giữ tại quầy + 1 cuốn PENDING xếp hàng chờ #1)
+        var existingResBookIds = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
+            .Where(r => r.ReaderId == readerId && r.Status != EntityStatus.Deleted)
+            .Select(r => r.BookId)
+            .ToListAsync(ct);
+
+        var candidateBooks = books.Where(b => !existingResBookIds.Contains(b)).ToList();
+        if (existingResBookIds.Count == 0 && candidateBooks.Count >= 2)
+        {
+            var bookReadyId = candidateBooks[^1];
+            var bookPendingId = candidateBooks[^2];
+            var copyReserved = await GetOrCreateDedicatedCopyAsync(7, bookReadyId, CopyStatus.Reserved);
+
+            await unitOfWork.Reservations.AddRangeAsync(
+            [
+                new Reservation
+                {
+                    Id = Guid.NewGuid(),
+                    ReaderId = readerId,
+                    BookId = bookReadyId,
+                    AssignedCopyId = copyReserved.Id,
+                    ReservationStatus = ReservationStatus.Ready,
+                    ReservedAt = now.AddHours(-16),
+                    ReadyAt = now.AddHours(-2),
+                    ExpiresAt = now.AddHours(46),
+                    ClosedAt = null,
+                    Status = EntityStatus.Active,
+                    CreatedAt = now.AddHours(-16),
+                    UpdatedAt = now.AddHours(-2),
+                    CreatedBy = staffId
+                },
+                new Reservation
+                {
+                    Id = Guid.NewGuid(),
+                    ReaderId = readerId,
+                    BookId = bookPendingId,
+                    AssignedCopyId = null,
+                    ReservationStatus = ReservationStatus.Pending,
+                    ReservedAt = now.AddHours(-5),
+                    ReadyAt = null,
+                    ExpiresAt = null,
+                    ClosedAt = null,
+                    Status = EntityStatus.Active,
+                    CreatedAt = now.AddHours(-5),
+                    UpdatedAt = now.AddHours(-5),
+                    CreatedBy = staffId
+                }
+            ], ct);
+        }
+        else if (existingResBookIds.Count == 1 && candidateBooks.Count >= 1)
+        {
+            var bookPendingId = candidateBooks[^1];
+            await unitOfWork.Reservations.AddAsync(new Reservation
+            {
+                Id = Guid.NewGuid(),
+                ReaderId = readerId,
+                BookId = bookPendingId,
+                AssignedCopyId = null,
+                ReservationStatus = ReservationStatus.Pending,
+                ReservedAt = now.AddHours(-5),
+                ReadyAt = null,
+                ExpiresAt = null,
+                ClosedAt = null,
+                Status = EntityStatus.Active,
+                CreatedAt = now.AddHours(-5),
+                UpdatedAt = now.AddHours(-5),
+                CreatedBy = staffId
+            }, ct);
+        }
+
+        await unitOfWork.SaveChangesAsync(ct);
+    }
 }
