@@ -813,6 +813,154 @@ public static class DbInitializer
             await context.Reservations.AddAsync(resReady);
             await context.SaveChangesAsync();
         }
+
+        // 13. Bổ sung dữ liệu mẫu Cổng Bạn Đọc (Lịch sử đã trả, Sách sắp đến hạn, Phiếu phạt đã nộp/miễn giảm)
+        await EnsureReaderPortalSampleDataAsync(context, adminStaff.Id, today);
+    }
+
+    private static async Task EnsureReaderPortalSampleDataAsync(ApplicationDbContext context, Guid adminStaffId, DateOnly today)
+    {
+        var availableCopies = await context.BookCopies
+            .Where(c => c.Status == EntityStatus.Active && c.CopyStatus == LibraryConstants.CopyStatus.Available)
+            .OrderBy(c => c.Barcode)
+            .ToListAsync();
+
+        if (availableCopies.Count < 4)
+        {
+            return;
+        }
+
+        var targetReaders = await context.Readers
+            .Where(r => r.Status == EntityStatus.Active && r.CardStatus == LibraryConstants.CardStatus.Active)
+            .ToListAsync();
+
+        foreach (var reader in targetReaders)
+        {
+            var hasReturnedHistory = await context.BorrowDetails
+                .AnyAsync(d => d.BorrowSlip.ReaderId == reader.Id && d.ReturnedAt != null);
+
+            if (!hasReturnedHistory)
+            {
+                var copyHist1 = availableCopies[0];
+                var copyHist2 = availableCopies[1];
+
+                var pastSlip = new BorrowSlip
+                {
+                    Id = Guid.NewGuid(),
+                    ReaderId = reader.Id,
+                    IssuedBy = adminStaffId,
+                    BorrowedAt = DateTimeOffset.UtcNow.AddDays(-35),
+                    Note = "Mượn tài liệu tham khảo học kỳ trước (Đã hoàn trả)",
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow.AddDays(-35),
+                    UpdatedAt = DateTimeOffset.UtcNow.AddDays(-18),
+                    CreatedBy = adminStaffId
+                };
+
+                var detailReturnedOnTime = new BorrowDetail
+                {
+                    Id = Guid.NewGuid(),
+                    SlipId = pastSlip.Id,
+                    CopyId = copyHist1.Id,
+                    DueDate = today.AddDays(-21),
+                    ReturnedAt = DateTimeOffset.UtcNow.AddDays(-23),
+                    ReceivedBy = adminStaffId,
+                    RenewCount = 1,
+                    ReturnCondition = LibraryConstants.ReturnCondition.Good,
+                    ReturnNote = "Sách nguyên vẹn, trả đúng hạn",
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow.AddDays(-35),
+                    UpdatedAt = DateTimeOffset.UtcNow.AddDays(-23),
+                    CreatedBy = adminStaffId
+                };
+
+                var detailReturnedLate = new BorrowDetail
+                {
+                    Id = Guid.NewGuid(),
+                    SlipId = pastSlip.Id,
+                    CopyId = copyHist2.Id,
+                    DueDate = today.AddDays(-21),
+                    ReturnedAt = DateTimeOffset.UtcNow.AddDays(-17),
+                    ReceivedBy = adminStaffId,
+                    RenewCount = 0,
+                    ReturnCondition = LibraryConstants.ReturnCondition.Good,
+                    ReturnNote = "Trả trễ 4 ngày, đã nộp phạt tại quầy",
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow.AddDays(-35),
+                    UpdatedAt = DateTimeOffset.UtcNow.AddDays(-17),
+                    CreatedBy = adminStaffId
+                };
+
+                var paidFine = new Fine
+                {
+                    Id = Guid.NewGuid(),
+                    BorrowDetailId = detailReturnedLate.Id,
+                    FineType = LibraryConstants.FineType.Overdue,
+                    OverdueDays = 4,
+                    Amount = 4 * 2000m,
+                    FineStatus = LibraryConstants.FineStatus.Paid,
+                    HandledBy = adminStaffId,
+                    PaidAt = DateTimeOffset.UtcNow.AddDays(-17),
+                    PaymentMethod = LibraryConstants.PaymentMethod.BankTransfer,
+                    Note = "Đã thu tiền phạt quá hạn 4 ngày qua chuyển khoản tại quầy lưu hành",
+                    Status = EntityStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow.AddDays(-17),
+                    UpdatedAt = DateTimeOffset.UtcNow.AddDays(-17),
+                    CreatedBy = adminStaffId
+                };
+
+                await context.BorrowSlips.AddAsync(pastSlip);
+                await context.BorrowDetails.AddRangeAsync([detailReturnedOnTime, detailReturnedLate]);
+                await context.Fines.AddAsync(paidFine);
+                await context.SaveChangesAsync();
+            }
+
+            // Nếu là tài khoản độc giả từ .env chưa có sách đang mượn nào, cấp 1 phiếu đang mượn hợp lệ
+            var hasActiveLoan = await context.BorrowDetails
+                .AnyAsync(d => d.BorrowSlip.ReaderId == reader.Id && d.ReturnedAt == null && d.Status == EntityStatus.Active);
+
+            if (!hasActiveLoan)
+            {
+                var copyToBorrow = await context.BookCopies
+                    .FirstOrDefaultAsync(c => c.Status == EntityStatus.Active && c.CopyStatus == LibraryConstants.CopyStatus.Available);
+
+                if (copyToBorrow != null)
+                {
+                    copyToBorrow.CopyStatus = LibraryConstants.CopyStatus.Borrowed;
+                    copyToBorrow.UpdatedAt = DateTimeOffset.UtcNow;
+
+                    var activeSlip = new BorrowSlip
+                    {
+                        Id = Guid.NewGuid(),
+                        ReaderId = reader.Id,
+                        IssuedBy = adminStaffId,
+                        BorrowedAt = DateTimeOffset.UtcNow.AddDays(-4),
+                        Note = "Mượn giáo trình học tập chuyên ngành",
+                        Status = EntityStatus.Active,
+                        CreatedAt = DateTimeOffset.UtcNow.AddDays(-4),
+                        UpdatedAt = DateTimeOffset.UtcNow.AddDays(-4),
+                        CreatedBy = adminStaffId
+                    };
+
+                    var activeDetail = new BorrowDetail
+                    {
+                        Id = Guid.NewGuid(),
+                        SlipId = activeSlip.Id,
+                        CopyId = copyToBorrow.Id,
+                        DueDate = today.AddDays(10),
+                        RenewCount = 0,
+                        Status = EntityStatus.Active,
+                        CreatedAt = DateTimeOffset.UtcNow.AddDays(-4),
+                        UpdatedAt = DateTimeOffset.UtcNow.AddDays(-4),
+                        CreatedBy = adminStaffId
+                    };
+
+                    await context.BorrowSlips.AddAsync(activeSlip);
+                    await context.BorrowDetails.AddAsync(activeDetail);
+                    await context.SaveChangesAsync();
+                }
+            }
+        }
     }
 
     private static async Task EnsureThesisAndJournalBooksAsync(ApplicationDbContext context, Guid adminStaffId, DateOnly today)

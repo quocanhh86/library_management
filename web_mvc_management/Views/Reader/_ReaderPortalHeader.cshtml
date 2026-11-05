@@ -1,0 +1,183 @@
+@model web_mvc_management.Models.ViewModels.Reader.ReaderPortalPageViewModel
+@using web_mvc_management.Constant
+@using web_mvc_management.Models.ViewModels.Shared
+@{
+    var screen = Model.ActiveScreen;
+    var hasFineOrOverdue = Model.OverdueLoanCount > 0 || Model.TotalUnpaidFine > 0;
+}
+
+<header class="reader-card-banner" aria-label="Thông tin thẻ thư viện bạn đọc">
+    <div class="reader-card-banner__main">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="reader-card-banner__kicker">
+                <i class="bi bi-person-vcard" aria-hidden="true"></i>
+                Thẻ bạn đọc · @(string.IsNullOrWhiteSpace(Model.ReaderTypeName) ? "Bạn đọc UTC" : Model.ReaderTypeName)
+            </span>
+            @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Card, Model.EffectiveCardBadgeCode))
+        </div>
+
+        <h1 class="reader-card-banner__name">@Model.FullName</h1>
+
+        <div class="reader-card-banner__meta">
+            <span>Số thẻ: <strong class="mono">@Model.CardNo</strong></span>
+            @if (!string.IsNullOrWhiteSpace(Model.MemberCode))
+            {
+                <span>Mã định danh: <strong class="mono">@Model.MemberCode</strong></span>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.Email))
+            {
+                <span>Email: <strong>@Model.Email</strong></span>
+            }
+            <span>Hạn thẻ: <strong>@Model.CardExpiryDate.ToString("dd/MM/yyyy")</strong></span>
+        </div>
+    </div>
+
+    <div class="reader-card-banner__quota" aria-label="Hạn mức quyền lợi thẻ đọc">
+        <div class="reader-card-banner__quota-item">
+            <span class="reader-card-banner__quota-label">Hạn mức mượn</span>
+            <span class="reader-card-banner__quota-val">@Model.ActiveLoanCount / @Model.MaxBorrowBooks cuốn</span>
+        </div>
+        <div class="reader-card-banner__quota-item">
+            <span class="reader-card-banner__quota-label">Thời hạn mượn</span>
+            <span class="reader-card-banner__quota-val">@Model.LoanDays ngày / lượt</span>
+        </div>
+        <div class="reader-card-banner__quota-item">
+            <span class="reader-card-banner__quota-label">Gia hạn tối đa</span>
+            <span class="reader-card-banner__quota-val">@Model.MaxRenewals lần (+@Model.RenewDays ngày)</span>
+        </div>
+    </div>
+</header>
+
+@if (Model.Warnings.Count > 0)
+{
+    <ul class="reader-alert-list" aria-label="Thông báo quan trọng cho bạn đọc">
+        @foreach (var warning in Model.Warnings)
+        {
+            <li class="reader-alert-item @(hasFineOrOverdue ? "reader-alert-item--danger" : "")">
+                <i class="bi bi-exclamation-triangle-fill mt-1" aria-hidden="true"></i>
+                <span>@warning</span>
+            </li>
+        }
+    </ul>
+}
+
+<section class="reader-kpi-grid" aria-label="Chỉ số tổng quan tài khoản bạn đọc">
+    <a class="reader-kpi-card @(screen == ScreenId.ReaderProfile ? "reader-kpi-card--active" : "")"
+       asp-controller="Reader" asp-action="Profile">
+        <div class="reader-kpi-card__head">
+            <span>Sách đang mượn</span>
+            <i class="bi bi-journal-bookmark" aria-hidden="true"></i>
+        </div>
+        <div class="reader-kpi-card__value @(Model.OverdueLoanCount > 0 ? "reader-kpi-card__value--danger" : "")">
+            @Model.ActiveLoanCount <small class="text-muted fw-normal" style="font-size: var(--fs-sm);">/ @Model.MaxBorrowBooks</small>
+        </div>
+        <div class="reader-kpi-card__sub">
+            @if (Model.OverdueLoanCount > 0)
+            {
+                <span style="color: var(--c-stamp-text); font-weight: 500;">@Model.OverdueLoanCount cuốn quá hạn</span>
+            }
+            else if (Model.DueSoonLoanCount > 0)
+            {
+                <span style="color: var(--c-warn-text); font-weight: 500;">@Model.DueSoonLoanCount cuốn sắp đến hạn</span>
+            }
+            else
+            {
+                <span>Tất cả trong hạn trả</span>
+            }
+        </div>
+    </a>
+
+    <a class="reader-kpi-card @(screen == ScreenId.ReaderBorrowHistory ? "reader-kpi-card--active" : "")"
+       asp-controller="Reader" asp-action="BorrowHistory">
+        <div class="reader-kpi-card__head">
+            <span>Lịch sử mượn trả</span>
+            <i class="bi bi-clock-history" aria-hidden="true"></i>
+        </div>
+        <div class="reader-kpi-card__value">@Model.TotalHistoryCount</div>
+        <div class="reader-kpi-card__sub">Đã hoàn trả @Model.ReturnedLoanCount lượt sách</div>
+    </a>
+
+    <a class="reader-kpi-card @(screen == ScreenId.ReaderFines ? "reader-kpi-card--active" : "")"
+       asp-controller="Reader" asp-action="Fines">
+        <div class="reader-kpi-card__head">
+            <span>Tiền phạt chưa nộp</span>
+            <i class="bi bi-receipt" aria-hidden="true"></i>
+        </div>
+        <div class="reader-kpi-card__value @(Model.TotalUnpaidFine > 0 || Model.EstimatedAccruingFine > 0 ? "reader-kpi-card__value--danger" : "")">
+            @Model.TotalUnpaidFine.ToString("N0") đ
+        </div>
+        <div class="reader-kpi-card__sub">
+            @if (Model.EstimatedAccruingFine > 0)
+            {
+                <span style="color: var(--c-stamp-text);">+ @Model.EstimatedAccruingFine.ToString("N0") đ tạm tính quá hạn</span>
+            }
+            else if (Model.TotalPaidFine > 0)
+            {
+                <span>Đã thanh toán: @Model.TotalPaidFine.ToString("N0") đ</span>
+            }
+            else
+            {
+                <span>Không có công nợ tồn đọng</span>
+            }
+        </div>
+    </a>
+
+    <a class="reader-kpi-card @(screen == ScreenId.ReaderReservations ? "reader-kpi-card--active" : "")"
+       asp-controller="Reader" asp-action="Reservations">
+        <div class="reader-kpi-card__head">
+            <span>Sách đặt trước</span>
+            <i class="bi bi-bookmark-check" aria-hidden="true"></i>
+        </div>
+        <div class="reader-kpi-card__value">@Model.ActiveReservationCount</div>
+        <div class="reader-kpi-card__sub">
+            @if (Model.ReadyReservationCount > 0)
+            {
+                <span style="color: var(--c-ok-text); font-weight: 500;">@Model.ReadyReservationCount cuốn đã sẵn sàng tại quầy</span>
+            }
+            else
+            {
+                <span>Yêu cầu giữ sách khi có bản rảnh</span>
+            }
+        </div>
+    </a>
+</section>
+
+<nav class="reader-portal-nav" aria-label="Điều hướng cổng bạn đọc">
+    <a class="reader-portal-nav__link"
+       asp-controller="Reader" asp-action="Profile"
+       aria-current="@(screen == ScreenId.ReaderProfile ? "page" : null)">
+        <i class="bi bi-book" aria-hidden="true"></i>
+        <span>Sách đang mượn</span>
+        <span class="reader-portal-nav__count @(Model.OverdueLoanCount > 0 ? "reader-portal-nav__count--danger" : "")">@Model.ActiveLoanCount</span>
+    </a>
+
+    <a class="reader-portal-nav__link"
+       asp-controller="Reader" asp-action="BorrowHistory"
+       aria-current="@(screen == ScreenId.ReaderBorrowHistory ? "page" : null)">
+        <i class="bi bi-clock-history" aria-hidden="true"></i>
+        <span>Lịch sử mượn</span>
+        <span class="reader-portal-nav__count">@Model.TotalHistoryCount</span>
+    </a>
+
+    <a class="reader-portal-nav__link"
+       asp-controller="Reader" asp-action="Fines"
+       aria-current="@(screen == ScreenId.ReaderFines ? "page" : null)">
+        <i class="bi bi-cash-coin" aria-hidden="true"></i>
+        <span>Tiền phạt</span>
+        @if (Model.UnpaidFineCount > 0)
+        {
+            <span class="reader-portal-nav__count reader-portal-nav__count--danger">@Model.UnpaidFineCount</span>
+        }
+    </a>
+
+    <a class="reader-portal-nav__link"
+       asp-controller="Reader" asp-action="Reservations"
+       aria-current="@(screen == ScreenId.ReaderReservations ? "page" : null)">
+        <i class="bi bi-bookmark-star" aria-hidden="true"></i>
+        <span>Sách đặt trước</span>
+        @if (Model.ActiveReservationCount > 0)
+        {
+            <span class="reader-portal-nav__count">@Model.ActiveReservationCount</span>
+        }
+    </a>
+</nav>
