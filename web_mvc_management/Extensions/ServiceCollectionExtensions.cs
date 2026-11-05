@@ -1,5 +1,9 @@
+using System.Data.Common;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using web_mvc_management.Constant;
 using web_mvc_management.Data;
 using web_mvc_management.Infrastructure;
@@ -9,20 +13,64 @@ using web_mvc_management.Services;
 
 namespace web_mvc_management.Extensions;
 
+/// <summary>
+/// Interceptor mở kết nối SQL Server qua đường dẫn đồng bộ (0ms từ Connection Pool)
+/// để tránh lỗi bất đồng bộ của Microsoft.Data.SqlClient 5.1.6 trên .NET 10.0
+/// (TaskCanceledException trong OpenInternalAsync và Win32Exception wait timeout trên SNI).
+/// </summary>
+public sealed class FastLocalSqlConnectionInterceptor : DbConnectionInterceptor
+{
+    public override InterceptionResult ConnectionOpening(
+        DbConnection connection,
+        ConnectionEventData eventData,
+        InterceptionResult result)
+    {
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            connection.Open();
+        }
+        return InterceptionResult.Suppress();
+    }
+
+    public override ValueTask<InterceptionResult> ConnectionOpeningAsync(
+        DbConnection connection,
+        ConnectionEventData eventData,
+        InterceptionResult result,
+        CancellationToken cancellationToken = default)
+    {
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            connection.Open();
+        }
+        return ValueTask.FromResult(InterceptionResult.Suppress());
+    }
+}
+
 public static class ServiceCollectionExtensions
 {
+    private static readonly FastLocalSqlConnectionInterceptor SqlConnectionInterceptor = new();
+
     /// <summary>
-    /// Đăng ký DbContext với kết nối bảo mật.
+    /// Đăng ký DbContext với kết nối bảo mật và tối ưu tốc độ kết nối IPv4 Loopback.
     /// </summary>
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
+        AppContext.SetSwitch("Switch.Microsoft.Data.SqlClient.UseManagedNetworkingOnWindows", true);
+
         var connectionString = ResolveConnectionString(configuration);
+        var commandTimeout = Debugger.IsAttached ? 300 : 60;
 
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(
                 connectionString,
-                sqlOptions => sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)
+                sqlOptions =>
+                {
+                    sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
+                    sqlOptions.CommandTimeout(commandTimeout);
+                }
             )
+            .AddInterceptors(SqlConnectionInterceptor)
+            .ConfigureWarnings(w => w.Ignore(RelationalEventId.MultipleCollectionIncludeWarning))
         );
 
         return services;
@@ -80,7 +128,26 @@ public static class ServiceCollectionExtensions
             );
         }
 
-        return connectionString;
+        // Tối ưu kết nối cục bộ trên Windows: chuyển localhost -> 127.0.0.1 để tránh delay 1.3s do fallback IPv6 (::1),
+        // tắt Encrypt/MARS trên loopback để tránh treo SNI/SslStream và TaskCanceledException trong OpenInternalAsync.
+        var csBuilder = new SqlConnectionStringBuilder(connectionString)
+        {
+            TrustServerCertificate = true,
+            Encrypt = SqlConnectionEncryptOption.Optional,
+            MultipleActiveResultSets = false,
+            Pooling = true,
+            MinPoolSize = 2,
+            MaxPoolSize = 100,
+            ConnectTimeout = 30,
+            CommandTimeout = Debugger.IsAttached ? 300 : 60
+        };
+
+        if (csBuilder.DataSource.StartsWith("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            csBuilder.DataSource = "127.0.0.1" + csBuilder.DataSource["localhost".Length..];
+        }
+
+        return csBuilder.ConnectionString;
     }
 
     /// <summary>
@@ -120,7 +187,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserContext, UserContext>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
 
-        // Cấu hình Distributed Memory Cache & Stateful Session (MVC Server-Side State)
+        // Cấu hình Memory Cache, Distributed Memory Cache & Stateful Session (MVC Server-Side State)
+        services.AddMemoryCache();
         services.AddDistributedMemoryCache();
         services.AddSession(options =>
         {

@@ -37,7 +37,7 @@ public static class DbInitializer
                 CREATE INDEX ix_book_images_book_id_status_display_order ON dbo.book_images(book_id, status, display_order);
             END
 
-            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.books') AND name = 'language')
+            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.books') AND name = 'language' AND system_type_id <> 231)
             BEGIN
                 IF OBJECT_ID('dbo.df_books_language', 'D') IS NOT NULL
                     ALTER TABLE dbo.books DROP CONSTRAINT df_books_language;
@@ -129,7 +129,10 @@ public static class DbInitializer
             };
             await context.ReaderTypes.AddAsync(guestType);
         }
-        await context.SaveChangesAsync();
+        if (context.ChangeTracker.HasChanges())
+        {
+            await context.SaveChangesAsync();
+        }
 
         // 3. Nhân viên & Quản trị viên (Staff)
         var configuredDefaultPassword = configuration?["SeedSettings:DefaultPassword"]
@@ -191,10 +194,10 @@ public static class DbInitializer
         foreach (var u in seedUsers)
         {
             var staffUser = await context.Staff.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
-            var passHash = u.HasExplicitPassword ? PasswordHasher.HashPassword(u.Password) : null;
 
             if (staffUser == null)
             {
+                var passHash = u.HasExplicitPassword ? PasswordHasher.HashPassword(u.Password) : null;
                 var candidateUsername = u.Username;
                 var suffix = 1;
                 while (usedStaffUsernames.Contains(candidateUsername))
@@ -221,20 +224,23 @@ public static class DbInitializer
             }
             else
             {
-                staffUser.Role = u.Role;
-                staffUser.FullName = u.FullName;
-                if (passHash != null)
+                if (staffUser.Role != u.Role) staffUser.Role = u.Role;
+                if (staffUser.FullName != u.FullName) staffUser.FullName = u.FullName;
+                if (u.HasExplicitPassword && !PasswordHasher.VerifyPassword(u.Password, staffUser.PasswordHash))
                 {
-                    staffUser.PasswordHash = passHash;
+                    staffUser.PasswordHash = PasswordHasher.HashPassword(u.Password);
                 }
-                staffUser.Status = EntityStatus.Active;
+                if (staffUser.Status != EntityStatus.Active) staffUser.Status = EntityStatus.Active;
                 if (string.IsNullOrWhiteSpace(staffUser.SecurityStamp))
                 {
                     staffUser.SecurityStamp = Guid.NewGuid().ToString("N");
                 }
             }
         }
-        await context.SaveChangesAsync();
+        if (context.ChangeTracker.HasChanges())
+        {
+            await context.SaveChangesAsync();
+        }
 
         var adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin)
             ?? await context.Staff.FirstAsync();
@@ -410,11 +416,11 @@ public static class DbInitializer
         foreach (var u in seedUsers)
         {
             var readerUser = await context.Readers.FirstOrDefaultAsync(x => x.Email.ToLower() == u.Email);
-            var passHash = u.HasExplicitPassword ? PasswordHasher.HashPassword(u.Password) : null;
             var targetTypeId = u.Role == AppRoles.Admin ? lecturerType.Id : studentType.Id;
 
             if (readerUser == null)
             {
+                var passHash = u.HasExplicitPassword ? PasswordHasher.HashPassword(u.Password) : null;
                 var baseReaderUsername = u.Username.Replace("_admin", "_reader").Replace("_librarian", "_student");
                 var candidateUsername = baseReaderUsername;
                 var uSuffix = 1;
@@ -459,19 +465,22 @@ public static class DbInitializer
             }
             else
             {
-                if (passHash != null)
+                if (u.HasExplicitPassword && !PasswordHasher.VerifyPassword(u.Password, readerUser.PasswordHash))
                 {
-                    readerUser.PasswordHash = passHash;
+                    readerUser.PasswordHash = PasswordHasher.HashPassword(u.Password);
                 }
-                readerUser.Status = EntityStatus.Active;
-                readerUser.CardStatus = LibraryConstants.CardStatus.Active;
+                if (readerUser.Status != EntityStatus.Active) readerUser.Status = EntityStatus.Active;
+                if (readerUser.CardStatus != LibraryConstants.CardStatus.Active) readerUser.CardStatus = LibraryConstants.CardStatus.Active;
                 if (string.IsNullOrWhiteSpace(readerUser.SecurityStamp))
                 {
                     readerUser.SecurityStamp = Guid.NewGuid().ToString("N");
                 }
             }
         }
-        await context.SaveChangesAsync();
+        if (context.ChangeTracker.HasChanges())
+        {
+            await context.SaveChangesAsync();
+        }
 
         // 9. Sách (Books), Tác giả sách (BookAuthors), và Bản sao (BookCopies)
         if (!await context.Books.AnyAsync())
@@ -680,11 +689,11 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        // 9.5. Khởi tạo Bộ sưu tập Hình ảnh Sách mẫu (BookImages: Ảnh bìa trước + Mục lục + Trang đọc thử + Bìa sau)
-        if (!await context.BookImages.AnyAsync())
-        {
-            await SeedSampleBookImagesAsync(context, adminStaff.Id);
-        }
+        // 9.2. Bổ sung tài liệu mẫu Luận văn & Đồ án, Tạp chí khoa học (Idempotent cho DB hiện hữu)
+        await EnsureThesisAndJournalBooksAsync(context, adminStaff.Id, today);
+
+        // 9.5. Khởi tạo Bộ sưu tập Hình ảnh Sách mẫu (BookImages: Ảnh bìa trước + Mục lục + Trang đọc thử) cho các sách chưa có ảnh
+        await SeedSampleBookImagesAsync(context, adminStaff.Id);
 
         // 10. Phiếu mượn mẫu (BorrowSlips) & Chi tiết mượn (BorrowDetails)
         if (!await context.BorrowSlips.AnyAsync())
@@ -806,6 +815,135 @@ public static class DbInitializer
         }
     }
 
+    private static async Task EnsureThesisAndJournalBooksAsync(ApplicationDbContext context, Guid adminStaffId, DateOnly today)
+    {
+        if (await context.Books.AnyAsync(b => b.Isbn == "978-6047625011"))
+        {
+            return;
+        }
+
+        var catIt = await context.Categories.FirstOrDefaultAsync(x => x.Name.Contains("Công nghệ thông tin"))
+            ?? await context.Categories.FirstAsync();
+        var catGt = await context.Categories.FirstOrDefaultAsync(x => x.Name.Contains("Kỹ thuật Giao thông"))
+            ?? catIt;
+        var catKt = await context.Categories.FirstOrDefaultAsync(x => x.Name.Contains("Kinh tế"))
+            ?? catGt;
+
+        var pubGtvt = await context.Publishers.FirstOrDefaultAsync(x => x.Name.Contains("Giao Thông Vận Tải"))
+            ?? await context.Publishers.FirstAsync();
+        var pubTttt = await context.Publishers.FirstOrDefaultAsync(x => x.Name.Contains("Thông Tin"))
+            ?? pubGtvt;
+
+        var authorThuy = await context.Authors.FirstOrDefaultAsync(x => x.FullName.Contains("Nguyễn Thanh Thủy"))
+            ?? await context.Authors.FirstAsync();
+        var authorQue = await context.Authors.FirstOrDefaultAsync(x => x.FullName.Contains("Trần Đình Quế"))
+            ?? authorThuy;
+
+        var shelfIt1 = await context.Shelves.FirstOrDefaultAsync(x => x.Code == "KE-IT-01")
+            ?? await context.Shelves.FirstAsync();
+        var shelfGt = await context.Shelves.FirstOrDefaultAsync(x => x.Code == "KE-GT-01")
+            ?? shelfIt1;
+        var shelfKt = await context.Shelves.FirstOrDefaultAsync(x => x.Code == "KE-KT-01")
+            ?? shelfGt;
+
+        var thesisAiTraffic = new Book
+        {
+            Id = Guid.NewGuid(),
+            Title = "Luận văn Thạc sĩ: Ứng dụng học sâu dự báo lưu lượng giao thông đô thị Hà Nội",
+            Isbn = "978-6047625011",
+            CategoryId = catIt.Id,
+            PublisherId = pubGtvt.Id,
+            PublicationYear = 2025,
+            Edition = "Luận văn Thạc sĩ Kỹ thuật",
+            Language = "Tiếng Việt",
+            PageCount = 128,
+            Description = "Luận văn thạc sĩ nghiên cứu mô hình mạng nơ-ron đồ thị không-thời gian (ST-GNN) phân tích camera giao thông và dự báo ùn tắc tại các nút giao trọng điểm.",
+            Status = EntityStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            CreatedBy = adminStaffId
+        };
+
+        var thesisBridgeDesign = new Book
+        {
+            Id = Guid.NewGuid(),
+            Title = "Đồ án Tốt nghiệp: Thiết kế kết cấu nhịp cầu dây văng vượt sông lớn theo tiêu chuẩn AASHTO LRFD",
+            Isbn = "978-6047625028",
+            CategoryId = catGt.Id,
+            PublisherId = pubGtvt.Id,
+            PublicationYear = 2025,
+            Edition = "Đồ án Tốt nghiệp Kỹ sư",
+            Language = "Tiếng Việt",
+            PageCount = 165,
+            Description = "Đồ án tốt nghiệp xuất sắc ngành Kỹ thuật Xây dựng Cầu - Đường bộ, mô phỏng nội lực dầm chủ, trụ tháp và cáp văng bằng phần mềm MIDAS Civil.",
+            Status = EntityStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            CreatedBy = adminStaffId
+        };
+
+        var journalTransportSci = new Book
+        {
+            Id = Guid.NewGuid(),
+            Title = "Tạp chí Khoa học Giao thông Vận tải - Chuyên san Công nghệ số & Hạ tầng thông minh",
+            Isbn = "978-6047625035",
+            CategoryId = catGt.Id,
+            PublisherId = pubGtvt.Id,
+            PublicationYear = 2025,
+            Edition = "Tập 76, Số 02 (2025)",
+            Language = "Tiếng Việt",
+            PageCount = 142,
+            Description = "Tạp chí khoa học định kỳ của Trường Đại học Giao thông Vận tải (ISSN 1859-2724) công bố các công trình nghiên cứu mới về BIM, vật liệu mặt đường bền vững và điều khiển giao thông thông minh.",
+            Status = EntityStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            CreatedBy = adminStaffId
+        };
+
+        var journalLogisticsConf = new Book
+        {
+            Id = Guid.NewGuid(),
+            Title = "Kỷ yếu Hội nghị Khoa học Công nghệ Giao thông Vận tải & Logistics xanh lần thứ VII",
+            Isbn = "978-6047625042",
+            CategoryId = catKt.Id,
+            PublisherId = pubTttt.Id,
+            PublicationYear = 2024,
+            Edition = "Kỷ yếu Hội nghị Khoa học",
+            Language = "Tiếng Việt",
+            PageCount = 296,
+            Description = "Tập hợp các bài báo khoa học phản biện độc lập về chuyển đổi xanh trong vận tải đa phương thức, tối ưu hóa kho bãi và chuỗi cung ứng số tại Việt Nam.",
+            Status = EntityStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            CreatedBy = adminStaffId
+        };
+
+        await context.Books.AddRangeAsync([thesisAiTraffic, thesisBridgeDesign, journalTransportSci, journalLogisticsConf]);
+        await context.SaveChangesAsync();
+
+        await context.BookAuthors.AddRangeAsync(
+        [
+            new BookAuthor { BookId = thesisAiTraffic.Id, AuthorId = authorThuy.Id, AuthorOrder = 1, Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new BookAuthor { BookId = thesisBridgeDesign.Id, AuthorId = authorQue.Id, AuthorOrder = 1, Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new BookAuthor { BookId = journalTransportSci.Id, AuthorId = authorQue.Id, AuthorOrder = 1, Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new BookAuthor { BookId = journalLogisticsConf.Id, AuthorId = authorThuy.Id, AuthorOrder = 1, Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId }
+        ]);
+
+        var existingBarcodes = new HashSet<string>(await context.BookCopies.Select(c => c.Barcode).ToListAsync(), StringComparer.OrdinalIgnoreCase);
+        var newCopies = new List<BookCopy>
+        {
+            new() { Id = Guid.NewGuid(), BookId = thesisAiTraffic.Id, ShelfId = shelfIt1.Id, Barcode = "BC-202610-0018", CopyStatus = LibraryConstants.CopyStatus.Available, Price = 85000m, AcquiredDate = today.AddDays(-20), Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new() { Id = Guid.NewGuid(), BookId = thesisAiTraffic.Id, ShelfId = shelfIt1.Id, Barcode = "BC-202610-0019", CopyStatus = LibraryConstants.CopyStatus.Available, Price = 85000m, AcquiredDate = today.AddDays(-20), Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new() { Id = Guid.NewGuid(), BookId = thesisBridgeDesign.Id, ShelfId = shelfGt.Id, Barcode = "BC-202610-0020", CopyStatus = LibraryConstants.CopyStatus.Available, Price = 90000m, AcquiredDate = today.AddDays(-18), Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new() { Id = Guid.NewGuid(), BookId = journalTransportSci.Id, ShelfId = shelfGt.Id, Barcode = "BC-202610-0021", CopyStatus = LibraryConstants.CopyStatus.Available, Price = 75000m, AcquiredDate = today.AddDays(-15), Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new() { Id = Guid.NewGuid(), BookId = journalTransportSci.Id, ShelfId = shelfGt.Id, Barcode = "BC-202610-0022", CopyStatus = LibraryConstants.CopyStatus.Available, Price = 75000m, AcquiredDate = today.AddDays(-15), Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId },
+            new() { Id = Guid.NewGuid(), BookId = journalLogisticsConf.Id, ShelfId = shelfKt.Id, Barcode = "BC-202610-0023", CopyStatus = LibraryConstants.CopyStatus.Available, Price = 115000m, AcquiredDate = today.AddDays(-12), Status = EntityStatus.Active, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, CreatedBy = adminStaffId }
+        };
+
+        await context.BookCopies.AddRangeAsync(newCopies.Where(c => !existingBarcodes.Contains(c.Barcode)));
+        await context.SaveChangesAsync();
+    }
+
     private static async Task SeedSampleBookImagesAsync(ApplicationDbContext context, Guid adminStaffId)
     {
         var cwd = Directory.GetCurrentDirectory();
@@ -815,6 +953,8 @@ public static class DbInitializer
 
         var seedDir = Path.Combine(webRoot, "uploads", "books", "seed");
         Directory.CreateDirectory(seedDir);
+
+        var booksWithImages = new HashSet<Guid>(await context.BookImages.Select(img => img.BookId).Distinct().ToListAsync());
 
         var books = await context.Books
             .Include(b => b.Category)
@@ -838,6 +978,10 @@ public static class DbInitializer
         for (var i = 0; i < books.Count; i++)
         {
             var book = books[i];
+            if (booksWithImages.Contains(book.Id))
+            {
+                continue;
+            }
             var palette = palettes[i % palettes.Length];
             var slug = $"book-{i + 1:00}";
 

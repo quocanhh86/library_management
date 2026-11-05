@@ -54,6 +54,12 @@ public class BookSummaryViewModel
     /// <summary>Khóa thể loại dùng làm tham số lọc và màu bìa: civil, logistics, it, science, survey, humanities.</summary>
     public string CategoryKey { get; init; } = string.Empty;
 
+    /// <summary>Phạm vi loại tài liệu: textbook (Giáo trình), thesis (Luận văn &amp; Đồ án), journal (Tạp chí khoa học).</summary>
+    public string DocumentScope { get; init; } = "textbook";
+
+    /// <summary>Nhãn hiển thị của loại tài liệu: Giáo trình, Luận văn &amp; Đồ án, Tạp chí khoa học.</summary>
+    public string DocumentScopeLabel { get; init; } = "Giáo trình";
+
     public int AvailableCopies { get; init; }
     public int TotalCopies { get; init; }
 

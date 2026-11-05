@@ -31,8 +31,10 @@ public class HomeController(
     {
         return new HomeViewModel
         {
-            NewArrivals = await bookService.GetNewArrivalsAsync(6, ct),
+            NewArrivals = await bookService.GetNewArrivalsAsync(12, ct),
             Topics = await bookService.GetTopicsAsync(ct),
+            Authors = await bookService.GetActiveAuthorsSelectAsync(ct),
+            Publishers = await bookService.GetActivePublishersSelectAsync(ct),
             Info = await libraryInfoService.GetAsync(ct),
             ReaderLoans = null,
             Today = dateTimeProvider.Today

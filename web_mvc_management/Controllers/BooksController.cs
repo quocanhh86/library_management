@@ -14,6 +14,7 @@ public class BooksController(IBookService bookService) : BaseController
         int? year,
         bool available = false,
         int page = 1,
+        string? scope = null,
         CancellationToken ct = default)
     {
         var model = await bookService.GetPublicCatalogAsync(
@@ -24,6 +25,7 @@ public class BooksController(IBookService bookService) : BaseController
             year,
             available,
             page,
+            scope,
             ct);
 
         return View(model);
@@ -43,9 +45,9 @@ public class BooksController(IBookService bookService) : BaseController
 
     /// <summary>Gợi ý khi gõ ở ô tìm kiếm (AJAX, trả PartialView các &lt;li&gt;).</summary>
     [HttpGet]
-    public async Task<IActionResult> Suggest(string? keyword, CancellationToken ct)
+    public async Task<IActionResult> Suggest(string? keyword, string? scope = null, CancellationToken ct = default)
     {
-        var items = await bookService.SuggestAsync(keyword ?? string.Empty, 6, ct);
+        var items = await bookService.SuggestAsync(keyword ?? string.Empty, 6, scope, ct);
         return PartialView("_SearchSuggestions", items);
     }
 }

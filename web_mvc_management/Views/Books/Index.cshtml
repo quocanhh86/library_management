@@ -8,7 +8,16 @@
     <p class="text-muted-ink">Tìm tài liệu theo thể loại, tác giả, nhà xuất bản, năm xuất bản và kiểm tra số bản sao có sẵn trên kệ.</p>
 </div>
 
-<form method="get" action="@Screens.GetPath(ScreenId.BookCatalog)" class="catalog-filters">
+<form method="get" action="@Screens.GetPath(ScreenId.BookCatalog)" class="catalog-filters" id="catalogFilterForm">
+    <input type="hidden" name="scope" id="catalogScopeInput" value="@Model.Scope" />
+    <div class="catalog-filters__scopes">
+        <div class="portal-search__scopes" role="tablist" aria-label="Phạm vi tài liệu">
+            <button type="button" data-catalog-scope="" aria-current="@(string.IsNullOrEmpty(Model.Scope) ? "true" : null)">Tất cả tài liệu</button>
+            <button type="button" data-catalog-scope="textbook" aria-current="@(Model.Scope == "textbook" ? "true" : null)">Giáo trình</button>
+            <button type="button" data-catalog-scope="thesis" aria-current="@(Model.Scope == "thesis" ? "true" : null)">Luận văn &amp; Đồ án</button>
+            <button type="button" data-catalog-scope="journal" aria-current="@(Model.Scope == "journal" ? "true" : null)">Tạp chí khoa học</button>
+        </div>
+    </div>
     <div>
         <label class="form-label" for="catalogKeyword">Tên sách, tác giả hoặc ISBN</label>
         <input class="form-control" type="search" id="catalogKeyword" name="keyword" value="@Model.Keyword" placeholder="Nhập từ khóa..." />
@@ -92,6 +101,7 @@ else
             {
                 <a class="btn btn-quiet" asp-action="Index"
                    asp-route-keyword="@Model.Keyword"
+                   asp-route-scope="@Model.Scope"
                    asp-route-category="@Model.Category"
                    asp-route-authorId="@Model.AuthorId"
                    asp-route-publisherId="@Model.PublisherId"
@@ -108,6 +118,7 @@ else
             {
                 <a class="btn btn-quiet" asp-action="Index"
                    asp-route-keyword="@Model.Keyword"
+                   asp-route-scope="@Model.Scope"
                    asp-route-category="@Model.Category"
                    asp-route-authorId="@Model.AuthorId"
                    asp-route-publisherId="@Model.PublisherId"

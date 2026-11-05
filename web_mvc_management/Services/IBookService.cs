@@ -10,9 +10,11 @@ public interface IBookService
     // -------------------------------------------------------------------------
     // 1. Tra cứu Danh mục sách (Public & Reader Portal)
     // -------------------------------------------------------------------------
-    Task<IReadOnlyList<BookSummaryViewModel>> SuggestAsync(string keyword, int limit = 6, CancellationToken ct = default);
+    Task<IReadOnlyList<BookSummaryViewModel>> SuggestAsync(string keyword, int limit = 6, string? scope = null, CancellationToken ct = default);
     Task<IReadOnlyList<BookSummaryViewModel>> GetNewArrivalsAsync(int count, CancellationToken ct = default);
     Task<IReadOnlyList<TopicViewModel>> GetTopicsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<SelectOptionViewModel>> GetActiveAuthorsSelectAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<SelectOptionViewModel>> GetActivePublishersSelectAsync(CancellationToken ct = default);
     Task<CatalogViewModel> GetPublicCatalogAsync(
         string? keyword,
         string? category,
@@ -21,6 +23,7 @@ public interface IBookService
         int? year,
         bool available,
         int page,
+        string? scope = null,
         CancellationToken ct = default);
     Task<BookSummaryViewModel?> GetPublicBookDetailAsync(Guid id, CancellationToken ct = default);
 

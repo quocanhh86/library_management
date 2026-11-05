@@ -1,4 +1,4 @@
-﻿@model web_mvc_management.Models.ViewModels.Home.HomeViewModel
+@model web_mvc_management.Models.ViewModels.Home.HomeViewModel
 @{
     ViewData["Title"] = "Trang chủ";
     ViewData["IsHome"] = true;
@@ -16,16 +16,71 @@
         <p class="portal-hero__intro">Tra cứu và khám phá tài liệu phục vụ học tập, nghiên cứu và giảng dạy tại UTC.</p>
         <div class="portal-search">
             <div class="portal-search__toolbar">
-                <div class="portal-search__scopes" aria-label="Phạm vi tài liệu"><span aria-current="true">Tất cả tài liệu</span><button type="button" disabled title="Danh mục riêng đang được bổ sung">Giáo trình</button><button type="button" disabled title="Danh mục đang được bổ sung">Luận văn &amp; Đồ án</button><button type="button" disabled title="Danh mục đang được bổ sung">Tạp chí khoa học</button></div>
+                <div class="portal-search__scopes" role="tablist" aria-label="Phạm vi tài liệu">
+                    <button type="button" data-scope-tab="" data-scope-placeholder="Tên sách, tác giả hoặc ISBN" aria-current="true">Tất cả tài liệu</button>
+                    <button type="button" data-scope-tab="textbook" data-scope-placeholder="Tìm giáo trình môn học, tên tác giả hoặc ISBN...">Giáo trình</button>
+                    <button type="button" data-scope-tab="thesis" data-scope-placeholder="Tìm đề tài luận văn thạc sĩ, đồ án tốt nghiệp...">Luận văn &amp; Đồ án</button>
+                    <button type="button" data-scope-tab="journal" data-scope-placeholder="Tìm tạp chí khoa học GTVT, kỷ yếu hoặc mã ISSN...">Tạp chí khoa học</button>
+                </div>
                 <button class="portal-advanced-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#advancedSearch" aria-expanded="false" aria-controls="advancedSearch">Tìm kiếm nâng cao <i class="bi bi-sliders2" aria-hidden="true"></i></button>
             </div>
             <vc:search-bar hero="true" autofocus="false" />
             <div class="collapse" id="advancedSearch">
                 <form class="portal-advanced" action="@catalogPath" method="get">
-                    <div><label class="form-label" for="advancedKeyword">Từ khóa</label><input class="form-control" id="advancedKeyword" name="keyword" type="search" /></div>
-                    <div><label class="form-label" for="advancedCategory">Chuyên ngành</label><select class="form-select" id="advancedCategory" name="category"><option value="">Tất cả chuyên ngành</option>@foreach (var topic in Model.Topics){<option value="@topic.Key">@topic.Name</option>}</select></div>
-                    <div><label class="form-label" for="advancedYear">Năm xuất bản</label><input class="form-control" id="advancedYear" name="year" type="number" min="1000" max="9999" /></div>
-                    <label class="portal-advanced__available"><input class="form-check-input" type="checkbox" name="available" value="true" /> Chỉ sách còn bản</label><button class="btn portal-button" type="submit">Tra cứu tài liệu</button>
+                    <div>
+                        <label class="form-label" for="advancedKeyword">Từ khóa</label>
+                        <input class="form-control" id="advancedKeyword" name="keyword" type="search" placeholder="Tên tài liệu, đề tài hoặc ISBN..." />
+                    </div>
+                    <div>
+                        <label class="form-label" for="advancedScope">Loại tài liệu</label>
+                        <select class="form-select" id="advancedScope" name="scope" data-advanced-scope>
+                            <option value="">Tất cả loại tài liệu</option>
+                            <option value="textbook">Giáo trình &amp; Sách chuyên khảo</option>
+                            <option value="thesis">Luận văn &amp; Đồ án tốt nghiệp</option>
+                            <option value="journal">Tạp chí khoa học &amp; Kỷ yếu</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="advancedCategory">Chuyên ngành</label>
+                        <select class="form-select" id="advancedCategory" name="category">
+                            <option value="">Tất cả chuyên ngành</option>
+                            @foreach (var topic in Model.Topics)
+                            {
+                                <option value="@topic.Key">@topic.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="advancedAuthor">Tác giả / Giảng viên hướng dẫn</label>
+                        <select class="form-select" id="advancedAuthor" name="authorId">
+                            <option value="">Tất cả tác giả</option>
+                            @foreach (var author in Model.Authors)
+                            {
+                                <option value="@author.Id">@author.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="advancedPublisher">Nhà xuất bản / Đơn vị cấp</label>
+                        <select class="form-select" id="advancedPublisher" name="publisherId">
+                            <option value="">Tất cả NXB</option>
+                            @foreach (var pub in Model.Publishers)
+                            {
+                                <option value="@pub.Id">@pub.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="advancedYear">Năm xuất bản</label>
+                        <input class="form-control" id="advancedYear" name="year" type="number" min="1950" max="2099" placeholder="VD: 2024" />
+                    </div>
+                    <label class="portal-advanced__available">
+                        <input class="form-check-input" type="checkbox" name="available" value="true" /> Chỉ hiển thị tài liệu còn bản sẵn sàng trên kệ
+                    </label>
+                    <div class="portal-advanced__actions">
+                        <button class="btn btn-quiet btn-sm" type="reset" data-advanced-reset>Đặt lại</button>
+                        <button class="btn portal-button" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Tra cứu tài liệu</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -41,9 +96,9 @@
 </section>
 <section class="portal-section portal-arrivals" aria-labelledby="newTitle">
     <div class="portal-container">
-        <div class="portal-section__head"><div><p class="portal-kicker"><i class="bi bi-patch-check" aria-hidden="true"></i> Bộ sưu tập học thuật mới</p><h2 id="newTitle">Sách mới bổ sung</h2><p class="portal-section__description">Khám phá những tài liệu mới được cập nhật tại thư viện.</p></div><a class="portal-section__link" href="@catalogPath">Xem tất cả tài liệu <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
+        <div class="portal-section__head"><div><p class="portal-kicker"><i class="bi bi-patch-check" aria-hidden="true"></i> Bộ sưu tập học thuật mới</p><h2 id="newTitle" data-arrivals-title>Sách mới bổ sung</h2><p class="portal-section__description" data-arrivals-desc>Khám phá những tài liệu mới được cập nhật tại thư viện.</p></div><a class="portal-section__link" href="@catalogPath" data-arrivals-more-link data-base-href="@catalogPath">Xem tất cả tài liệu <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
         @if (Model.NewArrivals.Count == 0){<div class="library-empty"><h3>Tủ sách đang được cập nhật</h3><p>Bạn có thể tra cứu tài liệu hiện có trong danh mục.</p><a href="@catalogPath">Mở danh mục sách</a></div>}
-        else{<div class="portal-books">@foreach (var book in Model.NewArrivals){<partial name="_PortalBook" model="book" />}</div>}
+        else{<div class="portal-books" data-portal-books>@foreach (var book in Model.NewArrivals){<partial name="_PortalBook" model="book" />}</div>}
     </div>
 </section>
 @if (Model.ReaderLoans is { } loans)

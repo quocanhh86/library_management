@@ -10,6 +10,7 @@ public class SearchBarViewComponent : ViewComponent
     public IViewComponentResult Invoke(bool hero = false, bool autofocus = false)
     {
         var keyword = Request.Query["keyword"].ToString();
-        return View((Keyword: keyword, Hero: hero, Autofocus: autofocus));
+        var scope = Request.Query["scope"].ToString();
+        return View((Keyword: keyword, Scope: scope, Hero: hero, Autofocus: autofocus));
     }
 }
