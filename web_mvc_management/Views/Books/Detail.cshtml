@@ -99,6 +99,35 @@
             {
                 <p class="mt-3 mb-0 fs-xs">Có thể có lại từ @due.ToString(AppConstants.DefaultDateFormat). Ngày trả thực tế có thể thay đổi.</p>
             }
+            @if (Model.AvailableCopies == 0 && Model.TotalCopies > 0)
+            {
+                <div class="mt-3">
+                    @if (User.IsInRole(AppRoles.Reader))
+                    {
+                        <form asp-controller="Reader"
+                              asp-action="CreateReservation"
+                              method="post"
+                              class="d-inline"
+                              data-confirm="Đăng ký đặt trước đầu sách &quot;@Model.Title&quot;? Hệ thống sẽ ưu tiên giữ bản sao đầu tiên được trả về cho thẻ bạn đọc của bạn."
+                              data-confirm-title="Xác nhận đặt trước sách"
+                              data-confirm-ok="Đặt trước">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="bookId" value="@Model.Id" />
+                            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-bookmark-plus me-1" aria-hidden="true"></i>Đặt trước đầu sách này
+                            </button>
+                        </form>
+                    }
+                    else if (User.Identity?.IsAuthenticated != true)
+                    {
+                        <a class="btn btn-outline-secondary btn-sm"
+                           href="@Screens.GetPath(ScreenId.Login)?mode=reader&returnUrl=@Uri.EscapeDataString(Context.Request.Path)">
+                            <i class="bi bi-bookmark-plus me-1" aria-hidden="true"></i>Đăng nhập để đặt trước sách
+                        </a>
+                    }
+                </div>
+            }
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Model.Description))
