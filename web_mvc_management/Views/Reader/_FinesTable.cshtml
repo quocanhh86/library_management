@@ -32,7 +32,7 @@
 else
 {
     <div class="table-responsive">
-        <table class="table mb-0 align-middle">
+        <table class="table data-table mb-0 align-middle">
             <thead>
                 <tr>
                     <th>Mã phiếu / Barcode</th>
@@ -48,8 +48,8 @@ else
                 @foreach (var fine in items)
                 {
                     <tr>
-                        <td>
-                            <div class="d-flex flex-column gap-1">
+                        <td class="text-nowrap">
+                            <div class="d-flex flex-column align-items-start gap-1">
                                 <span class="reader-code-chip">@fine.SlipNo</span>
                                 <span class="mono text-muted" style="font-size: var(--fs-xs);">
                                     <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@fine.Barcode
@@ -97,13 +97,13 @@ else
                                 @fine.Amount.ToString("N0") đ
                             </span>
                         </td>
-                        <td class="mono" style="font-size: var(--fs-sm);">
+                        <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
                             @fine.CreatedAt.ToString("dd/MM/yyyy HH:mm")
                         </td>
                         <td style="font-size: var(--fs-sm);">
                             @if (fine.PaidAt.HasValue)
                             {
-                                <div class="mono">@fine.PaidAt.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                                <div class="mono text-nowrap">@fine.PaidAt.Value.ToString("dd/MM/yyyy HH:mm")</div>
                                 @if (!string.IsNullOrWhiteSpace(fine.PaymentMethodLabel))
                                 {
                                     <small class="text-muted">Hình thức: @fine.PaymentMethodLabel</small>
@@ -118,7 +118,7 @@ else
                                 <span class="text-muted">Nộp trực tiếp tại quầy</span>
                             }
                         </td>
-                        <td>
+                        <td class="text-nowrap">
                             @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Fine, fine.FineStatus))
                         </td>
                     </tr>

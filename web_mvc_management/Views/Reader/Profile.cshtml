@@ -40,13 +40,14 @@
         else
         {
             <div class="table-responsive">
-                <table class="table mb-0 align-middle">
+                <table class="table data-table mb-0 align-middle">
                     <thead>
                         <tr>
                             <th>Mã phiếu / Barcode</th>
                             <th>Tài liệu</th>
                             <th>Ngày mượn</th>
-                            <th>Hạn trả &amp; Trạng thái</th>
+                            <th>Hạn trả</th>
+                            <th>Trạng thái</th>
                             <th class="num">Gia hạn</th>
                             <th class="num">Phạt tạm tính</th>
                             <th class="text-end">Thao tác</th>
@@ -57,8 +58,8 @@
                         {
                             var overdueDays = Math.Max(0, Model.Today.DayNumber - loan.DueDate.DayNumber);
                             <tr>
-                                <td>
-                                    <div class="d-flex flex-column gap-1">
+                                <td class="text-nowrap">
+                                    <div class="d-flex flex-column align-items-start gap-1">
                                         <span class="reader-code-chip" title="Mã phiếu mượn">@loan.SlipNo</span>
                                         <span class="mono text-muted" style="font-size: var(--fs-xs);" title="Mã vạch bản sách">
                                             <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@loan.Barcode
@@ -88,21 +89,14 @@
                                         <span class="reader-book-meta">@loan.Authors</span>
                                     }
                                 </td>
-                                <td class="mono" style="font-size: var(--fs-sm);">
+                                <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
                                     @loan.BorrowedAt.ToString("dd/MM/yyyy")
                                 </td>
-                                <td>
-                                    <div class="d-flex align-items-center gap-3">
-                                        @await Html.PartialAsync("_DueStamp", new DueStamp(loan.DueDate, Model.Today))
-                                        <div class="d-flex flex-column gap-1">
-                                            <span class="mono fw-medium" style="font-size: var(--fs-sm);">
-                                                @loan.DueDate.ToString("dd/MM/yyyy")
-                                            </span>
-                                            <div>
-                                                @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Loan, loan.LoanStatusCode))
-                                            </div>
-                                        </div>
-                                    </div>
+                                <td class="text-nowrap">
+                                    @await Html.PartialAsync("_DueStamp", new DueStamp(loan.DueDate, Model.Today))
+                                </td>
+                                <td class="text-nowrap">
+                                    @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Loan, loan.LoanStatusCode))
                                 </td>
                                 <td class="num">
                                     <span class="mono">@loan.RenewCount / @loan.MaxRenewals</span>
@@ -120,7 +114,7 @@
                                         <span class="text-muted">—</span>
                                     }
                                 </td>
-                                <td class="text-end">
+                                <td class="text-end text-nowrap">
                                     @if (loan.CanRenew)
                                     {
                                         <form asp-controller="Reader"
@@ -145,7 +139,7 @@
                                             </button>
                                             @if (!string.IsNullOrWhiteSpace(loan.RenewBlockReason))
                                             {
-                                                <small class="text-muted mt-1" style="max-width: 210px; font-size: var(--fs-xs);">
+                                                <small class="text-muted mt-1 text-end" style="max-width: 210px; white-space: normal; font-size: var(--fs-xs);">
                                                     @loan.RenewBlockReason
                                                 </small>
                                             }
