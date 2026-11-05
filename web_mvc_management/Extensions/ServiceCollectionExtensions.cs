@@ -223,6 +223,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICatalogMasterService, CatalogMasterService>();
         services.AddScoped<ISystemAdminService, SystemAdminService>();
         services.AddScoped<ICirculationService, CirculationService>();
+        services.AddScoped<IReaderAdminService, ReaderAdminService>();
 
         return services;
     }
