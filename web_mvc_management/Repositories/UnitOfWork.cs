@@ -66,7 +66,7 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         }
         catch
         {
-            await RollbackTransactionAsync(cancellationToken);
+            await RollbackTransactionAsync(CancellationToken.None);
             throw;
         }
         finally

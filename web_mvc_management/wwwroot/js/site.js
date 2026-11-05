@@ -193,7 +193,9 @@
             timer = setTimeout(() => {
                 input.setAttribute("aria-busy", "true");
                 if (status) status.textContent = "Đang tìm gợi ý sách.";
-                request = $.get(form.dataset.suggestUrl, { keyword: term })
+                const scopeEl = form.querySelector("[data-search-scope-input]");
+                const scopeVal = scopeEl ? scopeEl.value : "";
+                request = $.get(form.dataset.suggestUrl, { keyword: term, scope: scopeVal })
                     .done((html) => {
                         if (input.value.trim() !== term || document.activeElement !== input) return;
                         list.innerHTML = html;
@@ -239,5 +241,106 @@
     // ---------- Phân trang ----------
     $(document).on("change", "[data-pager-size]", function () {
         window.location.href = this.value;
+    });
+
+    // ---------- Phạm vi tài liệu (Tất cả tài liệu / Giáo trình / Luận văn & Đồ án / Tạp chí khoa học) ----------
+    const scopeMeta = {
+        "": {
+            title: "Sách mới bổ sung",
+            desc: "Khám phá những tài liệu mới được cập nhật tại thư viện.",
+            moreText: "Xem tất cả tài liệu"
+        },
+        "textbook": {
+            title: "Giáo trình & Sách chuyên khảo",
+            desc: "Giáo trình môn học và sách chuyên khảo phục vụ đào tạo các ngành tại UTC.",
+            moreText: "Xem tất cả giáo trình"
+        },
+        "thesis": {
+            title: "Luận văn & Đồ án tốt nghiệp",
+            desc: "Các đề tài luận văn thạc sĩ, đồ án tốt nghiệp xuất sắc lưu trữ tại thư viện.",
+            moreText: "Xem tất cả luận văn & đồ án"
+        },
+        "journal": {
+            title: "Tạp chí khoa học & Kỷ yếu",
+            desc: "Các số tạp chí Khoa học Giao thông Vận tải và kỷ yếu hội nghị nghiên cứu khoa học.",
+            moreText: "Xem tất cả tạp chí khoa học"
+        }
+    };
+
+    function applyHomeScope(scopeValue) {
+        const val = scopeValue || "";
+        const tabs = document.querySelectorAll("[data-scope-tab]");
+        tabs.forEach((btn) => {
+            if ((btn.dataset.scopeTab || "") === val) {
+                btn.setAttribute("aria-current", "true");
+                const heroInput = document.getElementById("searchHero");
+                if (heroInput && btn.dataset.scopePlaceholder) {
+                    heroInput.setAttribute("placeholder", btn.dataset.scopePlaceholder);
+                }
+            } else {
+                btn.removeAttribute("aria-current");
+            }
+        });
+
+        document.querySelectorAll("[data-search-scope-input]").forEach((inp) => {
+            inp.value = val;
+        });
+
+        const advScope = document.querySelector("[data-advanced-scope]");
+        if (advScope && advScope.value !== val) {
+            advScope.value = val;
+        }
+
+        const meta = scopeMeta[val] || scopeMeta[""];
+        const titleEl = document.querySelector("[data-arrivals-title]");
+        const descEl = document.querySelector("[data-arrivals-desc]");
+        const moreLink = document.querySelector("[data-arrivals-more-link]");
+        if (titleEl) titleEl.textContent = meta.title;
+        if (descEl) descEl.textContent = meta.desc;
+        if (moreLink) {
+            const baseHref = moreLink.dataset.baseHref || "/Books";
+            moreLink.href = val ? `${baseHref}?scope=${encodeURIComponent(val)}` : baseHref;
+            moreLink.innerHTML = `${meta.moreText} <i class="bi bi-arrow-right" aria-hidden="true"></i>`;
+        }
+
+        const bookCards = document.querySelectorAll("[data-portal-books] > [data-book-scope]");
+        if (bookCards.length) {
+            let shown = 0;
+            bookCards.forEach((card) => {
+                const match = !val || card.dataset.bookScope === val;
+                if (match && shown < 6) {
+                    card.hidden = false;
+                    shown++;
+                } else {
+                    card.hidden = true;
+                }
+            });
+        }
+    }
+
+    $(function () {
+        if (document.querySelector("[data-scope-tab]")) {
+            applyHomeScope("");
+        }
+    });
+
+    $(document).on("click", "[data-scope-tab]", function () {
+        applyHomeScope(this.dataset.scopeTab || "");
+    });
+
+    $(document).on("change", "[data-advanced-scope]", function () {
+        applyHomeScope(this.value || "");
+    });
+
+    $(document).on("click", "[data-advanced-reset]", function () {
+        setTimeout(() => applyHomeScope(""), 0);
+    });
+
+    $(document).on("click", "[data-catalog-scope]", function () {
+        const scopeVal = this.dataset.catalogScope || "";
+        const scopeInput = document.getElementById("catalogScopeInput");
+        const form = document.getElementById("catalogFilterForm");
+        if (scopeInput) scopeInput.value = scopeVal;
+        if (form) form.submit();
     });
 })(jQuery);

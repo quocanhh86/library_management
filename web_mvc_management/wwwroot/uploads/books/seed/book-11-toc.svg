@@ -1,0 +1,21 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+  <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+  <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="65" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#64748B">Tạp ch&#237; Khoa học Giao th&#244;ng Vận tải - Chuy&#234;n ...</text>
+  <line x1="65" y1="92" x2="535" y2="92" stroke="#CBD5E1" stroke-width="1.5"/>
+  <rect x="65" y="122" width="470" height="44" rx="6" fill="#4A1D1F" fill-opacity="0.08"/>
+  <text x="80" y="150" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#4A1D1F">MỤC LỤC CHI TIẾT (TABLE OF CONTENTS)</text>
+  <text x="65" y="215" font-family="Georgia, serif" font-size="16" fill="#334155">Chương 1: Tổng quan kiến thức nền tảng &amp; Nguy&#234;n l&#253; cốt l&#245;i</text>
+<text x="65" y="243" font-family="Georgia, serif" font-size="16" fill="#334155">.......... Trang 05</text>
+<text x="65" y="289" font-family="Georgia, serif" font-size="16" fill="#334155">Chương 2: Ph&#226;n t&#237;ch cấu tr&#250;c, m&#244; h&#236;nh h&#243;a &amp; Ti&#234;u chuẩn kỹ</text>
+<text x="65" y="317" font-family="Georgia, serif" font-size="16" fill="#334155">thuật .... Trang 48</text>
+<text x="65" y="363" font-family="Georgia, serif" font-size="16" fill="#334155">Chương 3: Thiết kế hệ thống &amp; C&#225;c mẫu thực h&#224;nh tốt nhất</text>
+<text x="65" y="391" font-family="Georgia, serif" font-size="16" fill="#334155">........... Trang 112</text>
+<text x="65" y="437" font-family="Georgia, serif" font-size="16" fill="#334155">Chương 4: Nghi&#234;n cứu t&#236;nh huống thực tế (Case Studies)</text>
+<text x="65" y="465" font-family="Georgia, serif" font-size="16" fill="#334155">.............. Trang 195</text>
+<text x="65" y="511" font-family="Georgia, serif" font-size="16" fill="#334155">Chương 5: C&#226;u hỏi &#244;n tập, B&#224;i tập thực h&#224;nh &amp; Phụ lục tra</text>
+<text x="65" y="539" font-family="Georgia, serif" font-size="16" fill="#334155">cứu ...... Trang 280</text>
+
+  <line x1="65" y1="745" x2="535" y2="745" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="300" y="775" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">Trang i — Mục lục</text>
+</svg>

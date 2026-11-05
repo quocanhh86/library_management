@@ -54,7 +54,8 @@
 .portal-search { max-width: 1040px; margin-inline: auto; padding: 16px; background: var(--c-surface); border-radius: 8px; box-shadow: var(--portal-shadow); text-align: left; }
 .portal-search__toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
 .portal-search__scopes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.portal-search__scopes > * { border: 0; padding: 9px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; white-space: nowrap; }
+.portal-search__scopes > * { border: 0; padding: 9px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; white-space: nowrap; background: transparent; color: var(--portal-muted); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.portal-search__scopes > *:hover:not([aria-current]) { background: var(--portal-panel); color: var(--portal-primary); }
 .portal-search__scopes [aria-current] { color: var(--c-surface); background: var(--portal-primary); }
 .portal-search__scopes button:disabled { color: var(--portal-muted); background: none; opacity: .65; cursor: not-allowed; }
 .portal-advanced-toggle { background: none; padding: 10px 0; border: 0; color: var(--portal-gold); font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -70,8 +71,9 @@
 .portal-search .searchbar__submit .bi { color: var(--portal-amber); font-size: 18px; }
 .portal-search .searchbar__key { display: none; }
 .portal-search .search-suggest { text-align: left; z-index: 20; }
-.portal-advanced { display: grid; grid-template-columns: 1fr 1fr 120px; gap: 20px 16px; padding: 24px 0 8px; border-top: 1px solid var(--portal-rule); margin-top: 20px; }
-.portal-advanced__available { grid-column: span 2; align-self: center; display: flex; gap: 8px; font-size: 13px; }
+.portal-advanced { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 16px; padding: 24px 0 8px; border-top: 1px solid var(--portal-rule); margin-top: 20px; }
+.portal-advanced__available { grid-column: span 2; align-self: center; display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 0; cursor: pointer; }
+.portal-advanced__actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 .portal-topics { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 24px auto 0; max-width: 1080px; font-size: 11px; }
 .portal-topics > span { text-transform: uppercase; font-weight: 600; color: var(--portal-muted); margin-right: 8px; }
 .portal-topics a { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; min-height: 36px; border-radius: 4px; background: var(--portal-panel); text-decoration: none; font-weight: 500; }

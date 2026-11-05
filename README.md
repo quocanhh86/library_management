@@ -483,6 +483,20 @@ Trước khi commit mã nguồn hoặc tạo Pull Request, lập trình viên h�
 
 ---
 
+## ✨ Các Tính Năng Mới Nổi Bật Trên Cổng Bạn Đọc & Bảo Mật Hệ Thống
+
+1. **Phân loại & Tra cứu theo Phạm vi Tài liệu (`Document Scopes`) trên Trang Chủ (`/`) & Danh mục (`/Books`):**
+   - Hỗ trợ 4 tab chuyển đổi phạm vi tức thì: **Tất cả tài liệu**, **Giáo trình** (`scope=textbook`), **Luận văn & Đồ án** (`scope=thesis`), **Tạp chí khoa học** (`scope=journal`).
+   - Tự động đồng bộ phạm vi đang chọn vào ô tìm kiếm chính, gợi ý tìm kiếm tự động (`AJAX Suggest`) và lọc trực tiếp danh sách tài liệu mới trên trang chủ.
+2. **Tìm kiếm Nâng cao Đa tiêu chí (`#advancedSearch`):**
+   - Kết hợp đồng thời: **Từ khóa**, **Loại tài liệu (`scope`)**, **Chuyên ngành (`category`)**, **Tác giả / Giảng viên hướng dẫn (`authorId`)**, **Nhà xuất bản (`publisherId`)**, **Năm xuất bản (`year`)** và **Chỉ hiển thị tài liệu còn bản sẵn sàng trên kệ (`available`)**.
+3. **Bộ sưu tập Đa ảnh Đầu sách & Đọc thử (`BookImages` + Cloudinary):**
+   - Mỗi đầu sách hỗ trợ nhiều ảnh phân loại: Ảnh bìa trước (`COVER`), Bìa sau (`BACK_COVER`), Mục lục (`TABLE_OF_CONTENTS`), Trang đọc thử (`PREVIEW_PAGE`) kèm trình xem phóng to trên trang chi tiết.
+4. **Bảo mật Chống Can thiệp F12, XSS/SQLi & Kiểm định File Upload (`InputSanitizer` & `RequestSecurityMiddleware`):**
+   - Tự động làm sạch dữ liệu đầu vào (loại bỏ ký tự điều khiển, Zero-width, Zalgo, Emoji không hợp lệ), chặn payload XSS/HTML/SQLi khi bị chỉnh sửa DOM qua F12 DevTools, chống Cross-Site POST/CSRF và kiểm tra chữ ký nhị phân (`Magic Bytes`) của file ảnh tải lên.
+
+---
+
 ## 📝 License
 
 Dự án phát triển nội bộ phục vụ bài tập lớn môn Hệ thống Quản lý Thư viện - Đại học Giao Thông Vận Tải (UTC).

@@ -1,0 +1,139 @@
+@model web_mvc_management.Models.ViewModels.Reader.ReaderPortalPageViewModel
+@using web_mvc_management.Models.ViewModels.Shared
+@{
+    var items = Model.PagedBorrowHistory?.Items ?? Model.BorrowHistory;
+    var filter = Model.HistoryFilter;
+    var totalCount = Model.PagedBorrowHistory?.TotalCount ?? items.Count;
+    var totalPages = Model.PagedBorrowHistory?.TotalPages ?? 1;
+}
+
+@if (items.Count == 0)
+{
+    <div class="reader-empty-box">
+        <h3 class="reader-empty-box__title">Không tìm thấy lượt mượn trả phù hợp</h3>
+        <p class="reader-empty-box__desc">
+            @if (!string.IsNullOrWhiteSpace(filter.Keyword) || !string.IsNullOrWhiteSpace(filter.LoanState))
+            {
+                <span>Không có bản ghi nào khớp với bộ lọc hiện tại. Hãy thử xóa bộ lọc hoặc đổi từ khóa tìm kiếm.</span>
+            }
+            else
+            {
+                <span>Chưa có dữ liệu lịch sử mượn trả nào được ghi nhận cho thẻ thư viện của bạn.</span>
+            }
+        </p>
+        @if (!string.IsNullOrWhiteSpace(filter.Keyword) || !string.IsNullOrWhiteSpace(filter.LoanState))
+        {
+            <a class="btn btn-outline-secondary btn-sm" asp-controller="Reader" asp-action="BorrowHistory">
+                Đặt lại bộ lọc
+            </a>
+        }
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Mã phiếu / Barcode</th>
+                    <th>Tài liệu</th>
+                    <th>Ngày mượn</th>
+                    <th>Hạn trả</th>
+                    <th>Ngày trả thực tế</th>
+                    <th>Tình trạng sách</th>
+                    <th class="num">Gia hạn</th>
+                    <th>Trạng thái</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in items)
+                {
+                    <tr>
+                        <td>
+                            <div class="d-flex flex-column gap-1">
+                                <span class="reader-code-chip">@row.SlipNo</span>
+                                <span class="mono text-muted" style="font-size: var(--fs-xs);">
+                                    <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@row.Barcode
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            @if (row.BookId != Guid.Empty)
+                            {
+                                <a class="reader-book-title"
+                                   asp-controller="Books"
+                                   asp-action="Detail"
+                                   asp-route-id="@row.BookId">
+                                    @row.BookTitle
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="reader-book-title">@row.BookTitle</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(row.Authors))
+                            {
+                                <span class="reader-book-meta">@row.Authors</span>
+                            }
+                            @if (row.RecordedFineAmount > 0)
+                            {
+                                <small class="d-inline-block mt-1" style="color: var(--c-stamp-text);">
+                                    <i class="bi bi-receipt me-1" aria-hidden="true"></i>Phát sinh phạt: @row.RecordedFineAmount.ToString("N0") đ
+                                </small>
+                            }
+                        </td>
+                        <td class="mono" style="font-size: var(--fs-sm);">
+                            @row.BorrowedAt.ToString("dd/MM/yyyy")
+                        </td>
+                        <td class="mono" style="font-size: var(--fs-sm);">
+                            @row.DueDate.ToString("dd/MM/yyyy")
+                        </td>
+                        <td class="mono" style="font-size: var(--fs-sm);">
+                            @if (row.ReturnedAt.HasValue)
+                            {
+                                @row.ReturnedAt.Value.ToString("dd/MM/yyyy HH:mm")
+                            }
+                            else
+                            {
+                                <span class="text-muted">Chưa trả</span>
+                            }
+                        </td>
+                        <td>
+                            @if (row.ReturnedAt.HasValue)
+                            {
+                                <span class="fw-medium" style="font-size: var(--fs-sm);">@row.ReturnConditionLabel</span>
+                                @if (!string.IsNullOrWhiteSpace(row.ReturnNote))
+                                {
+                                    <small class="d-block text-muted">@row.ReturnNote</small>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted" style="font-size: var(--fs-sm);">Đang lưu hành</span>
+                            }
+                        </td>
+                        <td class="num">
+                            <span class="mono">@row.RenewCount / @row.MaxRenewals</span>
+                        </td>
+                        <td>
+                            @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Loan, row.LoanStatusCode))
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.PagedBorrowHistory != null && totalPages > 1)
+    {
+        <div class="p-3 border-top">
+            @await Html.PartialAsync("_Pagination", Model.PagedBorrowHistory)
+        </div>
+    }
+    else
+    {
+        <div class="reader-card-footer">
+            <span>Hiển thị <strong>@items.Count</strong> / <strong>@totalCount</strong> lượt mượn sách</span>
+        </div>
+    }
+}

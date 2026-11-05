@@ -13,7 +13,7 @@
     </span>
     <span class="book-row__body">
         <span class="book-row__title">@Model.Title</span>
-        <span class="book-row__meta">@Model.Authors</span>
+        <span class="book-row__meta"><span class="badge bg-light text-dark border me-1">@Model.DocumentScopeLabel</span>@Model.Authors</span>
         <span class="book-row__meta">@Model.Publisher, @Model.PublicationYear</span>
         @if (Model.AvailableCopies == 0 && Model.EarliestDueDate is { } due)
         {

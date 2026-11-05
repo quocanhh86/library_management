@@ -48,6 +48,7 @@ public class DevController(IWebHostEnvironment env) : BaseController
     public async Task<IActionResult> HomeAsReader(
         [FromServices] IBookService bookService,
         [FromServices] ILibraryInfoService libraryInfoService,
+        [FromServices] IReaderPortalService readerPortalService,
         [FromServices] IDateTimeProvider dateTimeProvider,
         CancellationToken ct)
     {
@@ -57,7 +58,7 @@ public class DevController(IWebHostEnvironment env) : BaseController
         }
 
         ActAs("Lê Minh Châu", AppRoles.Reader);
-        var model = await HomeController.BuildModelAsync(bookService, libraryInfoService, dateTimeProvider, ct);
+        var model = await HomeController.BuildModelAsync(bookService, libraryInfoService, readerPortalService, dateTimeProvider, null, ct);
         return View("~/Views/Home/Index.cshtml", model);
     }
 
