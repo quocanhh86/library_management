@@ -32,7 +32,7 @@
 else
 {
     <div class="table-responsive">
-        <table class="table mb-0 align-middle">
+        <table class="table data-table mb-0 align-middle">
             <thead>
                 <tr>
                     <th>Mã phiếu / Barcode</th>
@@ -49,8 +49,8 @@ else
                 @foreach (var row in items)
                 {
                     <tr>
-                        <td>
-                            <div class="d-flex flex-column gap-1">
+                        <td class="text-nowrap">
+                            <div class="d-flex flex-column align-items-start gap-1">
                                 <span class="reader-code-chip">@row.SlipNo</span>
                                 <span class="mono text-muted" style="font-size: var(--fs-xs);">
                                     <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@row.Barcode
@@ -82,13 +82,13 @@ else
                                 </small>
                             }
                         </td>
-                        <td class="mono" style="font-size: var(--fs-sm);">
+                        <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
                             @row.BorrowedAt.ToString("dd/MM/yyyy")
                         </td>
-                        <td class="mono" style="font-size: var(--fs-sm);">
+                        <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
                             @row.DueDate.ToString("dd/MM/yyyy")
                         </td>
-                        <td class="mono" style="font-size: var(--fs-sm);">
+                        <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
                             @if (row.ReturnedAt.HasValue)
                             {
                                 @row.ReturnedAt.Value.ToString("dd/MM/yyyy HH:mm")
@@ -115,7 +115,7 @@ else
                         <td class="num">
                             <span class="mono">@row.RenewCount / @row.MaxRenewals</span>
                         </td>
-                        <td>
+                        <td class="text-nowrap">
                             @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Loan, row.LoanStatusCode))
                         </td>
                     </tr>

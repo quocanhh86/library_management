@@ -35,7 +35,7 @@
         else
         {
             <div class="table-responsive">
-                <table class="table mb-0 align-middle">
+                <table class="table data-table mb-0 align-middle">
                     <thead>
                         <tr>
                             <th>Đầu sách</th>
@@ -69,16 +69,18 @@
                                         <span class="reader-book-meta">@item.Authors</span>
                                     }
                                 </td>
-                                <td>
+                                <td class="text-nowrap">
                                     @if (item.ReservationStatus == "READY" && !string.IsNullOrWhiteSpace(item.AssignedBarcode))
                                     {
-                                        <span class="reader-code-chip">
-                                            <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@item.AssignedBarcode
-                                        </span>
-                                        @if (!string.IsNullOrWhiteSpace(item.ShelfCode))
-                                        {
-                                            <small class="d-block text-muted mt-1">Kệ: @item.ShelfCode</small>
-                                        }
+                                        <div class="d-flex flex-column align-items-start gap-1">
+                                            <span class="reader-code-chip">
+                                                <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@item.AssignedBarcode
+                                            </span>
+                                            @if (!string.IsNullOrWhiteSpace(item.ShelfCode))
+                                            {
+                                                <small class="text-muted">Kệ: @item.ShelfCode</small>
+                                            }
+                                        </div>
                                     }
                                     else if (item.ReservationStatus == "PENDING" && item.QueuePosition > 0)
                                     {
@@ -89,10 +91,10 @@
                                         <span class="text-muted">—</span>
                                     }
                                 </td>
-                                <td class="mono" style="font-size: var(--fs-sm);">
+                                <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
                                     @item.ReservedAt.ToString("dd/MM/yyyy HH:mm")
                                 </td>
-                                <td class="mono" style="font-size: var(--fs-sm);">
+                                <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
                                     @if (item.ExpiresAt.HasValue)
                                     {
                                         <span class="@(item.ReservationStatus == "READY" ? "fw-semibold" : "")">
@@ -104,10 +106,10 @@
                                         <span class="text-muted">Chờ có bản trả về</span>
                                     }
                                 </td>
-                                <td>
+                                <td class="text-nowrap">
                                     @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Reservation, item.ReservationStatus))
                                 </td>
-                                <td class="text-end">
+                                <td class="text-end text-nowrap">
                                     @if (item.CanCancel)
                                     {
                                         <form asp-controller="Reader"
@@ -134,6 +136,14 @@
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="reader-card-footer">
+                <span>
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                    Bản sao ở trạng thái <strong>Sẵn sàng nhận sách</strong> được giữ tại quầy thủ thư trong vòng 48 giờ.
+                </span>
+                <a asp-controller="Books" asp-action="Index">Tra cứu thêm tài liệu →</a>
             </div>
         }
     </section>

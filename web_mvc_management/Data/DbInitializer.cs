@@ -960,6 +960,86 @@ public static class DbInitializer
                     await context.SaveChangesAsync();
                 }
             }
+
+            // Đảm bảo mọi tài khoản độc giả đều có sẵn yêu cầu Đặt trước (READY & PENDING) để demo
+            var hasReservation = await context.Reservations
+                .AnyAsync(r => r.ReaderId == reader.Id && r.Status == EntityStatus.Active);
+
+            if (!hasReservation)
+            {
+                var allBooks = await context.Books
+                    .Where(b => b.Status == EntityStatus.Active)
+                    .OrderBy(b => b.CreatedAt)
+                    .Select(b => b.Id)
+                    .ToListAsync();
+
+                var firstShelfId = await context.Shelves
+                    .Where(s => s.Status == EntityStatus.Active)
+                    .Select(s => s.Id)
+                    .FirstOrDefaultAsync();
+
+                if (allBooks.Count >= 2 && firstShelfId != Guid.Empty)
+                {
+                    var shortTag = reader.Id.ToString("N")[..4].ToUpperInvariant();
+                    var resBarcode = $"BC-RES-{shortTag}-01";
+                    var reservedCopy = await context.BookCopies.FirstOrDefaultAsync(c => c.Barcode == resBarcode);
+                    if (reservedCopy == null)
+                    {
+                        reservedCopy = new BookCopy
+                        {
+                            Id = Guid.NewGuid(),
+                            BookId = allBooks[^1],
+                            ShelfId = firstShelfId,
+                            Barcode = resBarcode,
+                            CopyStatus = LibraryConstants.CopyStatus.Reserved,
+                            Price = 150000m,
+                            AcquiredDate = today.AddMonths(-4),
+                            Status = EntityStatus.Active,
+                            CreatedAt = DateTimeOffset.UtcNow,
+                            UpdatedAt = DateTimeOffset.UtcNow,
+                            CreatedBy = adminStaffId
+                        };
+                        await context.BookCopies.AddAsync(reservedCopy);
+                    }
+
+                    await context.Reservations.AddRangeAsync(
+                    [
+                        new Reservation
+                        {
+                            Id = Guid.NewGuid(),
+                            ReaderId = reader.Id,
+                            BookId = allBooks[^1],
+                            AssignedCopyId = reservedCopy.Id,
+                            ReservationStatus = LibraryConstants.ReservationStatus.Ready,
+                            ReservedAt = DateTimeOffset.UtcNow.AddHours(-16),
+                            ReadyAt = DateTimeOffset.UtcNow.AddHours(-2),
+                            ExpiresAt = DateTimeOffset.UtcNow.AddHours(46),
+                            ClosedAt = null,
+                            Status = EntityStatus.Active,
+                            CreatedAt = DateTimeOffset.UtcNow,
+                            UpdatedAt = DateTimeOffset.UtcNow,
+                            CreatedBy = adminStaffId
+                        },
+                        new Reservation
+                        {
+                            Id = Guid.NewGuid(),
+                            ReaderId = reader.Id,
+                            BookId = allBooks[^2],
+                            AssignedCopyId = null,
+                            ReservationStatus = LibraryConstants.ReservationStatus.Pending,
+                            ReservedAt = DateTimeOffset.UtcNow.AddHours(-5),
+                            ReadyAt = null,
+                            ExpiresAt = null,
+                            ClosedAt = null,
+                            Status = EntityStatus.Active,
+                            CreatedAt = DateTimeOffset.UtcNow,
+                            UpdatedAt = DateTimeOffset.UtcNow,
+                            CreatedBy = adminStaffId
+                        }
+                    ]);
+                    await context.SaveChangesAsync();
+                }
+            }
         }
     }
 
