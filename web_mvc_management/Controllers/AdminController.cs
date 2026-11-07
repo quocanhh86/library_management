@@ -67,10 +67,5 @@ public class AdminController(IAdminPortalService service) : AdminPortalControlle
     [HttpGet("/Admin/{module:regex(^(Books|BookCopies|Authors|Categories|Publishers|Shelves|Readers|ReaderTypes)$)}")]
     public Task<IActionResult> Index(string module, string? keyword, string? status, string? group, int pageNo = 1, int pageItemSize = 10, CancellationToken ct = default) => ListPage(module, keyword, status, group, pageNo, pageItemSize, ct);
 
-    // Mượn, trả, thu phạt, đặt trước: CirculationController. Người dùng, quy định: SystemAdminController.
-    [HttpGet("/Circulation/History")]
-    public Task<IActionResult> History(string? keyword, string? status, int pageNo = 1, int pageItemSize = 10, CancellationToken ct = default) => ListPage("history", keyword, status, null, pageNo, pageItemSize, ct);
-
-    [HttpGet("/Reports")]
-    public Task<IActionResult> Reports(CancellationToken ct) => DashboardPage(true, ct);
+    // Mượn, trả, thu phạt, đặt trước, phiếu mượn: CirculationController. Báo cáo: ReportController. Người dùng, quy định: SystemAdminController.
 }

@@ -51,7 +51,7 @@ public class BaseRepository<TEntity>(ApplicationDbContext context) : IBaseReposi
     {
         var safePageItemSize = pageSize <= 0 ? PaginationParams.DefaultPageItemSize : pageSize;
         var normalizedPageNo = pageIndex <= 1 ? 1 : pageIndex;
-        var skip = (normalizedPageNo - 1) * safePageItemSize;
+        var skip = PaginationParams.CalculateSkip(normalizedPageNo, safePageItemSize);
 
         var query = GetQueryable(asNoTracking);
 

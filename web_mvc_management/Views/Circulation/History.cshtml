@@ -1,0 +1,272 @@
+@model BorrowHistoryPageViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quản lý phiếu mượn";
+    ViewData["Screen"] = ScreenId.CirculationHistory;
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Quản lý phiếu mượn</h1>
+        <p class="text-muted-ink mb-0">Theo dõi toàn bộ phiếu mượn sách, kiểm soát tiến độ trả sách, in phiếu và xử lý hủy phiếu.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@Screens.GetPath(ScreenId.CirculationBorrow)" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Lập phiếu mượn mới
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3 d-flex align-items-center gap-3">
+            <div class="rounded-3 p-3 bg-primary-subtle text-primary fs-3">
+                <i class="bi bi-journal-check" aria-hidden="true"></i>
+            </div>
+            <div>
+                <div class="fs-xs text-muted-ink text-uppercase fw-semibold">Tổng số phiếu</div>
+                <div class="fs-3 fw-bold num">@Model.Slips.TotalCount</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3 d-flex align-items-center gap-3">
+            <div class="rounded-3 p-3 bg-info-subtle text-info fs-3">
+                <i class="bi bi-clock-history" aria-hidden="true"></i>
+            </div>
+            <div>
+                <div class="fs-xs text-muted-ink text-uppercase fw-semibold">Đang mượn</div>
+                <div class="fs-3 fw-bold num text-info">@Model.TotalActiveSlips</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3 d-flex align-items-center gap-3">
+            <div class="rounded-3 p-3 bg-danger-subtle text-danger fs-3">
+                <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+            </div>
+            <div>
+                <div class="fs-xs text-muted-ink text-uppercase fw-semibold">Có sách quá hạn</div>
+                <div class="fs-3 fw-bold num text-danger">@Model.TotalOverdueSlips</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3 d-flex align-items-center gap-3">
+            <div class="rounded-3 p-3 bg-success-subtle text-success fs-3">
+                <i class="bi bi-check-circle" aria-hidden="true"></i>
+            </div>
+            <div>
+                <div class="fs-xs text-muted-ink text-uppercase fw-semibold">Đã trả đủ</div>
+                <div class="fs-3 fw-bold num text-success">@Model.TotalReturnedSlips</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="get" action="@Screens.GetPath(ScreenId.CirculationHistory)" class="panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label" for="historyKeyword">Mã phiếu / Độc giả / Số thẻ / Mã vạch</label>
+            <input type="search" class="form-control" id="historyKeyword" name="Keyword" value="@Model.Filter.Keyword" placeholder="Nhập từ khóa tìm kiếm..." data-search-input />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="borrowStatus">Trạng thái phiếu</label>
+            <select class="form-select" id="borrowStatus" name="BorrowStatus">
+                <option value="">Tất cả</option>
+                <option value="borrowing" selected="@(string.Equals(Model.Filter.BorrowStatus, "borrowing", StringComparison.OrdinalIgnoreCase))">Đang mượn</option>
+                <option value="overdue" selected="@(string.Equals(Model.Filter.BorrowStatus, "overdue", StringComparison.OrdinalIgnoreCase))">Có sách quá hạn</option>
+                <option value="returned" selected="@(string.Equals(Model.Filter.BorrowStatus, "returned", StringComparison.OrdinalIgnoreCase))">Đã trả đủ</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="fromDate">Từ ngày</label>
+            <input type="date" class="form-control" id="fromDate" name="FromDate" value="@(Model.Filter.FromDate?.ToString("yyyy-MM-dd"))" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="toDate">Đến ngày</label>
+            <input type="date" class="form-control" id="toDate" name="ToDate" value="@(Model.Filter.ToDate?.ToString("yyyy-MM-dd"))" />
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-quiet w-100">
+                <i class="bi bi-funnel me-1" aria-hidden="true"></i>Lọc
+            </button>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || !string.IsNullOrWhiteSpace(Model.Filter.BorrowStatus) || Model.Filter.FromDate.HasValue || Model.Filter.ToDate.HasValue)
+    {
+        <div class="mt-2">
+            <a href="@Screens.GetPath(ScreenId.CirculationHistory)" class="fs-xs text-decoration-none">
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Xóa bộ lọc
+            </a>
+        </div>
+    }
+</form>
+
+<div class="table-frame mb-3">
+    <table class="table table-hover data-table mb-0">
+        <thead>
+            <tr>
+                <th scope="col">Mã phiếu / Ngày mượn</th>
+                <th scope="col">Độc giả</th>
+                <th scope="col">Tài liệu mượn</th>
+                <th scope="col" class="text-center">Tiến độ trả</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col">Cán bộ lập</th>
+                <th scope="col" class="text-end"><span class="visually-hidden">Thao tác</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Slips.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="7">
+                        <div class="state-block text-center py-5">
+                            <i class="bi bi-journal-x fs-1 text-muted-ink d-block mb-2" aria-hidden="true"></i>
+                            <div class="state-block__title">Chưa có phiếu mượn nào phù hợp</div>
+                            <p class="state-block__text mb-0">Thử thay đổi từ khóa tìm kiếm hoặc đặt lại các bộ lọc ngày tháng.</p>
+                        </div>
+                    </td>
+                </tr>
+            }
+            @foreach (var slip in Model.Slips.Items)
+            {
+                var badgeCode = slip.IsFullyReturned
+                    ? StatusBadge.Loan.Returned
+                    : (slip.HasOverdue ? StatusBadge.Loan.Overdue : StatusBadge.Loan.Active);
+
+                <tr>
+                    <td>
+                        <a href="/Circulation/History/Detail/@slip.Id" class="fw-bold text-decoration-none font-monospace">@slip.SlipCode</a>
+                        <div class="fs-xs text-muted-ink num">
+                            @DateTimeHelper.ToVietnameseDateTimeString(slip.BorrowedAt)
+                        </div>
+                    </td>
+                    <td>
+                        <span class="fw-medium">@slip.ReaderName</span>
+                        <div class="fs-xs text-muted-ink num">
+                            <span class="badge bg-secondary-subtle text-secondary me-1">@slip.ReaderTypeName</span>
+                            <span>@slip.CardNo</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="fw-medium">@slip.TotalBooks cuốn</div>
+                        <div class="fs-xs text-muted-ink text-truncate" style="max-width: 280px;" title="@string.Join(", ", slip.BookTitles)">
+                            @string.Join(", ", slip.BookTitles)
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <span class="num fw-semibold @(slip.IsFullyReturned ? "text-success" : (slip.HasOverdue ? "text-danger" : ""))">
+                            @slip.ReturnedBooks / @slip.TotalBooks
+                        </span>
+                        <div class="progress mt-1" style="height: 4px; width: 64px; margin: 0 auto;">
+                            @{
+                                var pct = slip.TotalBooks > 0 ? (slip.ReturnedBooks * 100 / slip.TotalBooks) : 0;
+                            }
+                            <div class="progress-bar @(slip.IsFullyReturned ? "bg-success" : (slip.HasOverdue ? "bg-danger" : "bg-primary"))"
+                                 role="progressbar" style="width: @pct%" aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <partial name="_StatusBadge" model="new StatusBadge(StatusKind.Loan, badgeCode)" />
+                        @if (!string.IsNullOrWhiteSpace(slip.Note))
+                        {
+                            <div class="fs-xs text-muted-ink text-truncate mt-1" style="max-width: 150px;" title="@slip.Note">
+                                @slip.Note
+                            </div>
+                        }
+                    </td>
+                    <td>
+                        <span class="fs-sm">@slip.IssuedByStaffName</span>
+                    </td>
+                    <td class="text-end">
+                        <div class="dropdown">
+                            <button type="button" class="btn btn-quiet btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                Thao tác
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                <li>
+                                    <a class="dropdown-item" href="/Circulation/History/Detail/@slip.Id">
+                                        <i class="bi bi-eye me-2 text-primary" aria-hidden="true"></i>Xem chi tiết
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/Circulation/History/Print/@slip.Id" target="_blank">
+                                        <i class="bi bi-printer me-2 text-secondary" aria-hidden="true"></i>In phiếu mượn
+                                    </a>
+                                </li>
+                                @if (slip.ReturnedBooks == 0 && (DateTimeOffset.UtcNow - slip.BorrowedAt <= TimeSpan.FromHours(24)))
+                                {
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <button type="button" class="dropdown-item text-danger"
+                                                data-bs-toggle="modal" data-bs-target="#cancelSlipModal"
+                                                data-slip-id="@slip.Id" data-slip-code="@slip.SlipCode">
+                                            <i class="bi bi-x-circle me-2" aria-hidden="true"></i>Hủy phiếu mượn
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<partial name="_Pagination" model="Model.Slips" />
+
+<div class="modal fade" id="cancelSlipModal" tabindex="-1" aria-labelledby="cancelSlipTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="cancelSlipForm" method="post" action="">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h2 class="modal-title h5 text-danger" id="cancelSlipTitle">
+                        <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>Xác nhận hủy phiếu mượn
+                    </h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Bạn đang yêu cầu hủy phiếu mượn <strong id="cancelSlipCodeText"></strong>.</p>
+                    <div class="alert alert-warning fs-sm mb-3">
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                        Hệ thống sẽ chuyển trạng thái các cuốn sách trong phiếu trở lại kho sẵn sàng hoặc chuyển giữ cho người đặt trước sớm nhất.
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="cancelReason">Lý do hủy phiếu <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="cancelReason" name="Reason" rows="3" required maxlength="500" placeholder="Ví dụ: Độc giả đổi ý không mượn nữa hoặc quét nhầm sách..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-danger">Xác nhận hủy phiếu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const cancelModal = document.getElementById('cancelSlipModal');
+        if (cancelModal) {
+            cancelModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const slipId = button.getAttribute('data-slip-id');
+                const slipCode = button.getAttribute('data-slip-code');
+                const form = document.getElementById('cancelSlipForm');
+                const codeText = document.getElementById('cancelSlipCodeText');
+
+                form.action = '/Circulation/History/Cancel/' + slipId;
+                if (codeText) codeText.textContent = slipCode;
+                document.getElementById('cancelReason').value = '';
+            });
+
+            cancelModal.addEventListener('shown.bs.modal', function () {
+                document.getElementById('cancelReason')?.focus();
+            });
+        }
+    </script>
+}

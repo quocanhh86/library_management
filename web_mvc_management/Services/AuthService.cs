@@ -275,6 +275,12 @@ public class AuthService(
                 ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
         }
 
+        // Account state can change after the password step while the OTP is pending.
+        if (reader.Status != EntityStatus.Active || reader.CardStatus == LibraryConstants.CardStatus.Locked)
+        {
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.AuthAccountInactive);
+        }
+
         // SEC-04: Xác thực OTP
         var verifyResult = await otpService.VerifyOtpAsync(normalizedEmail, PurposeReaderLogin, otpCode, ct);
         if (!verifyResult.IsSuccess)
@@ -403,6 +409,11 @@ public class AuthService(
             var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
             return ServiceResult<ClaimsPrincipal>.Failure(
                 ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
+        }
+
+        if (staff.Status != EntityStatus.Active)
+        {
+            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.AuthAccountInactive);
         }
 
         // SEC-04 & SEC-12: Xác thực OTP với Purpose = STAFF_LOGIN

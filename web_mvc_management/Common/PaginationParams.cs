@@ -64,7 +64,10 @@ public class PaginationParams
     /// - Client truyền pageno = 2: Skip = (2 - 1) * 10 = 10.
     /// - Client truyền pageno = 3: Skip = (3 - 1) * 10 = 20.
     /// </summary>
-    public int SkipCount => (NormalizedPageNo - 1) * PageItemSize;
+    public int SkipCount => CalculateSkip(PageNo, PageItemSize);
+
+    public static int CalculateSkip(int pageNo, int pageSize) =>
+        (int)Math.Min(int.MaxValue, (Math.Max(1L, pageNo) - 1) * Math.Max(1L, pageSize));
 
     /// <summary>
     /// Số bản ghi cần lấy (Take limit).

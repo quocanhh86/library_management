@@ -224,6 +224,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISystemAdminService, SystemAdminService>();
         services.AddScoped<ICirculationService, CirculationService>();
         services.AddScoped<IBorrowService, CirculationService>();
+        services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAdminPortalService, Services.Mock.MockAdminPortalService>();
 
         return services;

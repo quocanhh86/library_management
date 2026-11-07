@@ -1,0 +1,403 @@
+@model ReportDashboardViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Báo cáo & Thống kê";
+    ViewData["Screen"] = ScreenId.ReportsStatistics;
+    var filter = Model.Filter;
+    var printUrl = $"/Reports/Print?Preset={filter.Preset}&FromDate={filter.FromDate:yyyy-MM-dd}&ToDate={filter.ToDate:yyyy-MM-dd}";
+}
+
+<div class="staff-page-head">
+    <div>
+        <h1>Báo cáo & Thống kê lưu thông</h1>
+        <p class="text-muted-ink mb-0">
+            Tổng hợp dữ liệu lưu thông tài liệu từ <strong class="text-body">@Model.RangeStart.ToString("dd/MM/yyyy")</strong> đến <strong class="text-body">@Model.RangeEnd.ToString("dd/MM/yyyy")</strong>.
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@printUrl" target="_blank" class="btn btn-quiet">
+            <i class="bi bi-printer me-1" aria-hidden="true"></i>In báo cáo
+        </a>
+        <a href="/Reports/ExportOverdueCsv" class="btn btn-quiet">
+            <i class="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>Xuất Excel sách trễ
+        </a>
+    </div>
+</div>
+
+<form method="get" action="/Reports" class="panel mb-4" id="reportFilterForm">
+    <input type="hidden" name="ActiveTab" id="activeTabInput" value="@filter.ActiveTab" />
+    <div class="row g-3 align-items-end">
+        <div class="col-lg-5">
+            <label class="form-label d-block">Kỳ báo cáo nhanh</label>
+            <div class="btn-group w-100" role="group" aria-label="Kỳ báo cáo">
+                <button type="button" class="btn btn-sm @(filter.Preset == "today" ? "btn-primary" : "btn-quiet")" onclick="setPreset('today')">Hôm nay</button>
+                <button type="button" class="btn btn-sm @(filter.Preset == "week" ? "btn-primary" : "btn-quiet")" onclick="setPreset('week')">7 ngày</button>
+                <button type="button" class="btn btn-sm @(filter.Preset == "month" ? "btn-primary" : "btn-quiet")" onclick="setPreset('month')">Tháng này</button>
+                <button type="button" class="btn btn-sm @(filter.Preset == "year" ? "btn-primary" : "btn-quiet")" onclick="setPreset('year')">Năm nay</button>
+            </div>
+            <input type="hidden" name="Preset" id="presetInput" value="@filter.Preset" />
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="fromDate">Từ ngày</label>
+            <input type="date" class="form-control" id="fromDate" name="FromDate" value="@(filter.FromDate?.ToString("yyyy-MM-dd") ?? Model.RangeStart.ToString("yyyy-MM-dd"))" onchange="markCustom()" />
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="toDate">Đến ngày</label>
+            <input type="date" class="form-control" id="toDate" name="ToDate" value="@(filter.ToDate?.ToString("yyyy-MM-dd") ?? Model.RangeEnd.ToString("yyyy-MM-dd"))" onchange="markCustom()" />
+        </div>
+        <div class="col-lg-1">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-funnel" aria-hidden="true"></i>
+            </button>
+        </div>
+    </div>
+</form>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fs-xs text-muted-ink text-uppercase fw-semibold">Tổng lượt mượn</span>
+                <span class="badge bg-primary-subtle text-primary"><i class="bi bi-box-arrow-up-right me-1"></i>Mượn</span>
+            </div>
+            <div class="fs-3 fw-bold num mb-1">@Model.Metrics.TotalBooksBorrowed <small class="fs-sm fw-normal text-muted-ink">cuốn</small></div>
+            <div class="fs-xs text-muted-ink">Thuộc <strong>@Model.Metrics.TotalBorrowSlips</strong> phiếu mượn</div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fs-xs text-muted-ink text-uppercase fw-semibold">Đã hoàn trả</span>
+                <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle me-1"></i>Trả</span>
+            </div>
+            <div class="fs-3 fw-bold num text-success mb-1">@Model.Metrics.TotalBooksReturned <small class="fs-sm fw-normal text-muted-ink">cuốn</small></div>
+            <div class="fs-xs text-muted-ink">
+                Tỷ lệ đúng hạn: <strong class="text-success num">@Model.Metrics.OnTimeReturnRate%</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fs-xs text-muted-ink text-uppercase fw-semibold">Đang lưu thông</span>
+                <span class="badge bg-info-subtle text-info"><i class="bi bi-hourglass-split me-1"></i>Tại bạn đọc</span>
+            </div>
+            <div class="fs-3 fw-bold num text-info mb-1">@Model.Metrics.TotalBooksCurrentlyBorrowing <small class="fs-sm fw-normal text-muted-ink">cuốn</small></div>
+            <div class="fs-xs text-muted-ink">Trong đó quá hạn: <strong class="text-danger num">@Model.Metrics.TotalBooksOverdue</strong> cuốn</div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="panel p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fs-xs text-muted-ink text-uppercase fw-semibold">Tổng tiền phạt</span>
+                <span class="badge bg-danger-subtle text-danger"><i class="bi bi-cash-coin me-1"></i>Phạt</span>
+            </div>
+            <div class="fs-4 fw-bold num text-danger mb-1">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineIncurred)</div>
+            <div class="fs-xs text-muted-ink d-flex justify-content-between">
+                <span>Đã thu: <strong class="text-success num">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineCollected)</strong></span>
+                <span>Nợ: <strong class="text-danger num">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineUnpaid)</strong></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel mb-4 p-0">
+    <ul class="nav nav-tabs px-3 pt-3" id="reportTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(filter.ActiveTab == "overview" ? "active" : "")" id="circulation-tab" data-bs-toggle="tab" data-bs-target="#circulationPane" type="button" role="tab" onclick="changeTab('overview')">
+                <i class="bi bi-graph-up me-1" aria-hidden="true"></i>Xu hướng Mượn – Trả
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(filter.ActiveTab == "overdue" ? "active" : "")" id="overdue-tab" data-bs-toggle="tab" data-bs-target="#overduePane" type="button" role="tab" onclick="changeTab('overdue')">
+                <i class="bi bi-exclamation-octagon me-1" aria-hidden="true"></i>Sách quá hạn & Độc giả nợ (@Model.OverdueLoans.Count)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(filter.ActiveTab == "top-books" ? "active" : "")" id="topbooks-tab" data-bs-toggle="tab" data-bs-target="#topBooksPane" type="button" role="tab" onclick="changeTab('top-books')">
+                <i class="bi bi-trophy me-1" aria-hidden="true"></i>Top 10 sách mượn nhiều nhất
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(filter.ActiveTab == "fines" ? "active" : "")" id="fines-tab" data-bs-toggle="tab" data-bs-target="#finesPane" type="button" role="tab" onclick="changeTab('fines')">
+                <i class="bi bi-cash-stack me-1" aria-hidden="true"></i>Báo cáo Thu – Nợ phạt
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content p-4" id="reportTabsContent">
+        <!-- TAB 1: CIRCULATION TRENDS -->
+        <div class="tab-pane fade @(filter.ActiveTab == "overview" ? "show active" : "")" id="circulationPane" role="tabpanel">
+            <div class="row g-4 mb-4">
+                <div class="col-lg-8">
+                    <h2 class="h6 text-uppercase text-muted-ink fw-semibold mb-3">
+                        Chi tiết lưu thông theo ngày (tối đa 31 ngày gần nhất trong kỳ)
+                    </h2>
+                    <div class="table-frame">
+                        <table class="table table-hover data-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Ngày</th>
+                                    <th scope="col" class="num text-primary">Lượt mượn</th>
+                                    <th scope="col" class="num text-success">Lượt trả</th>
+                                    <th scope="col" class="num text-danger">Quá hạn phát sinh</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.DailyTrends.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted-ink py-4">Chưa có phát sinh lưu thông nào trong kỳ này.</td>
+                                    </tr>
+                                }
+                                @foreach (var d in Model.DailyTrends.OrderByDescending(x => x.Date))
+                                {
+                                    <tr>
+                                        <td class="num fw-medium">@d.Date.ToString("dd/MM/yyyy")</td>
+                                        <td class="num text-primary fw-semibold">@d.BorrowCount</td>
+                                        <td class="num text-success fw-semibold">@d.ReturnCount</td>
+                                        <td class="num text-danger">@d.OverdueCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <h2 class="h6 text-uppercase text-muted-ink fw-semibold mb-3">
+                        Tình trạng tài liệu khi hoàn trả
+                    </h2>
+                    <div class="border rounded p-3 bg-light mb-3">
+                        @{
+                            var totalCond = Model.ReturnConditionGood + Model.ReturnConditionDamaged + Model.ReturnConditionLost;
+                            var pctGood = totalCond > 0 ? (Model.ReturnConditionGood * 100 / totalCond) : 100;
+                            var pctDamaged = totalCond > 0 ? (Model.ReturnConditionDamaged * 100 / totalCond) : 0;
+                            var pctLost = totalCond > 0 ? (Model.ReturnConditionLost * 100 / totalCond) : 0;
+                        }
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between fs-sm mb-1">
+                                <span class="text-success fw-medium"><i class="bi bi-check-circle me-1"></i>Sách tốt, nguyên vẹn:</span>
+                                <strong class="num">@Model.ReturnConditionGood cuốn (@pctGood%)</strong>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-success" style="width: @pctGood%"></div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between fs-sm mb-1">
+                                <span class="text-warning fw-medium"><i class="bi bi-exclamation-triangle me-1"></i>Sách bị rách / hỏng:</span>
+                                <strong class="num">@Model.ReturnConditionDamaged cuốn (@pctDamaged%)</strong>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-warning" style="width: @pctDamaged%"></div>
+                            </div>
+                        </div>
+
+                        <div class="mb-0">
+                            <div class="d-flex justify-content-between fs-sm mb-1">
+                                <span class="text-danger fw-medium"><i class="bi bi-x-octagon me-1"></i>Sách báo mất:</span>
+                                <strong class="num">@Model.ReturnConditionLost cuốn (@pctLost%)</strong>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-danger" style="width: @pctLost%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-info fs-xs mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Trường hợp sách hỏng hoặc mất, hệ thống đã tự động tính tiền phạt dựa trên biểu phí quy định thư viện.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: OVERDUE LOANS -->
+        <div class="tab-pane fade @(filter.ActiveTab == "overdue" ? "show active" : "")" id="overduePane" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h6 text-uppercase text-muted-ink fw-semibold mb-0">
+                    Danh sách tài liệu quá hạn chưa trả (@Model.OverdueLoans.Count cuốn)
+                </h2>
+                <a href="/Reports/ExportOverdueCsv" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-file-earmark-arrow-down me-1"></i>Tải file Excel (.csv)
+                </a>
+            </div>
+
+            <div class="table-frame">
+                <table class="table table-hover data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Mã phiếu</th>
+                            <th scope="col">Độc giả</th>
+                            <th scope="col">Số thẻ / SĐT</th>
+                            <th scope="col">Tên sách / Mã vạch</th>
+                            <th scope="col" class="num">Hạn trả</th>
+                            <th scope="col" class="num text-danger">Quá hạn</th>
+                            <th scope="col" class="num text-danger">Tiền phạt tạm tính</th>
+                            <th scope="col" class="text-end">Chi tiết</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.OverdueLoans.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-success">
+                                    <i class="bi bi-check2-circle fs-3 d-block mb-1"></i>
+                                    Tuyệt vời! Hiện tại không có cuốn sách nào bị quá hạn.
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var o in Model.OverdueLoans)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-semibold fs-sm">@o.SlipCode</td>
+                                <td>
+                                    <div class="fw-medium">@o.ReaderName</div>
+                                    <span class="badge bg-secondary-subtle text-secondary fs-xs">@o.ReaderTypeName</span>
+                                </td>
+                                <td>
+                                    <div class="num font-monospace fs-sm">@o.CardNo</div>
+                                    <div class="num fs-xs text-muted-ink">@(string.IsNullOrEmpty(o.ReaderPhone) ? "—" : o.ReaderPhone)</div>
+                                </td>
+                                <td>
+                                    <div class="fw-medium">@o.BookTitle</div>
+                                    <div class="num fs-xs text-muted-ink">Mã vạch: <strong>@o.Barcode</strong> @(!string.IsNullOrEmpty(o.ShelfLocation) ? $"| Kệ: {o.ShelfLocation}" : "")</div>
+                                </td>
+                                <td class="num text-danger fw-semibold">@o.DueDate.ToString(AppConstants.DefaultDateFormat)</td>
+                                <td class="num text-danger fw-bold">@o.OverdueDays ngày</td>
+                                <td class="num text-danger fw-bold">@CurrencyHelper.ToVnd(o.EstimatedFine)</td>
+                                <td class="text-end">
+                                    <a href="/Circulation/History/Detail/@o.SlipId" class="btn btn-quiet btn-sm">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 3: TOP BOOKS -->
+        <div class="tab-pane fade @(filter.ActiveTab == "top-books" ? "show active" : "")" id="topBooksPane" role="tabpanel">
+            <h2 class="h6 text-uppercase text-muted-ink fw-semibold mb-3">
+                Top 10 đầu sách được bạn đọc mượn nhiều nhất trong kỳ
+            </h2>
+            <div class="table-frame">
+                <table class="table table-hover data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col" style="width: 50px;">STT</th>
+                            <th scope="col">Tựa sách / ISBN</th>
+                            <th scope="col">Tác giả</th>
+                            <th scope="col">Thể loại</th>
+                            <th scope="col" class="num text-center">Số bản sao</th>
+                            <th scope="col" class="num text-primary">Lượt mượn</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.TopBooks.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center text-muted-ink py-4">Chưa có dữ liệu mượn sách trong khoảng thời gian này.</td>
+                            </tr>
+                        }
+                        @{ int rank = 1; }
+                        @foreach (var b in Model.TopBooks)
+                        {
+                            <tr>
+                                <td class="num fw-bold @(rank <= 3 ? "text-primary fs-5" : "text-muted-ink")">
+                                    @(rank++)
+                                </td>
+                                <td>
+                                    <div class="fw-bold">@b.Title</div>
+                                    <div class="num fs-xs text-muted-ink">ISBN: @b.Isbn</div>
+                                </td>
+                                <td class="fs-sm">@b.Authors</td>
+                                <td class="fs-sm">
+                                    <span class="badge bg-light text-dark border">@b.Categories</span>
+                                </td>
+                                <td class="num text-center">@b.TotalCopies</td>
+                                <td class="num fw-bold text-primary fs-5">@b.BorrowCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 4: FINES REPORT -->
+        <div class="tab-pane fade @(filter.ActiveTab == "fines" ? "show active" : "")" id="finesPane" role="tabpanel">
+            <h2 class="h6 text-uppercase text-muted-ink fw-semibold mb-3">
+                Thống kê phát sinh & thu nợ phạt theo từng lý do
+            </h2>
+            <div class="table-frame mb-4">
+                <table class="table table-hover data-table mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Lý do phạt</th>
+                            <th scope="col" class="num text-center">Số lượt phạt</th>
+                            <th scope="col" class="num text-danger">Tổng tiền phát sinh</th>
+                            <th scope="col" class="num text-success">Đã thu</th>
+                            <th scope="col" class="num text-muted-ink">Được miễn</th>
+                            <th scope="col" class="num text-danger fw-bold">Còn nợ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var f in Model.FineSummary)
+                        {
+                            <tr>
+                                <td>
+                                    <strong class="d-block">@f.TypeLabel</strong>
+                                    <span class="fs-xs text-muted-ink font-monospace">@f.FineType</span>
+                                </td>
+                                <td class="num text-center fw-semibold">@f.Count</td>
+                                <td class="num text-danger fw-semibold">@CurrencyHelper.ToVnd(f.TotalAmount)</td>
+                                <td class="num text-success fw-semibold">@CurrencyHelper.ToVnd(f.PaidAmount)</td>
+                                <td class="num text-muted-ink">@CurrencyHelper.ToVnd(f.WaivedAmount)</td>
+                                <td class="num text-danger fw-bold">@CurrencyHelper.ToVnd(f.UnpaidAmount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td>Tổng cộng:</td>
+                            <td class="num text-center">@Model.FineSummary.Sum(x => x.Count)</td>
+                            <td class="num text-danger">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineIncurred)</td>
+                            <td class="num text-success">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineCollected)</td>
+                            <td class="num text-muted-ink">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineWaived)</td>
+                            <td class="num text-danger">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineUnpaid)</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-end">
+                <a href="/Fines" class="btn btn-primary btn-sm">
+                    <i class="bi bi-cash-coin me-1"></i>Đến trang Thu phạt & Xử lý nợ
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function setPreset(preset) {
+            document.getElementById('presetInput').value = preset;
+            document.getElementById('reportFilterForm').submit();
+        }
+
+        function markCustom() {
+            document.getElementById('presetInput').value = 'custom';
+        }
+
+        function changeTab(tabName) {
+            document.getElementById('activeTabInput').value = tabName;
+        }
+    </script>
+}

@@ -23,7 +23,7 @@ public static class QueryableExtensions
 
         var safePageItemSize = pageItemSize <= 0 ? PaginationParams.DefaultPageItemSize : pageItemSize;
         var normalizedPageNo = pageNo <= 1 ? 1 : pageNo;
-        var skip = (normalizedPageNo - 1) * safePageItemSize;
+        var skip = PaginationParams.CalculateSkip(normalizedPageNo, safePageItemSize);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query.Skip(skip).Take(safePageItemSize).ToListAsync(cancellationToken);
@@ -57,7 +57,7 @@ public static class QueryableExtensions
 
         var safePageItemSize = pageItemSize <= 0 ? PaginationParams.DefaultPageItemSize : pageItemSize;
         var normalizedPageNo = pageNo <= 1 ? 1 : pageNo;
-        var skip = (normalizedPageNo - 1) * safePageItemSize;
+        var skip = PaginationParams.CalculateSkip(normalizedPageNo, safePageItemSize);
 
         var list = source as IList<T> ?? [.. source];
         var totalCount = list.Count;

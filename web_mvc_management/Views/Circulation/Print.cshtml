@@ -1,0 +1,168 @@
+@model BorrowSlipDetailViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>In phiếu mượn sách - @Model.SlipCode</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="~/images/favicon-32.png" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <style>
+        body {
+            background-color: #f8fafc;
+            color: #1e293b;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 14px;
+            padding: 24px;
+        }
+        .print-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .header-title {
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .table th, .table td {
+            padding: 8px 12px;
+            vertical-align: middle;
+        }
+        .signature-block {
+            margin-top: 48px;
+            padding-top: 16px;
+        }
+        @@media print {
+            body {
+                background: #ffffff;
+                padding: 0;
+            }
+            .print-container {
+                box-shadow: none;
+                padding: 0;
+                max-width: 100%;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-container">
+        <div class="no-print d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+            <a href="/Circulation/History/Detail/@Model.Id" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Quay lại chi tiết
+            </a>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-primary" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i>In phiếu (Ctrl + P)
+                </button>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-start pb-3 border-bottom mb-4">
+            <div>
+                <div class="fw-bold text-uppercase fs-6">Trường Đại học Giao thông Vận tải</div>
+                <div class="fw-semibold text-primary">TRUNG TÂM THÔNG TIN - THƯ VIỆN UTC</div>
+                <div class="text-muted fs-xs">Địa chỉ: Số 3 Phố Cầu Giấy, Láng Thượng, Đống Đa, Hà Nội</div>
+            </div>
+            <div class="text-end">
+                <div class="fs-xs text-muted">Mã phiếu:</div>
+                <div class="font-monospace fw-bold fs-5 text-dark">@Model.SlipCode</div>
+                <div class="fs-xs text-muted">Ngày: @Model.BorrowedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+            </div>
+        </div>
+
+        <div class="text-center my-4">
+            <h1 class="h3 fw-bold header-title mb-1">Phiếu Mượn Tài Liệu</h1>
+            <p class="text-muted fs-sm mb-0">(Lưu ý giữ phiếu cẩn thận để đối chiếu khi hoàn trả sách)</p>
+        </div>
+
+        <div class="card bg-light border-0 mb-4">
+            <div class="card-body py-3 px-4">
+                <div class="row g-2 fs-sm">
+                    <div class="col-6">
+                        <strong>Họ và tên độc giả:</strong> @Model.ReaderName
+                    </div>
+                    <div class="col-6">
+                        <strong>Số thẻ thư viện:</strong> <span class="font-monospace fw-bold">@Model.CardNo</span>
+                    </div>
+                    <div class="col-6">
+                        <strong>Đối tượng:</strong> @Model.ReaderTypeName
+                    </div>
+                    <div class="col-6">
+                        <strong>Số điện thoại:</strong> @(string.IsNullOrEmpty(Model.ReaderPhone) ? "—" : Model.ReaderPhone)
+                    </div>
+                    <div class="col-12">
+                        <strong>Cán bộ lập phiếu:</strong> @Model.IssuedByStaffName
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Note))
+                    {
+                        <div class="col-12">
+                            <strong>Ghi chú:</strong> @Model.Note
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <h2 class="h6 fw-bold mb-3 text-uppercase">Danh mục tài liệu mượn (@Model.TotalBooks cuốn)</h2>
+        <table class="table table-bordered mb-4">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" class="text-center" style="width: 45px;">STT</th>
+                    <th scope="col" style="width: 140px;">Mã vạch</th>
+                    <th scope="col">Tên tài liệu / Tác phẩm</th>
+                    <th scope="col" style="width: 90px;">Vị trí kệ</th>
+                    <th scope="col" class="text-center" style="width: 110px;">Hạn trả</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ int stt = 1; }
+                @foreach (var book in Model.Items)
+                {
+                    <tr>
+                        <td class="text-center">@(stt++)</td>
+                        <td class="font-monospace fw-semibold">@book.Barcode</td>
+                        <td>
+                            <div class="fw-medium">@book.BookTitle</div>
+                        </td>
+                        <td>@(book.ShelfLocation ?? "—")</td>
+                        <td class="text-center fw-bold">@book.DueDate.ToString(AppConstants.DefaultDateFormat)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="border rounded p-3 bg-white mb-4 fs-xs text-muted">
+            <strong class="text-dark d-block mb-1"><i class="bi bi-shield-exclamation me-1"></i>QUY ĐỊNH MƯỢN TRẢ TÀI LIỆU:</strong>
+            <ul class="mb-0 ps-3">
+                <li>Độc giả có trách nhiệm bảo quản nguyên vẹn tài liệu đã mượn, không làm rách, viết vẽ bẩn lên sách.</li>
+                <li>Hoàn trả tài liệu đúng hoặc trước thời hạn ghi trên phiếu mượn. Trường hợp quá hạn sẽ bị phạt theo quy định hiện hành.</li>
+                <li>Nếu làm mất hoặc hỏng sách, độc giả phải bồi thường theo đúng nội quy thư viện ban hành.</li>
+            </ul>
+        </div>
+
+        <div class="row signature-block text-center fs-sm">
+            <div class="col-6">
+                <div class="fw-bold mb-1">NGƯỜI MƯỢN SÁCH</div>
+                <div class="fs-xs text-muted mb-5">(Ký và ghi rõ họ tên)</div>
+                <div class="fw-medium text-muted">@Model.ReaderName</div>
+            </div>
+            <div class="col-6">
+                <div class="fw-bold mb-1">THỦ THƯ LẬP PHIẾU</div>
+                <div class="fs-xs text-muted mb-5">(Ký và ghi rõ họ tên)</div>
+                <div class="fw-medium text-muted">@Model.IssuedByStaffName</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

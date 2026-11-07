@@ -19,8 +19,8 @@ public class PagedResult<T> : IPagedResult
     public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
     public bool HasPreviousPage => PageIndex > 1;
     public bool HasNextPage => PageIndex < TotalPages;
-    public int StartItemIndex => TotalCount == 0 ? 0 : (PageIndex - 1) * PageSize + 1;
-    public int EndItemIndex => TotalCount == 0 ? 0 : Math.Min(PageIndex * PageSize, TotalCount);
+    public int StartItemIndex => Items.Count == 0 ? 0 : (int)Math.Min(TotalCount, (long)PaginationParams.CalculateSkip(PageIndex, PageSize) + 1);
+    public int EndItemIndex => Items.Count == 0 ? 0 : (int)Math.Min((long)PageIndex * PageSize, TotalCount);
 
     public PagedResult() { }
 
@@ -45,8 +45,8 @@ public class PagedResult<T> : IPagedResult
 
         var pages = new List<int>();
         var half = maxDisplayPages / 2;
-        var startPage = Math.Max(1, PageIndex - half);
-        var endPage = Math.Min(TotalPages, startPage + maxDisplayPages - 1);
+        var startPage = Math.Max(1, Math.Min(PageIndex, TotalPages) - half);
+        var endPage = (int)Math.Min(TotalPages, (long)startPage + maxDisplayPages - 1);
 
         if (endPage - startPage + 1 < maxDisplayPages)
         {

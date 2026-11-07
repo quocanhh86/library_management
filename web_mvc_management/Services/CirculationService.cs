@@ -91,32 +91,32 @@ public class CirculationService(
         };
     }
 
-    public async Task<ServiceResult> CreateBorrowSlipAsync(BorrowSubmitViewModel model, CancellationToken ct = default)
+    public async Task<ServiceResult<Guid>> CreateBorrowSlipAsync(BorrowSubmitViewModel model, CancellationToken ct = default)
     {
-        if (userContext.CurrentUserId is not { } staffId) return ServiceResult.Failure(ErrorCode.AuthUnauthorized);
+        if (userContext.CurrentUserId is not { } staffId) return ServiceResult<Guid>.Failure(ErrorCode.AuthUnauthorized);
 
         var barcodes = model.Barcodes.Select(b => b?.Trim() ?? "").Where(b => b.Length > 0).ToList();
-        if (barcodes.Count == 0) return ServiceResult.ValidationError(ErrorCode.BorrowListEmpty);
+        if (barcodes.Count == 0) return ServiceResult<Guid>.ValidationError(ErrorCode.BorrowListEmpty);
 
         var duplicate = barcodes.GroupBy(b => b, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
         if (duplicate is not null)
         {
-            return ServiceResult.ValidationError(ErrorCode.BorrowDuplicateBarcode,
+            return ServiceResult<Guid>.ValidationError(ErrorCode.BorrowDuplicateBarcode,
                 ErrorMessages.Format(ErrorCode.BorrowDuplicateBarcode, duplicate.Key));
         }
 
         await ExpireHoldsAsync(await GetSettingAsync(ct), ct);
 
         var reader = await Readers(asNoTracking: true).FirstOrDefaultAsync(r => r.Id == model.ReaderId, ct);
-        if (reader is null) return ServiceResult.Failure(ErrorCode.ReaderNotFound);
+        if (reader is null) return ServiceResult<Guid>.Failure(ErrorCode.ReaderNotFound);
 
         var (reasons, borrowed, _) = await CheckBorrowerAsync(reader, ct);
-        if (reasons.Count > 0) return ServiceResult.Failure(reasons[0]);
+        if (reasons.Count > 0) return ServiceResult<Guid>.Failure(reasons[0]);
 
         var limit = reader.ReaderType.MaxBorrowBooks;
         if (borrowed + barcodes.Count > limit)
         {
-            return ServiceResult.Failure(ErrorCode.ReaderMaxBorrowLimitExceeded,
+            return ServiceResult<Guid>.Failure(ErrorCode.ReaderMaxBorrowLimitExceeded,
                 ErrorMessages.Format(ErrorCode.ReaderMaxBorrowLimitExceeded, limit));
         }
 
@@ -134,7 +134,7 @@ public class CirculationService(
         foreach (var code in barcodes)
         {
             var copy = copies.FirstOrDefault(c => string.Equals(c.Barcode, code, StringComparison.OrdinalIgnoreCase));
-            if (copy is null) return CopyFailure(ErrorCode.BookCopyNotFound, code);
+            if (copy is null) return CopyFailure<Guid>(ErrorCode.BookCopyNotFound, code);
 
             switch (copy.CopyStatus)
             {
@@ -144,16 +144,16 @@ public class CirculationService(
                     var hold = holds.FirstOrDefault(h => h.AssignedCopyId == copy.Id);
                     if (hold is null || hold.ReaderId != reader.Id)
                     {
-                        return ServiceResult.Failure(ErrorCode.BookCopyReservedForOther,
+                        return ServiceResult<Guid>.Failure(ErrorCode.BookCopyReservedForOther,
                             ErrorMessages.Format(ErrorCode.BookCopyReservedForOther, copy.Barcode));
                     }
                     hold.ReservationStatus = ReservationStatus.Fulfilled;
                     hold.ClosedAt = now;
                     break;
                 case CopyStatus.Damaged or CopyStatus.Lost:
-                    return CopyFailure(ErrorCode.BookCopyDamagedOrLost, copy.Barcode);
+                    return CopyFailure<Guid>(ErrorCode.BookCopyDamagedOrLost, copy.Barcode);
                 default:
-                    return CopyFailure(ErrorCode.BookCopyNotAvailable, copy.Barcode);
+                    return CopyFailure<Guid>(ErrorCode.BookCopyNotAvailable, copy.Barcode);
             }
             picked.Add(copy);
         }
@@ -184,7 +184,8 @@ public class CirculationService(
         // ponytail: một lần SaveChanges là một transaction; hai quầy quét cùng bản sao cùng lúc vẫn lọt — thêm rowversion cho book_copies nếu gặp.
         await unitOfWork.SaveChangesAsync(ct);
 
-        return ServiceResult.Success(
+        return ServiceResult<Guid>.Success(
+            slip.Id,
             $"Đã lập phiếu mượn {picked.Count} cuốn cho {reader.FullName}. Hạn trả {dueDate.ToString(AppConstants.DefaultDateFormat)}.");
     }
 
@@ -305,6 +306,254 @@ public class CirculationService(
 
         return ServiceResult.Success(
             $"Đã gia hạn đến {detail.DueDate.ToString(AppConstants.DefaultDateFormat)}. Còn {type.MaxRenewals - detail.RenewCount} lần gia hạn.");
+    }
+
+    // ===== Quản lý phiếu mượn & Lịch sử =====
+
+    public async Task<BorrowHistoryPageViewModel> GetBorrowHistoryPageAsync(BorrowSlipFilter filter, CancellationToken ct = default)
+    {
+        var today = dateTimeProvider.Today;
+        var baseQuery = unitOfWork.BorrowSlips.GetQueryable(asNoTracking: true)
+            .Where(s => s.Status != EntityStatus.Deleted);
+
+        var totalActive = await baseQuery.CountAsync(s => s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null), ct);
+        var totalOverdue = await baseQuery.CountAsync(s => s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.DueDate < today), ct);
+        var totalReturned = await baseQuery.CountAsync(s =>
+            s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted) &&
+            !s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null), ct);
+
+        var query = baseQuery;
+
+        if (!string.IsNullOrWhiteSpace(filter.Keyword))
+        {
+            var kw = filter.Keyword.Trim();
+            query = query.Where(s =>
+                s.Reader.FullName.Contains(kw) ||
+                s.Reader.CardNo.Contains(kw) ||
+                s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted &&
+                    (d.BookCopy.Barcode.Contains(kw) || d.BookCopy.Book.Title.Contains(kw))));
+        }
+
+        if (filter.FromDate.HasValue)
+        {
+            var fromOffset = DateTimeHelper.UtcDayBoundary(filter.FromDate.Value, dateTimeProvider.Now.Offset);
+            query = query.Where(s => s.BorrowedAt >= fromOffset);
+        }
+
+        if (filter.ToDate.HasValue)
+        {
+            var toOffset = DateTimeHelper.UtcDayBoundary(filter.ToDate.Value, dateTimeProvider.Now.Offset, endOfDay: true);
+            query = query.Where(s => s.BorrowedAt <= toOffset);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.BorrowStatus))
+        {
+            switch (filter.BorrowStatus.ToLowerInvariant())
+            {
+                case "borrowing":
+                    query = query.Where(s => s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null));
+                    break;
+                case "overdue":
+                    query = query.Where(s => s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.DueDate < today));
+                    break;
+                case "returned":
+                    query = query.Where(s =>
+                        s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted) &&
+                        !s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null));
+                    break;
+            }
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var safePageItemSize = filter.PageItemSize <= 0 ? PaginationParams.DefaultPageItemSize : filter.PageItemSize;
+        var normalizedPageNo = filter.PageNo <= 1 ? 1 : filter.PageNo;
+        var skip = PaginationParams.CalculateSkip(normalizedPageNo, safePageItemSize);
+
+        var rawItems = await query
+            .OrderByDescending(s => s.BorrowedAt)
+            .Skip(skip)
+            .Take(safePageItemSize)
+            .Select(s => new
+            {
+                s.Id,
+                s.ReaderId,
+                ReaderName = s.Reader.FullName,
+                s.Reader.CardNo,
+                ReaderTypeName = s.Reader.ReaderType.Name,
+                s.BorrowedAt,
+                IssuedByStaffName = s.IssuedByStaff.FullName,
+                s.Note,
+                Details = s.BorrowDetails.Where(d => d.Status != EntityStatus.Deleted).Select(d => new
+                {
+                    d.Id,
+                    d.DueDate,
+                    d.ReturnedAt,
+                    BookTitle = d.BookCopy.Book.Title
+                }).ToList()
+            })
+            .ToListAsync(ct);
+
+        var list = rawItems.Select(s =>
+        {
+            var totalBooks = s.Details.Count;
+            var returnedBooks = s.Details.Count(d => d.ReturnedAt != null);
+            var hasOverdue = s.Details.Any(d => d.ReturnedAt == null && d.DueDate < today);
+            var status = (totalBooks > 0 && returnedBooks == totalBooks) ? "Đã trả đủ" : (hasOverdue ? "Có sách quá hạn" : "Đang mượn");
+            return new BorrowSlipItemViewModel
+            {
+                Id = s.Id,
+                SlipCode = $"PM-{s.BorrowedAt:yyyyMMdd}-{s.Id.ToString()[..4].ToUpper()}",
+                ReaderId = s.ReaderId,
+                ReaderName = s.ReaderName,
+                CardNo = s.CardNo,
+                ReaderTypeName = s.ReaderTypeName,
+                BorrowedAt = s.BorrowedAt,
+                IssuedByStaffName = s.IssuedByStaffName,
+                TotalBooks = totalBooks,
+                ReturnedBooks = returnedBooks,
+                HasOverdue = hasOverdue,
+                Status = status,
+                Note = s.Note,
+                BookTitles = s.Details.Select(d => d.BookTitle).ToList()
+            };
+        }).ToList();
+
+        var pagedResult = new PagedResult<BorrowSlipItemViewModel>(list, totalCount, normalizedPageNo, safePageItemSize);
+
+        return new BorrowHistoryPageViewModel
+        {
+            Slips = pagedResult,
+            Filter = filter,
+            TotalActiveSlips = totalActive,
+            TotalOverdueSlips = totalOverdue,
+            TotalReturnedSlips = totalReturned
+        };
+    }
+
+    public async Task<BorrowSlipDetailViewModel?> GetBorrowSlipDetailAsync(Guid id, CancellationToken ct = default)
+    {
+        var today = dateTimeProvider.Today;
+        var now = dateTimeProvider.UtcNow;
+
+        var slip = await unitOfWork.BorrowSlips.GetQueryable(asNoTracking: true)
+            .Include(s => s.Reader)
+                .ThenInclude(r => r.ReaderType)
+            .Include(s => s.IssuedByStaff)
+            .Include(s => s.BorrowDetails.Where(d => d.Status != EntityStatus.Deleted))
+                .ThenInclude(d => d.BookCopy)
+                    .ThenInclude(c => c.Book)
+            .Include(s => s.BorrowDetails.Where(d => d.Status != EntityStatus.Deleted))
+                .ThenInclude(d => d.BookCopy)
+                    .ThenInclude(c => c.Shelf)
+            .Include(s => s.BorrowDetails.Where(d => d.Status != EntityStatus.Deleted))
+                .ThenInclude(d => d.ReceivedByStaff)
+            .FirstOrDefaultAsync(s => s.Id == id && s.Status != EntityStatus.Deleted, ct);
+
+        if (slip is null) return null;
+
+        var items = slip.BorrowDetails
+            .Where(d => d.Status != EntityStatus.Deleted)
+            .OrderBy(d => d.DueDate)
+            .Select(d =>
+            {
+                var isOverdue = d.ReturnedAt == null && d.DueDate < today;
+                var overdueDays = isOverdue ? Math.Max(0, today.DayNumber - d.DueDate.DayNumber) : 0;
+                return new BorrowSlipDetailItemViewModel
+                {
+                    DetailId = d.Id,
+                    BookTitle = d.BookCopy.Book.Title,
+                    Barcode = d.BookCopy.Barcode,
+                    ShelfLocation = d.BookCopy.Shelf != null ? d.BookCopy.Shelf.Code : null,
+                    Price = d.BookCopy.Price,
+                    DueDate = d.DueDate,
+                    RenewCount = d.RenewCount,
+                    ReturnedAt = d.ReturnedAt,
+                    ReturnCondition = d.ReturnCondition,
+                    ReceivedByStaffName = d.ReceivedByStaff?.FullName,
+                    ReturnNote = d.ReturnNote,
+                    IsOverdue = isOverdue,
+                    OverdueDays = overdueDays
+                };
+            })
+            .ToList();
+
+        var canCancel = slip.BorrowDetails.All(d => d.ReturnedAt == null) && (now - slip.BorrowedAt <= TimeSpan.FromHours(24));
+
+        return new BorrowSlipDetailViewModel
+        {
+            Id = slip.Id,
+            SlipCode = $"PM-{slip.BorrowedAt:yyyyMMdd}-{slip.Id.ToString()[..4].ToUpper()}",
+            ReaderId = slip.ReaderId,
+            ReaderName = slip.Reader.FullName,
+            CardNo = slip.Reader.CardNo,
+            ReaderTypeName = slip.Reader.ReaderType.Name,
+            ReaderEmail = slip.Reader.Email,
+            ReaderPhone = slip.Reader.Phone,
+            BorrowedAt = slip.BorrowedAt,
+            IssuedByStaffName = slip.IssuedByStaff.FullName,
+            Note = slip.Note,
+            TotalBooks = items.Count,
+            ReturnedBooks = items.Count(i => i.IsReturned),
+            CanCancel = canCancel,
+            Items = items
+        };
+    }
+
+    public async Task<ServiceResult> CancelBorrowSlipAsync(Guid id, string? reason, CancellationToken ct = default)
+    {
+        if (userContext.CurrentUserId is not { } staffId) return ServiceResult.Failure(ErrorCode.AuthUnauthorized);
+        if (string.IsNullOrWhiteSpace(reason)) return ServiceResult.ValidationError(ErrorCode.BorrowSlipCancelReasonRequired);
+
+        var slip = await unitOfWork.BorrowSlips.GetQueryable(asNoTracking: false)
+            .Include(s => s.BorrowDetails)
+                .ThenInclude(d => d.BookCopy)
+            .FirstOrDefaultAsync(s => s.Id == id && s.Status != EntityStatus.Deleted, ct);
+
+        if (slip is null) return ServiceResult.Failure(ErrorCode.BorrowSlipNotFound);
+
+        if (slip.BorrowDetails.Any(d => d.ReturnedAt != null))
+        {
+            return ServiceResult.Failure(ErrorCode.BorrowSlipCannotCancelHasReturned);
+        }
+
+        var now = dateTimeProvider.UtcNow;
+        if (now - slip.BorrowedAt > TimeSpan.FromHours(24))
+        {
+            return ServiceResult.Failure(ErrorCode.BorrowSlipCannotCancelExpired);
+        }
+
+        var setting = await GetSettingAsync(ct);
+        var holdHours = setting?.ReservationHoldHours ?? (short)48;
+
+        // ReleaseCopyAsync saves each copy to advance the reservation queue. Keep the
+        // entire cancellation atomic if any later copy or the final slip save fails.
+        await unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            foreach (var detail in slip.BorrowDetails.Where(d => d.Status != EntityStatus.Deleted))
+            {
+                detail.Status = EntityStatus.Deleted;
+                detail.ReturnNote = $"Hủy phiếu: {reason.Trim()}";
+
+                if (detail.BookCopy is { } copy)
+                {
+                    await ReleaseCopyAsync(copy, holdHours, ct);
+                }
+            }
+
+            slip.Status = EntityStatus.Deleted;
+            slip.Note = string.IsNullOrWhiteSpace(slip.Note)
+                ? $"[ĐÃ HỦY] {reason.Trim()}"
+                : $"{slip.Note} | [ĐÃ HỦY] {reason.Trim()}";
+
+            await unitOfWork.CommitTransactionAsync(ct);
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+            throw;
+        }
+        return ServiceResult.Success("Đã hủy phiếu mượn thành công. Các cuốn sách đã được hoàn trả lại kho.");
     }
 
     // ===== Đặt trước =====
@@ -585,6 +834,9 @@ public class CirculationService(
 
     private static ServiceResult CopyFailure(ErrorCode code, string barcode) =>
         ServiceResult.Failure(code, $"{barcode}: {ErrorMessages.Get(code)}");
+
+    private static ServiceResult<T> CopyFailure<T>(ErrorCode code, string barcode) =>
+        ServiceResult<T>.Failure(code, $"{barcode}: {ErrorMessages.Get(code)}");
 
     private async Task<decimal> AddFineAsync(BorrowDetail detail, string fineType, decimal amount, int? overdueDays, CancellationToken ct)
     {
