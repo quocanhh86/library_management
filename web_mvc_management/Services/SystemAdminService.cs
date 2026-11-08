@@ -73,111 +73,157 @@ public class SystemAdminService(
         var usernameTrim = model.Username.Trim().ToLowerInvariant();
         var emailTrim = model.Email.Trim().ToLowerInvariant();
 
-        if (await unitOfWork.Staff.ExistsAsync(s => s.Username.ToLower() == usernameTrim, ct))
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.ValidationError(ErrorCode.StaffUsernameAlreadyExists);
+            if (await unitOfWork.Staff.ExistsAsync(s => s.Username.ToLower() == usernameTrim, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.StaffUsernameAlreadyExists);
+            }
+
+            if (await unitOfWork.Staff.ExistsAsync(s => s.Email.ToLower() == emailTrim, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.StaffEmailAlreadyExists);
+            }
+
+            var role = model.Role == AppRoles.Admin ? AppRoles.Admin : AppRoles.Librarian;
+
+            var staff = new Staff
+            {
+                Id = Guid.NewGuid(),
+                Username = usernameTrim,
+                Email = emailTrim,
+                FullName = model.FullName.Trim(),
+                Phone = model.Phone?.Trim(),
+                Role = role,
+                PasswordHash = PasswordHasher.HashPassword(model.Password),
+                SecurityStamp = Guid.NewGuid().ToString("N"),
+                Status = EntityStatus.Active
+            };
+
+            await unitOfWork.Staff.AddAsync(staff, ct);
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            var roleLabel = role == AppRoles.Admin ? "Quản trị viên" : "Thủ thư";
+            return ServiceResult.Success($"Đã tạo tài khoản cán bộ \"{staff.FullName}\" ({roleLabel}).");
         }
-
-        if (await unitOfWork.Staff.ExistsAsync(s => s.Email.ToLower() == emailTrim, ct))
+        catch
         {
-            return ServiceResult.ValidationError(ErrorCode.StaffEmailAlreadyExists);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        var role = model.Role == AppRoles.Admin ? AppRoles.Admin : AppRoles.Librarian;
-
-        var staff = new Staff
-        {
-            Id = Guid.NewGuid(),
-            Username = usernameTrim,
-            Email = emailTrim,
-            FullName = model.FullName.Trim(),
-            Phone = model.Phone?.Trim(),
-            Role = role,
-            PasswordHash = PasswordHasher.HashPassword(model.Password),
-            SecurityStamp = Guid.NewGuid().ToString("N"),
-            Status = EntityStatus.Active
-        };
-
-        await unitOfWork.Staff.AddAsync(staff, ct);
-        await unitOfWork.SaveChangesAsync(ct);
-
-        var roleLabel = role == AppRoles.Admin ? "Quản trị viên" : "Thủ thư";
-        return ServiceResult.Success($"Đã tạo tài khoản cán bộ \"{staff.FullName}\" ({roleLabel}).");
     }
 
     public async Task<ServiceResult> UpdateStaffAsync(StaffEditViewModel model, CancellationToken ct = default)
     {
-        var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
-            s => s.Id == model.Id && s.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (staff == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
-        }
+            var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
+                s => s.Id == model.Id && s.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        var emailTrim = model.Email.Trim().ToLowerInvariant();
-        if (await unitOfWork.Staff.ExistsAsync(s => s.Email.ToLower() == emailTrim && s.Id != staff.Id, ct))
-        {
-            return ServiceResult.ValidationError(ErrorCode.StaffEmailAlreadyExists);
-        }
-
-        var targetRole = model.Role == AppRoles.Admin ? AppRoles.Admin : AppRoles.Librarian;
-
-        // Bảo vệ không cho Admin tự khóa hoặc tự hạ quyền chính mình
-        if (userContext.CurrentUserId.HasValue && userContext.CurrentUserId.Value == staff.Id)
-        {
-            if (targetRole != staff.Role || model.Status != EntityStatus.Active)
+            if (staff == null)
             {
-                return ServiceResult.Failure(ErrorCode.StaffCannotModifySelf);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
             }
+
+            var emailTrim = model.Email.Trim().ToLowerInvariant();
+            if (await unitOfWork.Staff.ExistsAsync(s => s.Email.ToLower() == emailTrim && s.Id != staff.Id, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.StaffEmailAlreadyExists);
+            }
+
+            var targetRole = model.Role == AppRoles.Admin ? AppRoles.Admin : AppRoles.Librarian;
+
+            // Bảo vệ không cho Admin tự khóa hoặc tự hạ quyền chính mình
+            if (userContext.CurrentUserId.HasValue && userContext.CurrentUserId.Value == staff.Id)
+            {
+                if (targetRole != staff.Role || model.Status != EntityStatus.Active)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.StaffCannotModifySelf);
+                }
+            }
+
+            // Bảo vệ không làm mất Admin hoạt động cuối cùng của hệ thống
+            if (staff.Role == AppRoles.Admin && (targetRole != AppRoles.Admin || model.Status != EntityStatus.Active))
+            {
+                var hasOtherActiveAdmin = await unitOfWork.Staff.ExistsAsync(
+                    s => s.Id != staff.Id && s.Role == AppRoles.Admin && s.Status == EntityStatus.Active,
+                    ct);
+                if (!hasOtherActiveAdmin)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(
+                        ErrorCode.CommonRecordInUse,
+                        "Hệ thống bắt buộc phải có ít nhất một Quản trị viên (ADMIN) đang hoạt động.");
+                }
+            }
+
+            var securitySensitiveChanged = staff.Role != targetRole ||
+                                           staff.Status != model.Status ||
+                                           !string.IsNullOrWhiteSpace(model.NewPassword);
+
+            staff.FullName = model.FullName.Trim();
+            staff.Email = emailTrim;
+            staff.Phone = model.Phone?.Trim();
+            staff.Role = targetRole;
+            staff.Status = model.Status;
+
+            if (!string.IsNullOrWhiteSpace(model.NewPassword))
+            {
+                staff.PasswordHash = PasswordHasher.HashPassword(model.NewPassword);
+            }
+
+            if (securitySensitiveChanged)
+            {
+                staff.SecurityStamp = Guid.NewGuid().ToString("N");
+            }
+
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã cập nhật tài khoản cán bộ \"{staff.FullName}\".");
         }
-
-        var securitySensitiveChanged = staff.Role != targetRole ||
-                                       staff.Status != model.Status ||
-                                       !string.IsNullOrWhiteSpace(model.NewPassword);
-
-        staff.FullName = model.FullName.Trim();
-        staff.Email = emailTrim;
-        staff.Phone = model.Phone?.Trim();
-        staff.Role = targetRole;
-        staff.Status = model.Status;
-
-        if (!string.IsNullOrWhiteSpace(model.NewPassword))
+        catch
         {
-            staff.PasswordHash = PasswordHasher.HashPassword(model.NewPassword);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        if (securitySensitiveChanged)
-        {
-            staff.SecurityStamp = Guid.NewGuid().ToString("N");
-        }
-
-        unitOfWork.Staff.Update(staff);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã cập nhật tài khoản cán bộ \"{staff.FullName}\".");
     }
 
     public async Task<ServiceResult> UnlockStaffAccountAsync(Guid id, CancellationToken ct = default)
     {
-        var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
-            s => s.Id == id && s.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (staff == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
+            var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
+                s => s.Id == id && s.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+
+            if (staff == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
+            }
+
+            staff.FailedLoginAttempts = 0;
+            staff.LockedUntil = null;
+            staff.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            return ServiceResult.Success($"Đã mở khóa tài khoản cán bộ \"{staff.FullName}\".");
         }
-
-        staff.FailedLoginAttempts = 0;
-        staff.LockedUntil = null;
-        staff.Status = EntityStatus.Active;
-        unitOfWork.Staff.Update(staff);
-        await unitOfWork.SaveChangesAsync(ct);
-
-        return ServiceResult.Success($"Đã mở khóa tài khoản cán bộ \"{staff.FullName}\".");
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> SoftDeleteStaffAsync(Guid id, CancellationToken ct = default)
@@ -187,42 +233,74 @@ public class SystemAdminService(
             return ServiceResult.Failure(ErrorCode.StaffCannotModifySelf);
         }
 
-        var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
-            s => s.Id == id && s.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (staff == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
-        }
+            var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
+                s => s.Id == id && s.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        staff.Status = EntityStatus.Deleted;
-        staff.SecurityStamp = Guid.NewGuid().ToString("N");
-        unitOfWork.Staff.Update(staff);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm tài khoản cán bộ \"{staff.FullName}\" (chuyển sang DELETED).");
+            if (staff == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
+            }
+
+            if (staff.Role == AppRoles.Admin)
+            {
+                var hasOtherActiveAdmin = await unitOfWork.Staff.ExistsAsync(
+                    s => s.Id != staff.Id && s.Role == AppRoles.Admin && s.Status == EntityStatus.Active,
+                    ct);
+                if (!hasOtherActiveAdmin)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(
+                        ErrorCode.CommonRecordInUse,
+                        "Không thể xóa mềm Quản trị viên (ADMIN) hoạt động cuối cùng của hệ thống.");
+                }
+            }
+
+            staff.Status = EntityStatus.Deleted;
+            staff.SecurityStamp = Guid.NewGuid().ToString("N");
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm tài khoản cán bộ \"{staff.FullName}\" (chuyển sang DELETED).");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> RestoreStaffAsync(Guid id, CancellationToken ct = default)
     {
-        var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
-            s => s.Id == id && s.Status == EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (staff == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
-        }
+            var staff = await unitOfWork.Staff.FirstOrDefaultAsync(
+                s => s.Id == id && s.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        staff.Status = EntityStatus.Active;
-        staff.FailedLoginAttempts = 0;
-        staff.LockedUntil = null;
-        staff.SecurityStamp = Guid.NewGuid().ToString("N");
-        unitOfWork.Staff.Update(staff);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục tài khoản cán bộ \"{staff.FullName}\" về trạng thái hoạt động.");
+            if (staff == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
+            }
+
+            staff.Status = EntityStatus.Active;
+            staff.FailedLoginAttempts = 0;
+            staff.LockedUntil = null;
+            staff.SecurityStamp = Guid.NewGuid().ToString("N");
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục tài khoản cán bộ \"{staff.FullName}\" về trạng thái hoạt động.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeleteStaffAsync(Guid id, string? confirmCode, CancellationToken ct = default)
@@ -232,37 +310,51 @@ public class SystemAdminService(
             return ServiceResult.Failure(ErrorCode.StaffCannotModifySelf);
         }
 
-        var staff = await unitOfWork.Staff.GetByIdAsync(id, ct);
-        if (staff == null)
-        {
-            return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
-        }
-
-        if (staff.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasRelatedRecords =
-            await unitOfWork.BorrowSlips.ExistsAsync(bs => bs.IssuedBy == id, ct) ||
-            await unitOfWork.BorrowDetails.ExistsAsync(bd => bd.ReceivedBy == id, ct) ||
-            await unitOfWork.Fines.ExistsAsync(f => f.HandledBy == id, ct);
-
-        if (hasRelatedRecords)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(
-                ErrorCode.CommonRecordInUse,
-                "Không thể xóa vĩnh viễn cán bộ đã phát sinh lịch sử lập phiếu mượn, nhận trả sách hoặc xử lý tiền phạt.");
-        }
+            var staff = await unitOfWork.Staff.FirstOrDefaultAsync(s => s.Id == id, asNoTracking: false, ct);
+            if (staff == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthStaffNotFound);
+            }
 
-        unitOfWork.Staff.Delete(staff);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn tài khoản cán bộ \"{staff.FullName}\" khỏi cơ sở dữ liệu.");
+            if (staff.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
+
+            var hasRelatedRecords =
+                await unitOfWork.BorrowSlips.ExistsAsync(bs => bs.IssuedBy == id, ct) ||
+                await unitOfWork.BorrowDetails.ExistsAsync(bd => bd.ReceivedBy == id, ct) ||
+                await unitOfWork.Fines.ExistsAsync(f => f.HandledBy == id, ct);
+
+            if (hasRelatedRecords)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.CommonRecordInUse,
+                    "Không thể xóa vĩnh viễn cán bộ đã phát sinh lịch sử lập phiếu mượn, nhận trả sách hoặc xử lý tiền phạt.");
+            }
+
+            var fullName = staff.FullName;
+            await unitOfWork.ClearStaffAuditReferencesAsync(id, ct);
+            unitOfWork.Staff.Delete(staff);
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa vĩnh viễn tài khoản cán bộ \"{fullName}\" khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // =========================================================================
@@ -293,135 +385,191 @@ public class SystemAdminService(
     public async Task<ServiceResult> SaveReaderTypeAsync(ReaderTypeFormViewModel model, CancellationToken ct = default)
     {
         var codeTrim = model.Code.Trim().ToUpperInvariant();
-        var duplicate = await unitOfWork.ReaderTypes.ExistsAsync(
-            rt => rt.Code.ToUpper() == codeTrim && rt.Id != model.Id,
-            ct);
 
-        if (duplicate)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.ValidationError(ErrorCode.ReaderTypeCodeAlreadyExists);
-        }
-
-        if (model.Id.HasValue && model.Id.Value != Guid.Empty)
-        {
-            var entity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
-                rt => rt.Id == model.Id.Value && rt.Status != EntityStatus.Deleted,
-                asNoTracking: false,
+            var duplicateEntity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
+                rt => rt.Code.ToUpper() == codeTrim && rt.Id != model.Id,
+                asNoTracking: true,
                 ct);
 
-            if (entity == null)
+            if (duplicateEntity != null)
             {
-                return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                var msg = duplicateEntity.Status == EntityStatus.Deleted
+                    ? $"Mã loại thẻ \"{duplicateEntity.Code}\" đang nằm trong mục Đã xóa mềm (DELETED). Vui lòng khôi phục hoặc xóa vĩnh viễn loại thẻ cũ trước."
+                    : null;
+                return ServiceResult.ValidationError(ErrorCode.ReaderTypeCodeAlreadyExists, msg);
             }
 
-            entity.Code = codeTrim;
-            entity.Name = model.Name.Trim();
-            entity.MaxBorrowBooks = model.MaxBorrowBooks;
-            entity.LoanDays = model.LoanDays;
-            entity.MaxRenewals = model.MaxRenewals;
-            entity.RenewDays = model.RenewDays;
-            entity.CardValidMonths = model.CardValidMonths;
-            entity.Description = model.Description?.Trim();
-            entity.Status = model.Status;
-
-            unitOfWork.ReaderTypes.Update(entity);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã cập nhật quy định loại độc giả \"{entity.Name}\" ({entity.MaxBorrowBooks} cuốn / {entity.LoanDays} ngày).");
-        }
-        else
-        {
-            var entity = new ReaderType
+            if (model.Id.HasValue && model.Id.Value != Guid.Empty)
             {
-                Id = Guid.NewGuid(),
-                Code = codeTrim,
-                Name = model.Name.Trim(),
-                MaxBorrowBooks = model.MaxBorrowBooks,
-                LoanDays = model.LoanDays,
-                MaxRenewals = model.MaxRenewals,
-                RenewDays = model.RenewDays,
-                CardValidMonths = model.CardValidMonths,
-                Description = model.Description?.Trim(),
-                Status = model.Status
-            };
+                var entity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
+                    rt => rt.Id == model.Id.Value && rt.Status != EntityStatus.Deleted,
+                    asNoTracking: false,
+                    ct);
 
-            await unitOfWork.ReaderTypes.AddAsync(entity, ct);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã thêm loại độc giả \"{entity.Name}\".");
+                if (entity == null)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
+                }
+
+                entity.Code = codeTrim;
+                entity.Name = model.Name.Trim();
+                entity.MaxBorrowBooks = model.MaxBorrowBooks;
+                entity.LoanDays = model.LoanDays;
+                entity.MaxRenewals = model.MaxRenewals;
+                entity.RenewDays = model.RenewDays;
+                entity.CardValidMonths = model.CardValidMonths;
+                entity.Description = model.Description?.Trim();
+                entity.Status = model.Status;
+
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã cập nhật quy định loại độc giả \"{entity.Name}\" ({entity.MaxBorrowBooks} cuốn / {entity.LoanDays} ngày).");
+            }
+            else
+            {
+                var entity = new ReaderType
+                {
+                    Id = Guid.NewGuid(),
+                    Code = codeTrim,
+                    Name = model.Name.Trim(),
+                    MaxBorrowBooks = model.MaxBorrowBooks,
+                    LoanDays = model.LoanDays,
+                    MaxRenewals = model.MaxRenewals,
+                    RenewDays = model.RenewDays,
+                    CardValidMonths = model.CardValidMonths,
+                    Description = model.Description?.Trim(),
+                    Status = model.Status
+                };
+
+                await unitOfWork.ReaderTypes.AddAsync(entity, ct);
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã thêm loại độc giả \"{entity.Name}\".");
+            }
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
     }
 
     public async Task<ServiceResult> DeleteReaderTypeAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
-            rt => rt.Id == id && rt.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
+            var entity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
+                rt => rt.Id == id && rt.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
+            }
+
+            var hasReaders = await unitOfWork.Readers.ExistsAsync(
+                r => r.ReaderTypeId == id && r.Status != EntityStatus.Deleted,
+                ct);
+
+            if (hasReaders)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            entity.Status = EntityStatus.Deleted;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm loại độc giả \"{entity.Name}\" (chuyển sang DELETED).");
         }
-
-        var hasReaders = await unitOfWork.Readers.ExistsAsync(
-            r => r.ReaderTypeId == id && r.Status != EntityStatus.Deleted,
-            ct);
-
-        if (hasReaders)
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        entity.Status = EntityStatus.Deleted;
-        unitOfWork.ReaderTypes.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm loại độc giả \"{entity.Name}\" (chuyển sang DELETED).");
     }
 
     public async Task<ServiceResult> RestoreReaderTypeAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
-            rt => rt.Id == id && rt.Status == EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
-        }
+            var entity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
+                rt => rt.Id == id && rt.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        entity.Status = EntityStatus.Active;
-        unitOfWork.ReaderTypes.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục loại độc giả \"{entity.Name}\" về trạng thái hoạt động.");
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
+            }
+
+            var duplicate = await unitOfWork.ReaderTypes.ExistsAsync(
+                rt => rt.Id != id && rt.Code.ToUpper() == entity.Code.ToUpper(),
+                ct);
+            if (duplicate)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.ReaderTypeCodeAlreadyExists);
+            }
+
+            entity.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục loại độc giả \"{entity.Name}\" về trạng thái hoạt động.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeleteReaderTypeAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.ReaderTypes.GetByIdAsync(id, ct);
-        if (entity == null)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
-        }
-
-        if (entity.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasAnyReaders = await unitOfWork.Readers.ExistsAsync(r => r.ReaderTypeId == id, ct);
-        if (hasAnyReaders)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
-        }
+            var entity = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(rt => rt.Id == id, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
+            }
 
-        unitOfWork.ReaderTypes.Delete(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn loại độc giả \"{entity.Name}\" khỏi cơ sở dữ liệu.");
+            if (entity.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
+
+            var hasAnyReaders = await unitOfWork.Readers.ExistsAsync(r => r.ReaderTypeId == id, ct);
+            if (hasAnyReaders)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            var name = entity.Name;
+            unitOfWork.ReaderTypes.Delete(entity);
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa vĩnh viễn loại độc giả \"{name}\" khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // =========================================================================

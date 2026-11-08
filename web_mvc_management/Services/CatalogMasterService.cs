@@ -105,106 +105,165 @@ public class CatalogMasterService(IUnitOfWork unitOfWork) : ICatalogMasterServic
     public async Task<ServiceResult> SaveCategoryAsync(CategoryFormViewModel model, CancellationToken ct = default)
     {
         var nameTrim = model.Name.Trim();
-        var duplicate = await unitOfWork.Categories.ExistsAsync(
-            x => x.Status != EntityStatus.Deleted && x.Name.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
-            ct);
 
-        if (duplicate)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.ValidationError(ErrorCode.CategoryNameAlreadyExists);
-        }
+            var duplicateEntity = await unitOfWork.Categories.FirstOrDefaultAsync(
+                x => x.Name.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
+                asNoTracking: true,
+                ct);
 
-        if (model.Id.HasValue && model.Id.Value != Guid.Empty)
-        {
-            var entity = await unitOfWork.Categories.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
-            if (entity == null)
+            if (duplicateEntity != null)
             {
-                return ServiceResult.Failure(ErrorCode.CategoryNotFound);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                var msg = duplicateEntity.Status == EntityStatus.Deleted
+                    ? $"Thể loại \"{duplicateEntity.Name}\" đang nằm trong mục Đã xóa mềm (DELETED). Vui lòng khôi phục hoặc xóa vĩnh viễn bản ghi cũ trước."
+                    : null;
+                return ServiceResult.ValidationError(ErrorCode.CategoryNameAlreadyExists, msg);
             }
 
-            entity.Name = nameTrim;
-            entity.Description = model.Description?.Trim();
-            entity.Status = model.Status;
-            unitOfWork.Categories.Update(entity);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã cập nhật thể loại \"{entity.Name}\".");
-        }
-        else
-        {
-            var entity = new Category
+            if (model.Id.HasValue && model.Id.Value != Guid.Empty)
             {
-                Id = Guid.NewGuid(),
-                Name = nameTrim,
-                Description = model.Description?.Trim(),
-                Status = model.Status
-            };
-            await unitOfWork.Categories.AddAsync(entity, ct);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã thêm thể loại \"{entity.Name}\".");
+                var entity = await unitOfWork.Categories.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
+                if (entity == null)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.CategoryNotFound);
+                }
+
+                entity.Name = nameTrim;
+                entity.Description = model.Description?.Trim();
+                entity.Status = model.Status;
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã cập nhật thể loại \"{entity.Name}\".");
+            }
+            else
+            {
+                var entity = new Category
+                {
+                    Id = Guid.NewGuid(),
+                    Name = nameTrim,
+                    Description = model.Description?.Trim(),
+                    Status = model.Status
+                };
+                await unitOfWork.Categories.AddAsync(entity, ct);
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã thêm thể loại \"{entity.Name}\".");
+            }
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
     }
 
     public async Task<ServiceResult> DeleteCategoryAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Categories.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.CategoryNotFound);
-        }
+            var entity = await unitOfWork.Categories.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CategoryNotFound);
+            }
 
-        var hasBooks = await unitOfWork.Books.ExistsAsync(x => x.CategoryId == id && x.Status != EntityStatus.Deleted, ct);
-        if (hasBooks)
+            var hasBooks = await unitOfWork.Books.ExistsAsync(x => x.CategoryId == id && x.Status != EntityStatus.Deleted, ct);
+            if (hasBooks)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            entity.Status = EntityStatus.Deleted;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm thể loại \"{entity.Name}\" (Bước 1: Đổi sang DELETED).");
+        }
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        entity.Status = EntityStatus.Deleted;
-        unitOfWork.Categories.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm thể loại \"{entity.Name}\" (Bước 1: Đổi sang DELETED).");
     }
 
     public async Task<ServiceResult> RestoreCategoryAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Categories.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.CategoryNotFound);
-        }
+            var entity = await unitOfWork.Categories.FirstOrDefaultAsync(
+                x => x.Id == id && x.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CategoryNotFound);
+            }
 
-        entity.Status = EntityStatus.Active;
-        unitOfWork.Categories.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục thể loại \"{entity.Name}\" về trạng thái hoạt động.");
+            var duplicate = await unitOfWork.Categories.ExistsAsync(
+                x => x.Id != id && x.Name.ToLower() == entity.Name.ToLower(),
+                ct);
+            if (duplicate)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.CategoryNameAlreadyExists);
+            }
+
+            entity.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục thể loại \"{entity.Name}\" về trạng thái hoạt động.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeleteCategoryAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Categories.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
-        {
-            return ServiceResult.Failure(ErrorCode.CategoryNotFound);
-        }
-
-        if (entity.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!IsValidHardDeleteConfirm(confirmCode))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasAnyBookRef = await unitOfWork.Books.ExistsAsync(x => x.CategoryId == id, ct);
-        if (hasAnyBookRef)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
-        }
+            var entity = await unitOfWork.Categories.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CategoryNotFound);
+            }
 
-        unitOfWork.Categories.Delete(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn thể loại \"{entity.Name}\" khỏi cơ sở dữ liệu.");
+            if (entity.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
+
+            var hasAnyBookRef = await unitOfWork.Books.ExistsAsync(x => x.CategoryId == id, ct);
+            if (hasAnyBookRef)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            var name = entity.Name;
+            unitOfWork.Categories.Delete(entity);
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa vĩnh viễn thể loại \"{name}\" khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // =========================================================================
@@ -246,109 +305,164 @@ public class CatalogMasterService(IUnitOfWork unitOfWork) : ICatalogMasterServic
     public async Task<ServiceResult> SaveAuthorAsync(AuthorFormViewModel model, CancellationToken ct = default)
     {
         var nameTrim = model.FullName.Trim();
-        var duplicate = await unitOfWork.Authors.ExistsAsync(
-            x => x.Status != EntityStatus.Deleted && x.FullName.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
-            ct);
 
-        if (duplicate)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.ValidationError(ErrorCode.AuthorNameAlreadyExists);
-        }
+            var duplicate = await unitOfWork.Authors.ExistsAsync(
+                x => x.Status != EntityStatus.Deleted && x.FullName.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
+                ct);
 
-        if (model.Id.HasValue && model.Id.Value != Guid.Empty)
-        {
-            var entity = await unitOfWork.Authors.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
-            if (entity == null)
+            if (duplicate)
             {
-                return ServiceResult.Failure(ErrorCode.AuthorNotFound);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.AuthorNameAlreadyExists);
             }
 
-            entity.FullName = nameTrim;
-            entity.Biography = model.Biography?.Trim();
-            entity.Status = model.Status;
-            unitOfWork.Authors.Update(entity);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã cập nhật tác giả \"{entity.FullName}\".");
-        }
-        else
-        {
-            var entity = new Author
+            if (model.Id.HasValue && model.Id.Value != Guid.Empty)
             {
-                Id = Guid.NewGuid(),
-                FullName = nameTrim,
-                Biography = model.Biography?.Trim(),
-                Status = model.Status
-            };
-            await unitOfWork.Authors.AddAsync(entity, ct);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã thêm tác giả \"{entity.FullName}\".");
+                var entity = await unitOfWork.Authors.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
+                if (entity == null)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.AuthorNotFound);
+                }
+
+                entity.FullName = nameTrim;
+                entity.Biography = model.Biography?.Trim();
+                entity.Status = model.Status;
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã cập nhật tác giả \"{entity.FullName}\".");
+            }
+            else
+            {
+                var entity = new Author
+                {
+                    Id = Guid.NewGuid(),
+                    FullName = nameTrim,
+                    Biography = model.Biography?.Trim(),
+                    Status = model.Status
+                };
+                await unitOfWork.Authors.AddAsync(entity, ct);
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã thêm tác giả \"{entity.FullName}\".");
+            }
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
     }
 
     public async Task<ServiceResult> DeleteAuthorAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Authors.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.AuthorNotFound);
+            var entity = await unitOfWork.Authors.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthorNotFound);
+            }
+
+            var hasBooks = await unitOfWork.BookAuthors.ExistsAsync(
+                x => x.AuthorId == id && x.Status != EntityStatus.Deleted && x.Book.Status != EntityStatus.Deleted,
+                ct);
+
+            if (hasBooks)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            entity.Status = EntityStatus.Deleted;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm tác giả \"{entity.FullName}\" (Bước 1: Đổi sang DELETED).");
         }
-
-        var hasBooks = await unitOfWork.BookAuthors.ExistsAsync(
-            x => x.AuthorId == id && x.Status != EntityStatus.Deleted && x.Book.Status != EntityStatus.Deleted,
-            ct);
-
-        if (hasBooks)
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        entity.Status = EntityStatus.Deleted;
-        unitOfWork.Authors.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm tác giả \"{entity.FullName}\" (Bước 1: Đổi sang DELETED).");
     }
 
     public async Task<ServiceResult> RestoreAuthorAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Authors.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.AuthorNotFound);
-        }
+            var entity = await unitOfWork.Authors.FirstOrDefaultAsync(
+                x => x.Id == id && x.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthorNotFound);
+            }
 
-        entity.Status = EntityStatus.Active;
-        unitOfWork.Authors.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục tác giả \"{entity.FullName}\".");
+            var duplicateActive = await unitOfWork.Authors.ExistsAsync(
+                x => x.Id != id && x.Status != EntityStatus.Deleted && x.FullName.ToLower() == entity.FullName.ToLower(),
+                ct);
+            if (duplicateActive)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.AuthorNameAlreadyExists);
+            }
+
+            entity.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục tác giả \"{entity.FullName}\".");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeleteAuthorAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Authors.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
-        {
-            return ServiceResult.Failure(ErrorCode.AuthorNotFound);
-        }
-
-        if (entity.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!IsValidHardDeleteConfirm(confirmCode))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasAnyLink = await unitOfWork.BookAuthors.ExistsAsync(x => x.AuthorId == id, ct);
-        if (hasAnyLink)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
-        }
+            var entity = await unitOfWork.Authors.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthorNotFound);
+            }
 
-        unitOfWork.Authors.Delete(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn tác giả \"{entity.FullName}\" khỏi cơ sở dữ liệu.");
+            if (entity.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
+
+            var hasAnyLink = await unitOfWork.BookAuthors.ExistsAsync(x => x.AuthorId == id, ct);
+            if (hasAnyLink)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            var fullName = entity.FullName;
+            unitOfWork.Authors.Delete(entity);
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa vĩnh viễn tác giả \"{fullName}\" khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // =========================================================================
@@ -396,112 +510,171 @@ public class CatalogMasterService(IUnitOfWork unitOfWork) : ICatalogMasterServic
     public async Task<ServiceResult> SavePublisherAsync(PublisherFormViewModel model, CancellationToken ct = default)
     {
         var nameTrim = model.Name.Trim();
-        var duplicate = await unitOfWork.Publishers.ExistsAsync(
-            x => x.Status != EntityStatus.Deleted && x.Name.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
-            ct);
 
-        if (duplicate)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.ValidationError(ErrorCode.PublisherNameAlreadyExists);
-        }
+            var duplicateEntity = await unitOfWork.Publishers.FirstOrDefaultAsync(
+                x => x.Name.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
+                asNoTracking: true,
+                ct);
 
-        if (model.Id.HasValue && model.Id.Value != Guid.Empty)
-        {
-            var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
-            if (entity == null)
+            if (duplicateEntity != null)
             {
-                return ServiceResult.Failure(ErrorCode.PublisherNotFound);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                var msg = duplicateEntity.Status == EntityStatus.Deleted
+                    ? $"Nhà xuất bản \"{duplicateEntity.Name}\" đang nằm trong mục Đã xóa mềm (DELETED). Vui lòng khôi phục hoặc xóa vĩnh viễn bản ghi cũ trước."
+                    : null;
+                return ServiceResult.ValidationError(ErrorCode.PublisherNameAlreadyExists, msg);
             }
 
-            entity.Name = nameTrim;
-            entity.Address = model.Address?.Trim();
-            entity.Phone = model.Phone?.Trim();
-            entity.Email = model.Email?.Trim();
-            entity.Website = model.Website?.Trim();
-            entity.Status = model.Status;
-            unitOfWork.Publishers.Update(entity);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã cập nhật nhà xuất bản \"{entity.Name}\".");
-        }
-        else
-        {
-            var entity = new Publisher
+            if (model.Id.HasValue && model.Id.Value != Guid.Empty)
             {
-                Id = Guid.NewGuid(),
-                Name = nameTrim,
-                Address = model.Address?.Trim(),
-                Phone = model.Phone?.Trim(),
-                Email = model.Email?.Trim(),
-                Website = model.Website?.Trim(),
-                Status = model.Status
-            };
-            await unitOfWork.Publishers.AddAsync(entity, ct);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã thêm nhà xuất bản \"{entity.Name}\".");
+                var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
+                if (entity == null)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.PublisherNotFound);
+                }
+
+                entity.Name = nameTrim;
+                entity.Address = model.Address?.Trim();
+                entity.Phone = model.Phone?.Trim();
+                entity.Email = model.Email?.Trim();
+                entity.Website = model.Website?.Trim();
+                entity.Status = model.Status;
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã cập nhật nhà xuất bản \"{entity.Name}\".");
+            }
+            else
+            {
+                var entity = new Publisher
+                {
+                    Id = Guid.NewGuid(),
+                    Name = nameTrim,
+                    Address = model.Address?.Trim(),
+                    Phone = model.Phone?.Trim(),
+                    Email = model.Email?.Trim(),
+                    Website = model.Website?.Trim(),
+                    Status = model.Status
+                };
+                await unitOfWork.Publishers.AddAsync(entity, ct);
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã thêm nhà xuất bản \"{entity.Name}\".");
+            }
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
     }
 
     public async Task<ServiceResult> DeletePublisherAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.PublisherNotFound);
-        }
+            var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.PublisherNotFound);
+            }
 
-        var hasBooks = await unitOfWork.Books.ExistsAsync(x => x.PublisherId == id && x.Status != EntityStatus.Deleted, ct);
-        if (hasBooks)
+            var hasBooks = await unitOfWork.Books.ExistsAsync(x => x.PublisherId == id && x.Status != EntityStatus.Deleted, ct);
+            if (hasBooks)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            entity.Status = EntityStatus.Deleted;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm nhà xuất bản \"{entity.Name}\" (Bước 1: Đổi sang DELETED).");
+        }
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        entity.Status = EntityStatus.Deleted;
-        unitOfWork.Publishers.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm nhà xuất bản \"{entity.Name}\" (Bước 1: Đổi sang DELETED).");
     }
 
     public async Task<ServiceResult> RestorePublisherAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.PublisherNotFound);
-        }
+            var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(
+                x => x.Id == id && x.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.PublisherNotFound);
+            }
 
-        entity.Status = EntityStatus.Active;
-        unitOfWork.Publishers.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục nhà xuất bản \"{entity.Name}\".");
+            var duplicate = await unitOfWork.Publishers.ExistsAsync(
+                x => x.Id != id && x.Name.ToLower() == entity.Name.ToLower(),
+                ct);
+            if (duplicate)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.PublisherNameAlreadyExists);
+            }
+
+            entity.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục nhà xuất bản \"{entity.Name}\".");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeletePublisherAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
-        {
-            return ServiceResult.Failure(ErrorCode.PublisherNotFound);
-        }
-
-        if (entity.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!IsValidHardDeleteConfirm(confirmCode))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasAnyBook = await unitOfWork.Books.ExistsAsync(x => x.PublisherId == id, ct);
-        if (hasAnyBook)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
-        }
+            var entity = await unitOfWork.Publishers.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.PublisherNotFound);
+            }
 
-        unitOfWork.Publishers.Delete(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn nhà xuất bản \"{entity.Name}\" khỏi cơ sở dữ liệu.");
+            if (entity.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
+
+            var hasAnyBook = await unitOfWork.Books.ExistsAsync(x => x.PublisherId == id, ct);
+            if (hasAnyBook)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            var name = entity.Name;
+            unitOfWork.Publishers.Delete(entity);
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa vĩnh viễn nhà xuất bản \"{name}\" khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // =========================================================================
@@ -544,108 +717,167 @@ public class CatalogMasterService(IUnitOfWork unitOfWork) : ICatalogMasterServic
     public async Task<ServiceResult> SaveShelfAsync(ShelfFormViewModel model, CancellationToken ct = default)
     {
         var codeTrim = model.Code.Trim().ToUpperInvariant();
-        var duplicate = await unitOfWork.Shelves.ExistsAsync(
-            x => x.Code.ToUpper() == codeTrim && x.Id != model.Id,
-            ct);
 
-        if (duplicate)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.ValidationError(ErrorCode.ShelfCodeAlreadyExists);
-        }
+            var duplicateEntity = await unitOfWork.Shelves.FirstOrDefaultAsync(
+                x => x.Code.ToUpper() == codeTrim && x.Id != model.Id,
+                asNoTracking: true,
+                ct);
 
-        if (model.Id.HasValue && model.Id.Value != Guid.Empty)
-        {
-            var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
-            if (entity == null)
+            if (duplicateEntity != null)
             {
-                return ServiceResult.Failure(ErrorCode.ShelfNotFound);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                var msg = duplicateEntity.Status == EntityStatus.Deleted
+                    ? $"Mã kệ \"{duplicateEntity.Code}\" đang nằm trong mục Đã xóa mềm (DELETED). Vui lòng khôi phục hoặc xóa vĩnh viễn kệ cũ trước."
+                    : null;
+                return ServiceResult.ValidationError(ErrorCode.ShelfCodeAlreadyExists, msg);
             }
 
-            entity.Code = codeTrim;
-            entity.Description = model.Description?.Trim();
-            entity.Status = model.Status;
-            unitOfWork.Shelves.Update(entity);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã cập nhật kệ sách \"{entity.Code}\".");
-        }
-        else
-        {
-            var entity = new Shelf
+            if (model.Id.HasValue && model.Id.Value != Guid.Empty)
             {
-                Id = Guid.NewGuid(),
-                Code = codeTrim,
-                Description = model.Description?.Trim(),
-                Status = model.Status
-            };
-            await unitOfWork.Shelves.AddAsync(entity, ct);
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult.Success($"Đã thêm vị trí kệ \"{entity.Code}\".");
+                var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(x => x.Id == model.Id.Value, asNoTracking: false, ct);
+                if (entity == null)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.ShelfNotFound);
+                }
+
+                entity.Code = codeTrim;
+                entity.Description = model.Description?.Trim();
+                entity.Status = model.Status;
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã cập nhật kệ sách \"{entity.Code}\".");
+            }
+            else
+            {
+                var entity = new Shelf
+                {
+                    Id = Guid.NewGuid(),
+                    Code = codeTrim,
+                    Description = model.Description?.Trim(),
+                    Status = model.Status
+                };
+                await unitOfWork.Shelves.AddAsync(entity, ct);
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult.Success($"Đã thêm vị trí kệ \"{entity.Code}\".");
+            }
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
     }
 
     public async Task<ServiceResult> DeleteShelfAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.ShelfNotFound);
+            var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(x => x.Id == id && x.Status != EntityStatus.Deleted, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ShelfNotFound);
+            }
+
+            var hasCopies = await unitOfWork.BookCopies.ExistsAsync(
+                x => x.ShelfId == id && x.Status != EntityStatus.Deleted && x.CopyStatus != LibraryConstants.CopyStatus.Disposed,
+                ct);
+
+            if (hasCopies)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            entity.Status = EntityStatus.Deleted;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm vị trí kệ \"{entity.Code}\" (Bước 1: Đổi sang DELETED).");
         }
-
-        var hasCopies = await unitOfWork.BookCopies.ExistsAsync(
-            x => x.ShelfId == id && x.Status != EntityStatus.Deleted && x.CopyStatus != LibraryConstants.CopyStatus.Disposed,
-            ct);
-
-        if (hasCopies)
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        entity.Status = EntityStatus.Deleted;
-        unitOfWork.Shelves.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm vị trí kệ \"{entity.Code}\" (Bước 1: Đổi sang DELETED).");
     }
 
     public async Task<ServiceResult> RestoreShelfAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.ShelfNotFound);
-        }
+            var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(
+                x => x.Id == id && x.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ShelfNotFound);
+            }
 
-        entity.Status = EntityStatus.Active;
-        unitOfWork.Shelves.Update(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục vị trí kệ \"{entity.Code}\".");
+            var duplicate = await unitOfWork.Shelves.ExistsAsync(
+                x => x.Id != id && x.Code.ToUpper() == entity.Code.ToUpper(),
+                ct);
+            if (duplicate)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.ShelfCodeAlreadyExists);
+            }
+
+            entity.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục vị trí kệ \"{entity.Code}\".");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeleteShelfAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
-        if (entity == null)
-        {
-            return ServiceResult.Failure(ErrorCode.ShelfNotFound);
-        }
-
-        if (entity.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!IsValidHardDeleteConfirm(confirmCode))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasAnyCopy = await unitOfWork.BookCopies.ExistsAsync(x => x.ShelfId == id, ct);
-        if (hasAnyCopy)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
-        }
+            var entity = await unitOfWork.Shelves.FirstOrDefaultAsync(x => x.Id == id, asNoTracking: false, ct);
+            if (entity == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ShelfNotFound);
+            }
 
-        unitOfWork.Shelves.Delete(entity);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn vị trí kệ \"{entity.Code}\" khỏi cơ sở dữ liệu.");
+            if (entity.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
+
+            var hasAnyCopy = await unitOfWork.BookCopies.ExistsAsync(x => x.ShelfId == id, ct);
+            if (hasAnyCopy)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.CommonRecordInUse);
+            }
+
+            var code = entity.Code;
+            unitOfWork.Shelves.Delete(entity);
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa vĩnh viễn vị trí kệ \"{code}\" khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 }
