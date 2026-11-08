@@ -1,9 +1,3 @@
 <Solution>
-  <Folder Name="/tests/">
-    <Project Path="tests/LibraryManagement.Tests/LibraryManagement.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tools/">
-    <Project Path="tools/WireframeGenerator/WireframeGenerator.csproj" />
-  </Folder>
   <Project Path="web_mvc_management/web_mvc_management.csproj" />
 </Solution>
