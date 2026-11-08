@@ -24,5 +24,12 @@ public interface ISystemAdminService
     // 3. Cấu hình Quy định Mượn trả & Mức phạt (/System/Settings)
     Task<LibrarySettingFormViewModel> GetLibrarySettingAsync(CancellationToken ct = default);
     Task<ServiceResult> SaveLibrarySettingAsync(LibrarySettingFormViewModel model, CancellationToken ct = default);
+    
+    // Task<DashboardViewModel> GetDashboardAsync(CancellationToken ct);
+    // Task<DashboardViewModel> GetDashboardAsync(int year,CancellationToken ct);
+    Task<DashboardViewModel> GetDashboardAsync(
+        int year,
+        CancellationToken ct);
+    
 }
 

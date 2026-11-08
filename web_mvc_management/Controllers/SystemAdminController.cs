@@ -275,5 +275,21 @@ public class SystemAdminController(
 
         return RedirectToAction(nameof(Settings));
     }
+    // =========================================================================
+    // 4. TỔNG QUAN THỐNG KÊ (/Admin/Dashboard)
+    // =========================================================================
+    [HttpGet("Admin/Dashboard")]
+    public async Task<IActionResult> Dashboard(
+            int? year,
+            CancellationToken ct)
+        {
+            var selectedYear = year ?? DateTime.Now.Year;
+
+            var viewModel = await systemAdminService
+                .GetDashboardAsync(selectedYear, ct);
+
+            return View("Dashboard", viewModel);
+        }
+                
 }
 

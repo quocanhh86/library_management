@@ -1,0 +1,1322 @@
+@model web_mvc_management.Models.ViewModels.SystemAdmin.DashboardViewModel
+
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Quy định mượn trả & mức phạt";
+    ViewData["Screen"] = ScreenId.SystemSettings;
+}
+
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Tổng quan";
+    ViewData["Screen"] = ScreenId.SystemSettings;
+}
+
+<style>
+    .dashboard-page {
+        background: #f8f9fa;
+        min-height: 100%;
+    }
+
+    .dashboard-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+    }
+
+    .dashboard-subtitle {
+        color: #6c757d;
+        font-size: 0.95rem;
+    }
+
+    .dashboard-card {
+        border: 0;
+        border-radius: 14px;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+        transition: all 0.2s ease;
+    }
+
+    .dashboard-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.09);
+    }
+
+    .stat-card {
+        min-height: 145px;
+    }
+
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-top: 8px;
+    }
+
+    .stat-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .icon-primary {
+        background: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+    }
+
+    .icon-success {
+        background: rgba(25, 135, 84, 0.1);
+        color: #198754;
+    }
+
+    .icon-info {
+        background: rgba(13, 202, 240, 0.1);
+        color: #0dcaf0;
+    }
+
+    .icon-warning {
+        background: rgba(255, 193, 7, 0.15);
+        color: #d39e00;
+    }
+
+    .icon-secondary {
+        background: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+    }
+
+    .icon-danger {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    .dashboard-section {
+        border: 0;
+        border-radius: 14px;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .section-subtitle {
+        color: #6c757d;
+        font-size: 0.82rem;
+    }
+
+    /* ============================= */
+    /* BIỂU ĐỒ */
+    /* ============================= */
+
+    .chart-wrapper {
+        position: relative;
+        width: 100%;
+        height: 320px;
+    }
+
+    /* ============================= */
+    /* SEARCH */
+    /* ============================= */
+
+    .search-box {
+        position: relative;
+        max-width: 420px;
+        width: 100%;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        z-index: 2;
+    }
+
+    .search-box input {
+        padding-left: 40px;
+        border-radius: 10px;
+        border: 1px solid #dee2e6;
+        height: 42px;
+        box-shadow: none;
+    }
+
+    .search-box input:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.1);
+    }
+
+    /* ============================= */
+    /* TABLE */
+    /* ============================= */
+
+    .table {
+        margin-bottom: 0;
+    }
+
+    .table thead th {
+        color: #6c757d;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        border-bottom: 1px solid #e9ecef;
+        white-space: nowrap;
+    }
+
+    .table tbody td {
+        padding-top: 13px;
+        padding-bottom: 13px;
+        border-color: #f1f3f5;
+    }
+
+    .table tbody tr {
+        transition: background-color 0.15s ease;
+    }
+
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    /* ============================= */
+    /* RANK */
+    /* ============================= */
+
+    .rank-badge {
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    /* ============================= */
+    /* EMPTY DATA */
+    /* ============================= */
+
+    .empty-data {
+        padding: 35px 10px;
+        text-align: center;
+        color: #6c757d;
+    }
+
+    /* ============================= */
+    /* RESPONSIVE */
+    /* ============================= */
+
+    @@media (max-width: 767.98px) {
+        .dashboard-title {
+            font-size: 1.45rem;
+        }
+
+        .search-box {
+            max-width: 100%;
+        }
+
+        .chart-wrapper {
+            height: 260px;
+        }
+    }
+</style>
+
+<div class="dashboard-page">
+    <div class="container-fluid py-4">
+
+        <!-- HEADER -->
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+
+            <div>
+                <h2 class="dashboard-title mb-1">
+                    Tổng quan thư viện
+                </h2>
+
+                <p class="dashboard-subtitle mb-0">
+                    Thống kê hoạt động của thư viện
+                </p>
+            </div>
+
+
+        </div>
+        <div class="card dashboard-section mb-4">
+    <div class="card-body">
+
+        <form method="get"
+              action="/Admin/Dashboard"
+              class="row g-3 align-items-end">
+
+            <div class="col-12 col-md-4 col-lg-3">
+                <label class="form-label small fw-semibold">
+                    Năm thống kê
+                </label>
+
+                <select name="year"
+                        class="form-select">
+
+                    @{
+                        var currentYear = DateTime.Now.Year;
+                    }
+
+                    @for (var y = currentYear; y >= currentYear - 5; y--)
+                    {
+                        <option value="@y"
+                                selected="@(Model.SelectedYear == y)">
+                            @y
+                        </option>
+                    }
+
+                </select>
+            </div>
+
+            <div class="col-12 col-md-5 col-lg-4">
+                <label class="form-label small fw-semibold">
+                    Tìm kiếm
+                </label>
+
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+
+                    <input type="text"
+                           id="dashboardSearch"
+                           class="form-control"
+                           placeholder="Tìm sách, độc giả, thể loại..." />
+                </div>
+            </div>
+
+            <div class="col-12 col-md-3 col-lg-2">
+                <button type="submit"
+                        class="btn btn-primary w-100">
+                    <i class="bi bi-funnel me-1"></i>
+                    Lọc
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+
+        <!-- ============================= -->
+        <!-- 6 CARDS -->
+        <!-- ============================= -->
+
+        <div class="row g-3 mb-4">
+
+            <!-- Tổng độc giả -->
+            <div class="col-12 col-sm-6 col-xl-2">
+                <div class="card dashboard-card stat-card h-100">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="stat-label">
+                                Tổng độc giả
+                            </div>
+
+                            <div class="stat-icon icon-primary">
+                                <i class="bi bi-people"></i>
+                            </div>
+                        </div>
+
+                        <div class="stat-value">
+                            @Model.TotalReaders
+                        </div>
+
+                        <div class="text-primary small mt-2">
+                            Độc giả
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Tổng sách -->
+            <div class="col-12 col-sm-6 col-xl-2">
+                <div class="card dashboard-card stat-card h-100">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="stat-label">
+                                Tổng sách
+                            </div>
+
+                            <div class="stat-icon icon-success">
+                                <i class="bi bi-book"></i>
+                            </div>
+                        </div>
+
+                        <div class="stat-value">
+                            @Model.TotalBooks
+                        </div>
+
+                        <div class="text-success small mt-2">
+                            Đầu sách
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Tổng bản sách -->
+            <div class="col-12 col-sm-6 col-xl-2">
+                <div class="card dashboard-card stat-card h-100">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="stat-label">
+                                Tổng bản sách
+                            </div>
+
+                            <div class="stat-icon icon-info">
+                                <i class="bi bi-stack"></i>
+                            </div>
+                        </div>
+
+                        <div class="stat-value">
+                            @Model.TotalBookCopies
+                        </div>
+
+                        <div class="text-info small mt-2">
+                            Bản sao
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Đang mượn -->
+            <div class="col-12 col-sm-6 col-xl-2">
+                <div class="card dashboard-card stat-card h-100">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="stat-label">
+                                Đang mượn
+                            </div>
+
+                            <div class="stat-icon icon-warning">
+                                <i class="bi bi-arrow-left-right"></i>
+                            </div>
+                        </div>
+
+                        <div class="stat-value">
+                            @Model.BorrowingBooks
+                        </div>
+
+                        <div class="text-warning small mt-2">
+                            Đang lưu thông
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Phiếu mượn -->
+            <div class="col-12 col-sm-6 col-xl-2">
+                <div class="card dashboard-card stat-card h-100">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="stat-label">
+                                Phiếu mượn
+                            </div>
+
+                            <div class="stat-icon icon-secondary">
+                                <i class="bi bi-journal-text"></i>
+                            </div>
+                        </div>
+
+                        <div class="stat-value">
+                            @Model.TotalBorrowSlips
+                        </div>
+
+                        <div class="text-secondary small mt-2">
+                            Phiếu
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Tiền phạt -->
+            <div class="col-12 col-sm-6 col-xl-2">
+                <div class="card dashboard-card stat-card h-100">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="stat-label">
+                                Tổng tiền phạt
+                            </div>
+
+                            <div class="stat-icon icon-danger">
+                                <i class="bi bi-cash-stack"></i>
+                            </div>
+                        </div>
+
+                        <div class="stat-value">
+                            @Model.TotalFines.ToString("N0") đ
+                        </div>
+
+                        <div class="text-danger small mt-2">
+                            Tiền phạt
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+
+        <!-- ============================= -->
+        <!-- BIỂU ĐỒ -->
+        <!-- ============================= -->
+
+        <div class="card dashboard-section mb-4">
+            <div class="card-body p-4">
+
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+
+                    <div>
+                        <div class="section-title">
+                            Thống kê lượt mượn
+                        </div>
+
+                        <div class="section-subtitle">
+                            Số lượt mượn sách theo từng tháng
+                        </div>
+                    </div>
+
+                    <span class="badge bg-light text-dark border">
+                        Năm @Model.SelectedYear
+                    </span>
+
+                </div>
+
+                <div class="chart-wrapper">
+                    <canvas id="borrowChart"></canvas>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- ============================= -->
+        <!-- TOP SÁCH + TOP ĐỘC GIẢ -->
+        <!-- ============================= -->
+
+        <div class="row g-4 mb-4">
+
+            <!-- TOP SÁCH -->
+            <div class="col-lg-6">
+
+                <div class="card dashboard-section h-100">
+                    <div class="card-body p-4">
+
+                        <div class="mb-3">
+                            <div class="section-title">
+                                Sách được mượn nhiều nhất
+                            </div>
+
+                            <div class="section-subtitle">
+                                Top 5 đầu sách có số lượt mượn cao nhất
+                            </div>
+                        </div>
+
+
+                        @if (Model.MostBorrowedBooks.Any())
+                        {
+                            <div class="table-responsive">
+
+                                <table class="table align-middle">
+
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">#</th>
+                                            <th>Sách</th>
+                                            <th class="text-end">
+                                                Lượt mượn
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        @{
+                                            var bookIndex = 1;
+                                        }
+
+                                        @foreach (var item in Model.MostBorrowedBooks)
+                                        {
+                                            <tr data-search-row>
+
+                                                <td>
+                                                    <span class="rank-badge bg-primary text-white">
+                                                        @bookIndex
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <div class="fw-semibold">
+                                                        @item.BookTitle
+                                                    </div>
+                                                </td>
+
+                                                <td class="text-end fw-bold">
+                                                    @item.BorrowCount
+                                                </td>
+
+                                            </tr>
+
+                                            bookIndex++;
+                                        }
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-data">
+                                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                Chưa có dữ liệu
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- TOP ĐỘC GIẢ -->
+            <div class="col-lg-6">
+
+                <div class="card dashboard-section h-100">
+                    <div class="card-body p-4">
+
+                        <div class="mb-3">
+                            <div class="section-title">
+                                Độc giả mượn nhiều nhất
+                            </div>
+
+                            <div class="section-subtitle">
+                                Top 5 độc giả có số lượt mượn cao nhất
+                            </div>
+                        </div>
+
+
+                        @if (Model.MostActiveReaders.Any())
+                        {
+                            <div class="table-responsive">
+
+                                <table class="table align-middle">
+
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">#</th>
+                                            <th>Độc giả</th>
+                                            <th class="text-end">
+                                                Lượt mượn
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        @{
+                                            var readerIndex = 1;
+                                        }
+
+                                        @foreach (var item in Model.MostActiveReaders)
+                                        {
+                                            <tr data-search-row>
+
+                                                <td>
+                                                    <span class="rank-badge bg-success text-white">
+                                                        @readerIndex
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <div class="fw-semibold">
+                                                        @item.ReaderName
+                                                    </div>
+                                                </td>
+
+                                                <td class="text-end fw-bold">
+                                                    @item.BorrowCount
+                                                </td>
+
+                                            </tr>
+
+                                            readerIndex++;
+                                        }
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-data">
+                                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                Chưa có dữ liệu
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ============================= -->
+        <!-- TOP THỂ LOẠI + SÁCH ÍT MƯỢN -->
+        <!-- ============================= -->
+
+        <div class="row g-4 mb-4">
+
+            <!-- TOP THỂ LOẠI -->
+            <div class="col-lg-6">
+
+                <div class="card dashboard-section h-100">
+                    <div class="card-body p-4">
+
+                        <div class="mb-3">
+                            <div class="section-title">
+                                Thể loại được mượn nhiều nhất
+                            </div>
+
+                            <div class="section-subtitle">
+                                Top 5 thể loại có số lượt mượn cao nhất
+                            </div>
+                        </div>
+
+
+                        @if (Model.MostBorrowedCategories.Any())
+                        {
+                            <div class="table-responsive">
+
+                                <table class="table align-middle">
+
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">#</th>
+                                            <th>Thể loại</th>
+                                            <th class="text-end">
+                                                Lượt mượn
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        @{
+                                            var categoryIndex = 1;
+                                        }
+
+                                        @foreach (var item in Model.MostBorrowedCategories)
+                                        {
+                                            <tr data-search-row>
+
+                                                <td>
+                                                    <span class="rank-badge bg-info text-dark">
+                                                        @categoryIndex
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <div class="fw-semibold">
+                                                        @item.CategoryName
+                                                    </div>
+                                                </td>
+
+                                                <td class="text-end fw-bold">
+                                                    @item.BorrowCount
+                                                </td>
+
+                                            </tr>
+
+                                            categoryIndex++;
+                                        }
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-data">
+                                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                Chưa có dữ liệu
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- SÁCH ÍT MƯỢN -->
+            <div class="col-lg-6">
+
+                <div class="card dashboard-section h-100">
+                    <div class="card-body p-4">
+
+                        <div class="mb-3">
+                            <div class="section-title">
+                                Sách ít được mượn
+                            </div>
+
+                            <div class="section-subtitle">
+                                5 đầu sách có số lượt mượn thấp nhất
+                            </div>
+                        </div>
+
+
+                        @if (Model.LeastBorrowedBooks.Any())
+                        {
+                            <div class="table-responsive">
+
+                                <table class="table align-middle">
+
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">#</th>
+                                            <th>Sách</th>
+                                            <th class="text-end">
+                                                Lượt mượn
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        @{
+                                            var leastBookIndex = 1;
+                                        }
+
+                                        @foreach (var item in Model.LeastBorrowedBooks)
+                                        {
+                                            <tr data-search-row>
+
+                                                <td>
+                                                    <span class="rank-badge bg-secondary text-white">
+                                                        @leastBookIndex
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <div class="fw-semibold">
+                                                        @item.BookTitle
+                                                    </div>
+                                                </td>
+
+                                                <td class="text-end">
+                                                    @item.BorrowCount
+                                                </td>
+
+                                            </tr>
+
+                                            leastBookIndex++;
+                                        }
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-data">
+                                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                Chưa có dữ liệu
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+
+@section Scripts
+{
+    <script src="~/js/lib/chart.umd.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            console.log("========== DASHBOARD DEBUG ==========");
+
+            // =====================================================
+            // 1. KIỂM TRA CHART.JS
+            // =====================================================
+
+            console.log("Chart.js =", typeof Chart);
+
+            if (typeof Chart === "undefined") {
+                console.error("❌ Chart.js KHÔNG LOAD");
+
+                return;
+            }
+
+            console.log("✅ Chart.js đã LOAD");
+
+
+            // =====================================================
+            // 2. LẤY CANVAS
+            // =====================================================
+
+            const borrowCanvas =
+                document.getElementById("borrowChart");
+
+            console.log("borrowCanvas =", borrowCanvas);
+
+            if (!borrowCanvas) {
+
+                console.error(
+                    "❌ KHÔNG TÌM THẤY canvas #borrowChart"
+                );
+
+                return;
+            }
+
+            console.log("✅ Tìm thấy canvas #borrowChart");
+
+
+            // =====================================================
+            // 3. LẤY DATA
+            // =====================================================
+
+            const monthlyData = @Html.Raw(
+                System.Text.Json.JsonSerializer.Serialize(
+                    Model.MonthlyStatistics
+                )
+            );
+
+            const booksData = @Html.Raw(
+                System.Text.Json.JsonSerializer.Serialize(
+                    Model.MostBorrowedBooks
+                )
+            );
+
+            const categoriesData = @Html.Raw(
+                System.Text.Json.JsonSerializer.Serialize(
+                    Model.MostBorrowedCategories
+                )
+            );
+
+            const readersData = @Html.Raw(
+                System.Text.Json.JsonSerializer.Serialize(
+                    Model.MostActiveReaders
+                )
+            );
+
+
+            console.log("monthlyData =", monthlyData);
+            console.log("booksData =", booksData);
+            console.log("categoriesData =", categoriesData);
+            console.log("readersData =", readersData);
+
+
+            // =====================================================
+            // 4. BIỂU ĐỒ LƯỢT MƯỢN THEO THÁNG
+            // =====================================================
+
+            try {
+
+                const monthlyLabels =
+                    monthlyData.map(x => x.Month);
+
+                const monthlyValues =
+                    monthlyData.map(x => x.BorrowCount);
+
+                console.log(
+                    "monthlyLabels =",
+                    monthlyLabels
+                );
+
+                console.log(
+                    "monthlyValues =",
+                    monthlyValues
+                );
+
+                new Chart(borrowCanvas, {
+
+                    type: "line",
+
+                    data: {
+
+                        labels: monthlyLabels,
+
+                        datasets: [
+                            {
+                                label: "Lượt mượn",
+
+                                data: monthlyValues,
+
+                                borderWidth: 2,
+
+                                tension: 0.3,
+
+                                fill: true,
+
+                                pointRadius: 4,
+
+                                pointHoverRadius: 6
+                            }
+                        ]
+
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio: false,
+
+                        interaction: {
+                            intersect: false,
+                            mode: "index"
+                        },
+
+                        plugins: {
+
+                            legend: {
+                                display: true
+                            }
+
+                        },
+
+                        scales: {
+
+                            y: {
+
+                                beginAtZero: true,
+
+                                ticks: {
+                                    precision: 0
+                                }
+
+                            }
+
+                        }
+
+                    }
+
+                });
+
+                console.log(
+                    "✅ ĐÃ TẠO borrowChart"
+                );
+
+            }
+            catch (error) {
+
+                console.error(
+                    "❌ LỖI KHI TẠO borrowChart:",
+                    error
+                );
+
+            }
+
+
+            // =====================================================
+            // 5. TOP SÁCH
+            // =====================================================
+
+            const booksCanvas =
+                document.getElementById("topBooksChart");
+
+            if (booksCanvas && booksData.length > 0) {
+
+                try {
+
+                    new Chart(booksCanvas, {
+
+                        type: "bar",
+
+                        data: {
+
+                            labels:
+                                booksData.map(
+                                    x => x.BookTitle
+                                ),
+
+                            datasets: [
+                                {
+                                    label: "Lượt mượn",
+
+                                    data:
+                                        booksData.map(
+                                            x => x.BorrowCount
+                                        ),
+
+                                    borderWidth: 1
+                                }
+                            ]
+
+                        },
+
+                        options: {
+
+                            responsive: true,
+
+                            maintainAspectRatio: false,
+
+                            indexAxis: "y",
+
+                            plugins: {
+
+                                legend: {
+                                    display: false
+                                }
+
+                            },
+
+                            scales: {
+
+                                x: {
+
+                                    beginAtZero: true,
+
+                                    ticks: {
+                                        precision: 0
+                                    }
+
+                                }
+
+                            }
+
+                        }
+
+                    });
+
+                    console.log(
+                        "✅ ĐÃ TẠO topBooksChart"
+                    );
+
+                }
+                catch (error) {
+
+                    console.error(
+                        "❌ LỖI topBooksChart:",
+                        error
+                    );
+
+                }
+
+            }
+
+
+            // =====================================================
+            // 6. TOP THỂ LOẠI
+            // =====================================================
+
+            const categoriesCanvas =
+                document.getElementById(
+                    "topCategoriesChart"
+                );
+
+            if (
+                categoriesCanvas &&
+                categoriesData.length > 0
+            ) {
+
+                try {
+
+                    new Chart(categoriesCanvas, {
+
+                        type: "doughnut",
+
+                        data: {
+
+                            labels:
+                                categoriesData.map(
+                                    x => x.CategoryName
+                                ),
+
+                            datasets: [
+                                {
+                                    label: "Lượt mượn",
+
+                                    data:
+                                        categoriesData.map(
+                                            x => x.BorrowCount
+                                        ),
+
+                                    borderWidth: 1
+                                }
+                            ]
+
+                        },
+
+                        options: {
+
+                            responsive: true,
+
+                            maintainAspectRatio: false,
+
+                            plugins: {
+
+                                legend: {
+
+                                    display: true,
+
+                                    position: "right"
+
+                                }
+
+                            }
+
+                        }
+
+                    });
+
+                    console.log(
+                        "✅ ĐÃ TẠO topCategoriesChart"
+                    );
+
+                }
+                catch (error) {
+
+                    console.error(
+                        "❌ LỖI topCategoriesChart:",
+                        error
+                    );
+
+                }
+
+            }
+
+
+            // =====================================================
+            // 7. TOP ĐỘC GIẢ
+            // =====================================================
+
+            const readersCanvas =
+                document.getElementById(
+                    "topReadersChart"
+                );
+
+            if (
+                readersCanvas &&
+                readersData.length > 0
+            ) {
+
+                try {
+
+                    new Chart(readersCanvas, {
+
+                        type: "bar",
+
+                        data: {
+
+                            labels:
+                                readersData.map(
+                                    x => x.ReaderName
+                                ),
+
+                            datasets: [
+                                {
+                                    label: "Lượt mượn",
+
+                                    data:
+                                        readersData.map(
+                                            x => x.BorrowCount
+                                        ),
+
+                                    borderWidth: 1
+                                }
+                            ]
+
+                        },
+
+                        options: {
+
+                            responsive: true,
+
+                            maintainAspectRatio: false,
+
+                            plugins: {
+
+                                legend: {
+                                    display: false
+                                }
+
+                            },
+
+                            scales: {
+
+                                y: {
+
+                                    beginAtZero: true,
+
+                                    ticks: {
+                                        precision: 0
+                                    }
+
+                                }
+
+                            }
+
+                        }
+
+                    });
+
+                    console.log(
+                        "✅ ĐÃ TẠO topReadersChart"
+                    );
+
+                }
+                catch (error) {
+
+                    console.error(
+                        "❌ LỖI topReadersChart:",
+                        error
+                    );
+
+                }
+
+            }
+
+
+            console.log(
+                "========== DEBUG END =========="
+            );
+
+        });
+    </script>
+}

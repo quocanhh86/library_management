@@ -450,10 +450,14 @@ public class ApplicationDbContext(
                 .HasForeignKey(x => x.ReaderId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // b.HasOne(x => x.Book)
+            //     .WithMany(x => x.Reservations)
+            //     .HasForeignKey(x => x.BookId)
+            //     .OnDelete(DeleteBehavior.Cascade);
             b.HasOne(x => x.Book)
                 .WithMany(x => x.Reservations)
                 .HasForeignKey(x => x.BookId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             b.HasOne(x => x.AssignedCopy)
                 .WithMany(x => x.Reservations)
