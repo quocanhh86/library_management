@@ -117,7 +117,8 @@ scripts/
 .claude/
 .gemini/
 .playwright-mcp/
-docs/
+docs/*
+!docs/*.md
 MODULE_STATUS.md
 
 screenshots/

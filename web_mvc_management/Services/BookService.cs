@@ -391,12 +391,16 @@ public class BookService(
         var isbnTrim = string.IsNullOrWhiteSpace(model.Isbn) ? null : model.Isbn.Trim();
         if (isbnTrim != null)
         {
-            var exists = await unitOfWork.Books.ExistsAsync(
-                b => b.Status != EntityStatus.Deleted && b.Isbn == isbnTrim,
+            var existingIsbnBook = await unitOfWork.Books.FirstOrDefaultAsync(
+                b => b.Isbn == isbnTrim,
+                asNoTracking: true,
                 ct);
-            if (exists)
+            if (existingIsbnBook != null)
             {
-                return ServiceResult<Guid>.ValidationError(ErrorCode.BookIsbnAlreadyExists);
+                var isbnMsg = existingIsbnBook.Status == EntityStatus.Deleted
+                    ? $"Mã ISBN \"{isbnTrim}\" đang thuộc về đầu sách \"{existingIsbnBook.Title}\" trong mục Đã xóa mềm. Vui lòng khôi phục hoặc xóa vĩnh viễn đầu sách cũ trước."
+                    : null;
+                return ServiceResult<Guid>.ValidationError(ErrorCode.BookIsbnAlreadyExists, isbnMsg);
             }
         }
 
@@ -433,9 +437,52 @@ public class BookService(
             }
         }
 
-        await unitOfWork.BeginTransactionAsync(ct);
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
         try
         {
+            if (isbnTrim != null)
+            {
+                var duplicateInTx = await unitOfWork.Books.ExistsAsync(b => b.Isbn == isbnTrim, ct);
+                if (duplicateInTx)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult<Guid>.ValidationError(ErrorCode.BookIsbnAlreadyExists);
+                }
+            }
+
+            if (model.CategoryId.HasValue)
+            {
+                var categoryOk = await unitOfWork.Categories.ExistsAsync(
+                    c => c.Id == model.CategoryId.Value && c.Status != EntityStatus.Deleted, ct);
+                if (!categoryOk)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult<Guid>.Failure(ErrorCode.CategoryNotFound);
+                }
+            }
+
+            if (model.PublisherId.HasValue)
+            {
+                var publisherOk = await unitOfWork.Publishers.ExistsAsync(
+                    p => p.Id == model.PublisherId.Value && p.Status != EntityStatus.Deleted, ct);
+                if (!publisherOk)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult<Guid>.Failure(ErrorCode.PublisherNotFound);
+                }
+            }
+
+            if (model.InitialCopyCount > 0 && model.ShelfId.HasValue)
+            {
+                var shelfOk = await unitOfWork.Shelves.ExistsAsync(
+                    s => s.Id == model.ShelfId.Value && s.Status != EntityStatus.Deleted, ct);
+                if (!shelfOk)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult<Guid>.Failure(ErrorCode.ShelfNotFound);
+                }
+            }
+
             var directCoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim();
             var primaryCoverUrl = coverUpload?.Url
                 ?? directCoverUrl
@@ -601,12 +648,16 @@ public class BookService(
         var isbnTrim = string.IsNullOrWhiteSpace(model.Isbn) ? null : model.Isbn.Trim();
         if (isbnTrim != null)
         {
-            var duplicateIsbn = await unitOfWork.Books.ExistsAsync(
-                b => b.Status != EntityStatus.Deleted && b.Isbn == isbnTrim && b.Id != book.Id,
+            var duplicateIsbnBook = await unitOfWork.Books.FirstOrDefaultAsync(
+                b => b.Isbn == isbnTrim && b.Id != book.Id,
+                asNoTracking: true,
                 ct);
-            if (duplicateIsbn)
+            if (duplicateIsbnBook != null)
             {
-                return ServiceResult.ValidationError(ErrorCode.BookIsbnAlreadyExists);
+                var isbnMsg = duplicateIsbnBook.Status == EntityStatus.Deleted
+                    ? $"Mã ISBN \"{isbnTrim}\" đang thuộc về đầu sách \"{duplicateIsbnBook.Title}\" trong mục Đã xóa mềm. Vui lòng khôi phục hoặc xóa vĩnh viễn đầu sách cũ trước."
+                    : null;
+                return ServiceResult.ValidationError(ErrorCode.BookIsbnAlreadyExists, isbnMsg);
             }
         }
 
@@ -640,9 +691,42 @@ public class BookService(
 
         var publicIdsToCleanup = new List<string>();
 
-        await unitOfWork.BeginTransactionAsync(ct);
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
         try
         {
+            if (isbnTrim != null)
+            {
+                var duplicateInTx = await unitOfWork.Books.ExistsAsync(
+                    b => b.Isbn == isbnTrim && b.Id != book.Id, ct);
+                if (duplicateInTx)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.ValidationError(ErrorCode.BookIsbnAlreadyExists);
+                }
+            }
+
+            if (model.CategoryId.HasValue)
+            {
+                var categoryOk = await unitOfWork.Categories.ExistsAsync(
+                    c => c.Id == model.CategoryId.Value && c.Status != EntityStatus.Deleted, ct);
+                if (!categoryOk)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.CategoryNotFound);
+                }
+            }
+
+            if (model.PublisherId.HasValue)
+            {
+                var publisherOk = await unitOfWork.Publishers.ExistsAsync(
+                    p => p.Id == model.PublisherId.Value && p.Status != EntityStatus.Deleted, ct);
+                if (!publisherOk)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.PublisherNotFound);
+                }
+            }
+
             book.Title = model.Title.Trim();
             book.Isbn = isbnTrim;
             book.CategoryId = model.CategoryId;
@@ -824,99 +908,165 @@ public class BookService(
 
     public async Task<ServiceResult> DeleteBookAsync(Guid id, CancellationToken ct = default)
     {
-        var book = await unitOfWork.Books.FirstOrDefaultAsync(
-            b => b.Id == id && b.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (book == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.BookNotFound);
+            var book = await unitOfWork.Books.FirstOrDefaultAsync(
+                b => b.Id == id && b.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+
+            if (book == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookNotFound);
+            }
+
+            var hasActiveCopies = await unitOfWork.BookCopies.ExistsAsync(
+                c => c.BookId == id &&
+                     c.Status != EntityStatus.Deleted &&
+                     (c.CopyStatus == LibraryConstants.CopyStatus.Borrowed || c.CopyStatus == LibraryConstants.CopyStatus.Reserved),
+                ct) || await unitOfWork.BorrowDetails.ExistsAsync(
+                bd => bd.BookCopy.BookId == id && bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted,
+                ct);
+
+            if (hasActiveCopies)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookHasBorrowedCopies);
+            }
+
+            var hasActiveReservations = await unitOfWork.Reservations.ExistsAsync(
+                r => r.BookId == id &&
+                     r.Status != EntityStatus.Deleted &&
+                     (r.ReservationStatus == LibraryConstants.ReservationStatus.Pending ||
+                      r.ReservationStatus == LibraryConstants.ReservationStatus.Ready),
+                ct);
+
+            if (hasActiveReservations)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.CommonRecordInUse,
+                    "Không thể xóa mềm đầu sách đang có bạn đọc đặt trước (PENDING/READY). Vui lòng hủy phiếu đặt trước trước.");
+            }
+
+            book.Status = EntityStatus.Deleted;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm đầu sách \"{book.Title}\" (chuyển sang DELETED).");
         }
-
-        var hasActiveCopies = await unitOfWork.BookCopies.ExistsAsync(
-            c => c.BookId == id &&
-                 c.Status != EntityStatus.Deleted &&
-                 (c.CopyStatus == LibraryConstants.CopyStatus.Borrowed || c.CopyStatus == LibraryConstants.CopyStatus.Reserved),
-            ct);
-
-        if (hasActiveCopies)
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.BookHasBorrowedCopies);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        book.Status = EntityStatus.Deleted;
-        unitOfWork.Books.Update(book);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm đầu sách \"{book.Title}\" (chuyển sang DELETED).");
     }
 
     public async Task<ServiceResult> RestoreBookAsync(Guid id, CancellationToken ct = default)
     {
-        var book = await unitOfWork.Books.FirstOrDefaultAsync(
-            b => b.Id == id && b.Status == EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (book == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.BookNotFound);
-        }
+            var book = await unitOfWork.Books.FirstOrDefaultAsync(
+                b => b.Id == id && b.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        book.Status = EntityStatus.Active;
-        unitOfWork.Books.Update(book);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục đầu sách \"{book.Title}\" về trạng thái hoạt động.");
+            if (book == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookNotFound);
+            }
+
+            if (!string.IsNullOrWhiteSpace(book.Isbn))
+            {
+                var duplicateIsbn = await unitOfWork.Books.ExistsAsync(
+                    b => b.Id != book.Id && b.Isbn == book.Isbn,
+                    ct);
+                if (duplicateIsbn)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.ValidationError(ErrorCode.BookIsbnAlreadyExists);
+                }
+            }
+
+            book.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục đầu sách \"{book.Title}\" về trạng thái hoạt động.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeleteBookAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var book = await unitOfWork.Books.GetByIdAsync(id, ct);
-        if (book == null)
-        {
-            return ServiceResult.Failure(ErrorCode.BookNotFound);
-        }
-
-        if (book.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasCopiesOrReservations = await unitOfWork.BookCopies.ExistsAsync(c => c.BookId == id, ct) ||
-                                      await unitOfWork.Reservations.ExistsAsync(r => r.BookId == id, ct);
+        var publicIdsToDelete = new List<string>();
 
-        if (hasCopiesOrReservations)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(
-                ErrorCode.CommonRecordInUse,
-                "Không thể xóa vĩnh viễn đầu sách vì vẫn còn bản sao vật lý hoặc lịch sử đặt trước liên kết. Vui lòng xóa vĩnh viễn các bản sao trước.");
-        }
-
-        var authorLinks = await unitOfWork.BookAuthors.FindAsync(ba => ba.BookId == id, asNoTracking: false, ct);
-        if (authorLinks.Count > 0)
-        {
-            unitOfWork.BookAuthors.DeleteRange(authorLinks);
-        }
-
-        var bookImages = await unitOfWork.BookImages.FindAsync(img => img.BookId == id, asNoTracking: false, ct);
-        if (bookImages.Count > 0)
-        {
-            foreach (var img in bookImages.Where(x => !string.IsNullOrWhiteSpace(x.PublicId)))
+            var book = await unitOfWork.Books.FirstOrDefaultAsync(b => b.Id == id, asNoTracking: false, ct);
+            if (book == null)
             {
-                await cloudinaryService.DeleteImageAsync(img.PublicId, ct);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookNotFound);
             }
 
-            unitOfWork.BookImages.DeleteRange(bookImages);
-        }
+            if (book.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
 
-        unitOfWork.Books.Delete(book);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn đầu sách \"{book.Title}\" khỏi cơ sở dữ liệu.");
+            var hasCopiesOrReservations = await unitOfWork.BookCopies.ExistsAsync(c => c.BookId == id, ct) ||
+                                          await unitOfWork.Reservations.ExistsAsync(r => r.BookId == id, ct);
+
+            if (hasCopiesOrReservations)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.CommonRecordInUse,
+                    "Không thể xóa vĩnh viễn đầu sách vì vẫn còn bản sao vật lý hoặc lịch sử đặt trước liên kết. Vui lòng xóa vĩnh viễn các bản sao trước.");
+            }
+
+            var authorLinks = await unitOfWork.BookAuthors.FindAsync(ba => ba.BookId == id, asNoTracking: false, ct);
+            if (authorLinks.Count > 0)
+            {
+                unitOfWork.BookAuthors.DeleteRange(authorLinks);
+            }
+
+            var bookImages = await unitOfWork.BookImages.FindAsync(img => img.BookId == id, asNoTracking: false, ct);
+            if (bookImages.Count > 0)
+            {
+                publicIdsToDelete.AddRange(
+                    bookImages.Where(x => !string.IsNullOrWhiteSpace(x.PublicId)).Select(x => x.PublicId!));
+                unitOfWork.BookImages.DeleteRange(bookImages);
+            }
+
+            var title = book.Title;
+            unitOfWork.Books.Delete(book);
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            foreach (var publicId in publicIdsToDelete)
+            {
+                await cloudinaryService.DeleteImageAsync(publicId, ct);
+            }
+
+            return ServiceResult.Success($"Đã xóa vĩnh viễn đầu sách \"{title}\" khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // =========================================================================
@@ -988,126 +1138,153 @@ public class BookService(
 
     public async Task<ServiceResult<int>> CreateBookCopiesBatchAsync(BookCopyBatchCreateViewModel model, CancellationToken ct = default)
     {
-        var book = await unitOfWork.Books.FirstOrDefaultAsync(
-            b => b.Id == model.BookId && b.Status != EntityStatus.Deleted,
-            asNoTracking: true,
-            ct);
-
-        if (book == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult<int>.Failure(ErrorCode.BookNotFound);
-        }
+            var book = await unitOfWork.Books.FirstOrDefaultAsync(
+                b => b.Id == model.BookId && b.Status != EntityStatus.Deleted,
+                asNoTracking: true,
+                ct);
 
-        var shelfExists = await unitOfWork.Shelves.ExistsAsync(
-            s => s.Id == model.ShelfId && s.Status != EntityStatus.Deleted,
-            ct);
-
-        if (!shelfExists)
-        {
-            return ServiceResult<int>.Failure(ErrorCode.ShelfNotFound);
-        }
-
-        if (model.Quantity == 1 && !string.IsNullOrWhiteSpace(model.CustomBarcode))
-        {
-            var customTrim = model.CustomBarcode.Trim().ToUpperInvariant();
-            if (await unitOfWork.BookCopies.ExistsAsync(c => c.Barcode.ToUpper() == customTrim, ct))
+            if (book == null)
             {
-                return ServiceResult<int>.ValidationError(ErrorCode.BookCopyBarcodeAlreadyExists);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<int>.Failure(ErrorCode.BookNotFound);
             }
 
-            await unitOfWork.BookCopies.AddAsync(new BookCopy
+            var shelfExists = await unitOfWork.Shelves.ExistsAsync(
+                s => s.Id == model.ShelfId && s.Status != EntityStatus.Deleted,
+                ct);
+
+            if (!shelfExists)
             {
-                Id = Guid.NewGuid(),
-                BookId = book.Id,
-                ShelfId = model.ShelfId,
-                Barcode = customTrim,
-                CopyStatus = LibraryConstants.CopyStatus.Available,
-                Price = model.Price,
-                AcquiredDate = model.AcquiredDate ?? dateTimeProvider.Today,
-                Note = model.Note?.Trim(),
-                Status = EntityStatus.Active
-            }, ct);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<int>.Failure(ErrorCode.ShelfNotFound);
+            }
 
-            await unitOfWork.SaveChangesAsync(ct);
-            return ServiceResult<int>.Success(1, $"Đã nhập bản sao mã vạch {customTrim} cho sách \"{book.Title}\".");
+            if (model.Quantity == 1 && !string.IsNullOrWhiteSpace(model.CustomBarcode))
+            {
+                var customTrim = model.CustomBarcode.Trim().ToUpperInvariant();
+                if (await unitOfWork.BookCopies.ExistsAsync(c => c.Barcode.ToUpper() == customTrim, ct))
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult<int>.ValidationError(ErrorCode.BookCopyBarcodeAlreadyExists);
+                }
+
+                await unitOfWork.BookCopies.AddAsync(new BookCopy
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ShelfId = model.ShelfId,
+                    Barcode = customTrim,
+                    CopyStatus = LibraryConstants.CopyStatus.Available,
+                    Price = model.Price,
+                    AcquiredDate = model.AcquiredDate ?? dateTimeProvider.Today,
+                    Note = model.Note?.Trim(),
+                    Status = EntityStatus.Active
+                }, ct);
+
+                await unitOfWork.CommitTransactionAsync(ct);
+                return ServiceResult<int>.Success(1, $"Đã nhập bản sao mã vạch {customTrim} cho sách \"{book.Title}\".");
+            }
+
+            var generatedBarcodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var acquiredDate = model.AcquiredDate ?? dateTimeProvider.Today;
+
+            for (var i = 0; i < model.Quantity; i++)
+            {
+                var barcode = await GenerateUniqueBarcodeAsync(generatedBarcodes, ct);
+                generatedBarcodes.Add(barcode);
+
+                await unitOfWork.BookCopies.AddAsync(new BookCopy
+                {
+                    Id = Guid.NewGuid(),
+                    BookId = book.Id,
+                    ShelfId = model.ShelfId,
+                    Barcode = barcode,
+                    CopyStatus = LibraryConstants.CopyStatus.Available,
+                    Price = model.Price,
+                    AcquiredDate = acquiredDate,
+                    Note = model.Note?.Trim(),
+                    Status = EntityStatus.Active
+                }, ct);
+            }
+
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult<int>.Success(model.Quantity, $"Đã nhập bổ sung {model.Quantity} bản sao mới cho đầu sách \"{book.Title}\".");
         }
-
-        var generatedBarcodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var acquiredDate = model.AcquiredDate ?? dateTimeProvider.Today;
-
-        for (var i = 0; i < model.Quantity; i++)
+        catch
         {
-            var barcode = await GenerateUniqueBarcodeAsync(generatedBarcodes, ct);
-            generatedBarcodes.Add(barcode);
-
-            await unitOfWork.BookCopies.AddAsync(new BookCopy
-            {
-                Id = Guid.NewGuid(),
-                BookId = book.Id,
-                ShelfId = model.ShelfId,
-                Barcode = barcode,
-                CopyStatus = LibraryConstants.CopyStatus.Available,
-                Price = model.Price,
-                AcquiredDate = acquiredDate,
-                Note = model.Note?.Trim(),
-                Status = EntityStatus.Active
-            }, ct);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult<int>.Success(model.Quantity, $"Đã nhập bổ sung {model.Quantity} bản sao mới cho đầu sách \"{book.Title}\".");
     }
 
     public async Task<ServiceResult> UpdateBookCopyAsync(BookCopyUpdateViewModel model, CancellationToken ct = default)
     {
-        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
-            c => c.Id == model.Id && c.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (copy == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
-        }
+            var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+                c => c.Id == model.Id && c.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        copy.ShelfId = model.ShelfId;
-        copy.Price = model.Price;
-        copy.Note = model.Note?.Trim();
-
-        if (model.RestoreToAvailable)
-        {
-            if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed)
+            if (copy == null)
             {
-                return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
             }
 
-            copy.CopyStatus = LibraryConstants.CopyStatus.Available;
-            copy.DisposedAt = null;
-            copy.DisposalReason = null;
-        }
+            if (model.ShelfId.HasValue)
+            {
+                var shelfExists = await unitOfWork.Shelves.ExistsAsync(
+                    s => s.Id == model.ShelfId.Value && s.Status != EntityStatus.Deleted,
+                    ct);
+                if (!shelfExists)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.ShelfNotFound);
+                }
+            }
 
-        unitOfWork.BookCopies.Update(copy);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã cập nhật bản sao mã vạch {copy.Barcode}.");
+            copy.ShelfId = model.ShelfId;
+            copy.Price = model.Price;
+            copy.Note = model.Note?.Trim();
+
+            if (model.RestoreToAvailable)
+            {
+                if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+                }
+
+                if (copy.CopyStatus == LibraryConstants.CopyStatus.Reserved)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.Failure(
+                        ErrorCode.CommonRecordInUse,
+                        $"Bản sao mã vạch {copy.Barcode} đang được giữ chỗ (RESERVED) cho bạn đọc đặt trước.");
+                }
+
+                copy.CopyStatus = LibraryConstants.CopyStatus.Available;
+                copy.DisposedAt = null;
+                copy.DisposalReason = null;
+            }
+
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã cập nhật bản sao mã vạch {copy.Barcode}.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> DisposeOrMarkCopyAsync(BookCopyDisposeViewModel model, CancellationToken ct = default)
     {
-        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
-            c => c.Id == model.CopyId && c.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (copy == null)
-        {
-            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
-        }
-
-        if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed)
-        {
-            return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
-        }
-
         var validStatuses = new[]
         {
             LibraryConstants.CopyStatus.Damaged,
@@ -1120,97 +1297,183 @@ public class BookService(
             return ServiceResult.Failure(ErrorCode.CommonInvalidRequest);
         }
 
-        copy.CopyStatus = model.TargetStatus;
-        copy.DisposedAt = dateTimeProvider.UtcNow;
-        copy.DisposalReason = model.DisposalReason.Trim();
-        if (!string.IsNullOrWhiteSpace(model.Note))
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            copy.Note = model.Note.Trim();
+            var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+                c => c.Id == model.CopyId && c.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
+
+            if (copy == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+            }
+
+            if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed ||
+                await unitOfWork.BorrowDetails.ExistsAsync(
+                    bd => bd.CopyId == copy.Id && bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+            }
+
+            if (copy.CopyStatus == LibraryConstants.CopyStatus.Reserved ||
+                await unitOfWork.Reservations.ExistsAsync(
+                    r => r.AssignedCopyId == copy.Id &&
+                         r.Status != EntityStatus.Deleted &&
+                         r.ReservationStatus == LibraryConstants.ReservationStatus.Ready, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.CommonRecordInUse,
+                    $"Bản sao mã vạch {copy.Barcode} đang được giữ chỗ (RESERVED) cho bạn đọc đặt trước. Vui lòng hủy phiếu đặt trước trước khi thanh lý.");
+            }
+
+            copy.CopyStatus = model.TargetStatus;
+            copy.DisposedAt = dateTimeProvider.UtcNow;
+            copy.DisposalReason = model.DisposalReason.Trim();
+            if (!string.IsNullOrWhiteSpace(model.Note))
+            {
+                copy.Note = model.Note.Trim();
+            }
+
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            var actionName = model.TargetStatus switch
+            {
+                LibraryConstants.CopyStatus.Damaged => "ghi nhận hư hỏng",
+                LibraryConstants.CopyStatus.Lost => "ghi nhận mất",
+                _ => "thanh lý"
+            };
+
+            return ServiceResult.Success($"Đã {actionName} bản sao mã vạch {copy.Barcode}.");
         }
-
-        unitOfWork.BookCopies.Update(copy);
-        await unitOfWork.SaveChangesAsync(ct);
-
-        var actionName = model.TargetStatus switch
+        catch
         {
-            LibraryConstants.CopyStatus.Damaged => "ghi nhận hư hỏng",
-            LibraryConstants.CopyStatus.Lost => "ghi nhận mất",
-            _ => "thanh lý"
-        };
-
-        return ServiceResult.Success($"Đã {actionName} bản sao mã vạch {copy.Barcode}.");
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> SoftDeleteBookCopyAsync(Guid id, CancellationToken ct = default)
     {
-        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
-            c => c.Id == id && c.Status != EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (copy == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
-        }
+            var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+                c => c.Id == id && c.Status != EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed)
+            if (copy == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+            }
+
+            if (copy.CopyStatus == LibraryConstants.CopyStatus.Borrowed ||
+                await unitOfWork.BorrowDetails.ExistsAsync(
+                    bd => bd.CopyId == copy.Id && bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+            }
+
+            if (copy.CopyStatus == LibraryConstants.CopyStatus.Reserved ||
+                await unitOfWork.Reservations.ExistsAsync(
+                    r => r.AssignedCopyId == copy.Id &&
+                         r.Status != EntityStatus.Deleted &&
+                         r.ReservationStatus == LibraryConstants.ReservationStatus.Ready, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.CommonRecordInUse,
+                    $"Bản sao mã vạch {copy.Barcode} đang được giữ chỗ (RESERVED) cho bạn đọc đặt trước. Vui lòng hủy phiếu đặt trước trước khi xóa mềm.");
+            }
+
+            copy.Status = EntityStatus.Deleted;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa mềm bản sao mã vạch {copy.Barcode} (chuyển sang DELETED).");
+        }
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.BookCopyCurrentlyBorrowed);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        copy.Status = EntityStatus.Deleted;
-        unitOfWork.BookCopies.Update(copy);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa mềm bản sao mã vạch {copy.Barcode} (chuyển sang DELETED).");
     }
 
     public async Task<ServiceResult> RestoreBookCopyAsync(Guid id, CancellationToken ct = default)
     {
-        var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
-            c => c.Id == id && c.Status == EntityStatus.Deleted,
-            asNoTracking: false,
-            ct);
-
-        if (copy == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
-        }
+            var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
+                c => c.Id == id && c.Status == EntityStatus.Deleted,
+                asNoTracking: false,
+                ct);
 
-        copy.Status = EntityStatus.Active;
-        unitOfWork.BookCopies.Update(copy);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã khôi phục bản sao mã vạch {copy.Barcode} về trạng thái hoạt động.");
+            if (copy == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+            }
+
+            copy.Status = EntityStatus.Active;
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã khôi phục bản sao mã vạch {copy.Barcode} về trạng thái hoạt động.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> HardDeleteBookCopyAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var copy = await unitOfWork.BookCopies.GetByIdAsync(id, ct);
-        if (copy == null)
-        {
-            return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
-        }
-
-        if (copy.Status != EntityStatus.Deleted)
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
-        }
-
         if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
         {
             return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
         }
 
-        var hasBorrowHistory = await unitOfWork.BorrowDetails.ExistsAsync(bd => bd.CopyId == id, ct);
-        if (hasBorrowHistory)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(
-                ErrorCode.CommonRecordInUse,
-                "Không thể xóa vĩnh viễn bản sao đã phát sinh lịch sử mượn trả.");
-        }
+            var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(c => c.Id == id, asNoTracking: false, ct);
+            if (copy == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
+            }
 
-        unitOfWork.BookCopies.Delete(copy);
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã xóa vĩnh viễn bản sao mã vạch {copy.Barcode} khỏi cơ sở dữ liệu.");
+            if (copy.Status != EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
+            }
+
+            var hasBorrowHistory = await unitOfWork.BorrowDetails.ExistsAsync(bd => bd.CopyId == id, ct) ||
+                                   await unitOfWork.Reservations.ExistsAsync(r => r.AssignedCopyId == id, ct);
+            if (hasBorrowHistory)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.CommonRecordInUse,
+                    "Không thể xóa vĩnh viễn bản sao đã phát sinh lịch sử mượn trả hoặc giữ chỗ đặt trước.");
+            }
+
+            var barcode = copy.Barcode;
+            unitOfWork.BookCopies.Delete(copy);
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã xóa vĩnh viễn bản sao mã vạch {barcode} khỏi cơ sở dữ liệu.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // =========================================================================

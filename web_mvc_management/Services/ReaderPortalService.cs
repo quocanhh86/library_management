@@ -549,139 +549,170 @@ public class ReaderPortalService(
     public async Task<ServiceResult> CreateReservationAsync(Guid readerId, Guid bookId, CancellationToken ct = default)
     {
         var today = dateTimeProvider.Today;
-        var reader = await unitOfWork.Readers.GetQueryable(asNoTracking: true)
-            .Include(r => r.ReaderType)
-            .FirstOrDefaultAsync(r => r.Id == readerId && r.Status != EntityStatus.Deleted, ct);
 
-        if (reader is null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.ReaderNotFound);
-        }
+            var reader = await unitOfWork.Readers.GetQueryable(asNoTracking: true)
+                .Include(r => r.ReaderType)
+                .FirstOrDefaultAsync(r => r.Id == readerId && r.Status == EntityStatus.Active, ct);
 
-        if (reader.CardStatus == CardStatus.Locked)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderCardLocked);
-        }
-
-        if (reader.CardStatus == CardStatus.Expired || reader.CardExpiryDate < today)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderCardExpired);
-        }
-
-        var book = await unitOfWork.Books.GetQueryable(asNoTracking: true)
-            .Where(b => b.Id == bookId && b.Status != EntityStatus.Deleted)
-            .Select(b => new
+            if (reader is null)
             {
-                b.Title,
-                HasAvailable = b.BookCopies.Any(c => c.Status != EntityStatus.Deleted && c.CopyStatus == CopyStatus.Available),
-                HasCirculating = b.BookCopies.Any(c => c.Status != EntityStatus.Deleted
-                                                       && (c.CopyStatus == CopyStatus.Borrowed || c.CopyStatus == CopyStatus.Reserved))
-            })
-            .FirstOrDefaultAsync(ct);
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderNotFound);
+            }
 
-        if (book is null)
-        {
-            return ServiceResult.Failure(ErrorCode.BookNotFound);
+            if (reader.CardStatus == CardStatus.Locked)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderCardLocked);
+            }
+
+            if (reader.CardStatus == CardStatus.Expired || reader.CardExpiryDate < today)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderCardExpired);
+            }
+
+            var book = await unitOfWork.Books.GetQueryable(asNoTracking: true)
+                .Where(b => b.Id == bookId && b.Status == EntityStatus.Active)
+                .Select(b => new
+                {
+                    b.Title,
+                    HasAvailable = b.BookCopies.Any(c => c.Status != EntityStatus.Deleted && c.CopyStatus == CopyStatus.Available),
+                    HasCirculating = b.BookCopies.Any(c => c.Status != EntityStatus.Deleted
+                                                           && (c.CopyStatus == CopyStatus.Borrowed || c.CopyStatus == CopyStatus.Reserved))
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (book is null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookNotFound);
+            }
+
+            if (book.HasAvailable)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReservationBookAvailable);
+            }
+
+            if (!book.HasCirculating)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReservationNotAvailable);
+            }
+
+            var alreadyBorrowing = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
+                .AnyAsync(d => d.Status != EntityStatus.Deleted
+                               && d.ReturnedAt == null
+                               && d.BorrowSlip.ReaderId == readerId
+                               && d.BorrowSlip.Status != EntityStatus.Deleted
+                               && d.BookCopy.BookId == bookId, ct);
+
+            if (alreadyBorrowing)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderAlreadyBorrowingBook);
+            }
+
+            var duplicate = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
+                .AnyAsync(r => r.Status != EntityStatus.Deleted
+                               && r.ReaderId == readerId
+                               && r.BookId == bookId
+                               && (r.ReservationStatus == ReservationStatus.Pending || r.ReservationStatus == ReservationStatus.Ready), ct);
+
+            if (duplicate)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReservationDuplicate);
+            }
+
+            await unitOfWork.Reservations.AddAsync(new Reservation
+            {
+                Id = Guid.NewGuid(),
+                ReaderId = readerId,
+                BookId = bookId,
+                ReservationStatus = ReservationStatus.Pending,
+                ReservedAt = dateTimeProvider.UtcNow,
+                Status = EntityStatus.Active
+            }, ct);
+
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã đăng ký đặt trước tài liệu \"{book.Title}\". Khi có bản sao hoàn trả, hệ thống sẽ giữ chỗ cho bạn.");
         }
-
-        if (book.HasAvailable)
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.ReservationBookAvailable);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        if (!book.HasCirculating)
-        {
-            return ServiceResult.Failure(ErrorCode.ReservationNotAvailable);
-        }
-
-        var alreadyBorrowing = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
-            .AnyAsync(d => d.Status != EntityStatus.Deleted
-                           && d.ReturnedAt == null
-                           && d.BorrowSlip.ReaderId == readerId
-                           && d.BorrowSlip.Status != EntityStatus.Deleted
-                           && d.BookCopy.BookId == bookId, ct);
-
-        if (alreadyBorrowing)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderAlreadyBorrowingBook);
-        }
-
-        var duplicate = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
-            .AnyAsync(r => r.Status != EntityStatus.Deleted
-                           && r.ReaderId == readerId
-                           && r.BookId == bookId
-                           && (r.ReservationStatus == ReservationStatus.Pending || r.ReservationStatus == ReservationStatus.Ready), ct);
-
-        if (duplicate)
-        {
-            return ServiceResult.Failure(ErrorCode.ReservationDuplicate);
-        }
-
-        await unitOfWork.Reservations.AddAsync(new Reservation
-        {
-            Id = Guid.NewGuid(),
-            ReaderId = readerId,
-            BookId = bookId,
-            ReservationStatus = ReservationStatus.Pending,
-            ReservedAt = dateTimeProvider.UtcNow,
-            Status = EntityStatus.Active
-        }, ct);
-
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã đăng ký đặt trước tài liệu \"{book.Title}\". Khi có bản sao hoàn trả, hệ thống sẽ giữ chỗ cho bạn.");
     }
 
     public async Task<ServiceResult> CancelReservationAsync(Guid readerId, Guid reservationId, CancellationToken ct = default)
     {
-        var reservation = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
-            .Include(r => r.AssignedCopy)
-            .Include(r => r.Book)
-            .FirstOrDefaultAsync(r => r.Id == reservationId
-                                      && r.ReaderId == readerId
-                                      && r.Status != EntityStatus.Deleted, ct);
-
-        if (reservation is null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.ReservationNotFound);
-        }
+            var reservation = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
+                .Include(r => r.AssignedCopy)
+                .Include(r => r.Book)
+                .FirstOrDefaultAsync(r => r.Id == reservationId
+                                          && r.ReaderId == readerId
+                                          && r.Status != EntityStatus.Deleted, ct);
 
-        if (reservation.ReservationStatus is not (ReservationStatus.Pending or ReservationStatus.Ready))
-        {
-            return ServiceResult.Failure(ErrorCode.ReservationAlreadyClosed);
-        }
-
-        var wasReady = reservation.ReservationStatus == ReservationStatus.Ready;
-        var now = dateTimeProvider.UtcNow;
-        reservation.ReservationStatus = ReservationStatus.Cancelled;
-        reservation.ClosedAt = now;
-
-        var setting = await GetSettingAsync(ct);
-        if (wasReady && setting is not null && reservation.AssignedCopy is { CopyStatus: CopyStatus.Reserved } copy)
-        {
-            var next = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
-                .Where(r => r.Status != EntityStatus.Deleted
-                            && r.BookId == copy.BookId
-                            && r.Id != reservation.Id
-                            && r.ReservationStatus == ReservationStatus.Pending)
-                .OrderBy(r => r.ReservedAt)
-                .FirstOrDefaultAsync(ct);
-
-            if (next is null)
+            if (reservation is null)
             {
-                copy.CopyStatus = CopyStatus.Available;
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReservationNotFound);
             }
-            else
-            {
-                next.ReservationStatus = ReservationStatus.Ready;
-                next.AssignedCopyId = copy.Id;
-                next.ReadyAt = now;
-                next.ExpiresAt = now.AddHours(setting.ReservationHoldHours);
-                copy.CopyStatus = CopyStatus.Reserved;
-            }
-        }
 
-        await unitOfWork.SaveChangesAsync(ct);
-        return ServiceResult.Success($"Đã hủy yêu cầu đặt trước tài liệu \"{reservation.Book.Title}\".");
+            if (reservation.ReservationStatus is not (ReservationStatus.Pending or ReservationStatus.Ready))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReservationAlreadyClosed);
+            }
+
+            var wasReady = reservation.ReservationStatus == ReservationStatus.Ready;
+            var now = dateTimeProvider.UtcNow;
+            reservation.ReservationStatus = ReservationStatus.Cancelled;
+            reservation.ClosedAt = now;
+
+            var setting = await GetSettingAsync(ct);
+            if (wasReady && setting is not null && reservation.AssignedCopy is { CopyStatus: CopyStatus.Reserved } copy)
+            {
+                var next = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
+                    .Where(r => r.Status != EntityStatus.Deleted
+                                && r.BookId == copy.BookId
+                                && r.Id != reservation.Id
+                                && r.Reader.Status == EntityStatus.Active
+                                && r.Book.Status == EntityStatus.Active
+                                && r.ReservationStatus == ReservationStatus.Pending)
+                    .OrderBy(r => r.ReservedAt)
+                    .FirstOrDefaultAsync(ct);
+
+                if (next is null)
+                {
+                    copy.CopyStatus = CopyStatus.Available;
+                }
+                else
+                {
+                    next.ReservationStatus = ReservationStatus.Ready;
+                    next.AssignedCopyId = copy.Id;
+                    next.ReadyAt = now;
+                    next.ExpiresAt = now.AddHours(setting.ReservationHoldHours);
+                    copy.CopyStatus = CopyStatus.Reserved;
+                }
+            }
+
+            await unitOfWork.CommitTransactionAsync(ct);
+            return ServiceResult.Success($"Đã hủy yêu cầu đặt trước tài liệu \"{reservation.Book.Title}\".");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     // ===== Helpers nội bộ =====
@@ -1083,6 +1114,11 @@ public class ReaderPortalService(
                 .FirstOrDefaultAsync(c => c.Barcode == barcode, ct);
             if (existing != null)
             {
+                if (existing.CopyStatus != copyStatus)
+                {
+                    existing.CopyStatus = copyStatus;
+                    await unitOfWork.SaveChangesAsync(ct);
+                }
                 return existing;
             }
 
@@ -1101,6 +1137,7 @@ public class ReaderPortalService(
                 CreatedBy = staffId
             };
             await unitOfWork.BookCopies.AddAsync(copy, ct);
+            await unitOfWork.SaveChangesAsync(ct);
             return copy;
         }
 
@@ -1124,7 +1161,7 @@ public class ReaderPortalService(
 
         if (existingActiveCount == 0)
         {
-            var copyActiveNormal = await GetOrCreateDedicatedCopyAsync(1, books[0], CopyStatus.Borrowed);
+            var copyActiveNormal = await GetOrCreateDedicatedCopyAsync(1, books[0], CopyStatus.Available);
             await unitOfWork.BorrowDetails.AddAsync(new BorrowDetail
             {
                 Id = Guid.NewGuid(),
@@ -1141,8 +1178,8 @@ public class ReaderPortalService(
 
         if (existingActiveCount <= 1)
         {
-            var copyDueSoon = await GetOrCreateDedicatedCopyAsync(2, books[1 % books.Count], CopyStatus.Borrowed);
-            var copyMaxRenew = await GetOrCreateDedicatedCopyAsync(3, books[2 % books.Count], CopyStatus.Borrowed);
+            var copyDueSoon = await GetOrCreateDedicatedCopyAsync(2, books[1 % books.Count], CopyStatus.Available);
+            var copyMaxRenew = await GetOrCreateDedicatedCopyAsync(3, books[2 % books.Count], CopyStatus.Available);
 
             await unitOfWork.BorrowDetails.AddRangeAsync(
             [
