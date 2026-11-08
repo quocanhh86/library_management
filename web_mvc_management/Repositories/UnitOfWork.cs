@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using web_mvc_management.Data;
 using web_mvc_management.Entity;
@@ -42,15 +44,86 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => await _context.SaveChangesAsync(cancellationToken);
 
-    public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) =>
+        await BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+
+    public async Task<IDbContextTransaction> BeginTransactionAsync(
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default)
     {
         if (_currentTransaction != null)
         {
             return _currentTransaction;
         }
 
-        _currentTransaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        _currentTransaction = await _context.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
         return _currentTransaction;
+    }
+
+    public async Task<IDbContextTransaction> BeginTransactionWithLockAsync(
+        string lockResource = "LIB_MUTATION_LOCK",
+        int lockTimeoutMs = 10000,
+        CancellationToken cancellationToken = default)
+    {
+        var tx = await BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        try
+        {
+            var safeResource = string.IsNullOrWhiteSpace(lockResource) ? "LIB_MUTATION_LOCK" : lockResource.Trim();
+            var rcParam = new Microsoft.Data.SqlClient.SqlParameter("@rc", SqlDbType.Int)
+            {
+                Direction = ParameterDirection.Output
+            };
+            var resourceParam = new Microsoft.Data.SqlClient.SqlParameter("@Resource", SqlDbType.NVarChar, 255)
+            {
+                Value = safeResource
+            };
+            var timeoutParam = new Microsoft.Data.SqlClient.SqlParameter("@LockTimeout", SqlDbType.Int)
+            {
+                Value = lockTimeoutMs
+            };
+
+            await _context.Database.ExecuteSqlRawAsync(
+                "EXEC @rc = sys.sp_getapplock @Resource = @Resource, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = @LockTimeout;",
+                [rcParam, resourceParam, timeoutParam],
+                cancellationToken);
+
+            var lockResult = rcParam.Value is int rc ? rc : -999;
+            if (lockResult < 0)
+            {
+                throw new TimeoutException($"Không thể lấy khóa giao dịch đồng thời cho tài nguyên '{safeResource}' (mã: {lockResult}).");
+            }
+
+            return tx;
+        }
+        catch
+        {
+            await RollbackTransactionAsync(CancellationToken.None);
+            throw;
+        }
+    }
+
+    public async Task ClearStaffAuditReferencesAsync(Guid staffId, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            UPDATE dbo.staff            SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.reader_types     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.readers          SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.categories       SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.publishers       SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.authors          SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.shelves          SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.books            SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.book_authors     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.book_copies      SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.book_images      SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.borrow_slips     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.borrow_details   SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.fines            SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.reservations     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            UPDATE dbo.library_settings SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
+            """;
+
+        await _context.Database.ExecuteSqlRawAsync(sql, [staffId], cancellationToken);
     }
 
     public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)

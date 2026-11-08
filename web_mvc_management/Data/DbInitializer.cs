@@ -44,6 +44,26 @@ public static class DbInitializer
                 ALTER TABLE dbo.books ALTER COLUMN language NVARCHAR(50) NULL;
                 UPDATE dbo.books SET language = N'Tiếng Việt' WHERE language LIKE 'Ti%ng Vi%t';
             END
+
+            IF EXISTS (
+                SELECT 1
+                FROM sys.check_constraints
+                WHERE COL_NAME(parent_object_id, parent_column_id) = 'status'
+                  AND definition NOT LIKE '%DELETED%'
+            )
+            BEGIN
+                DECLARE @statusConstraintSql NVARCHAR(MAX) = N'';
+                SELECT @statusConstraintSql += N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id)) + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id))
+                    + N' DROP CONSTRAINT ' + QUOTENAME(name) + N';' + CHAR(13)
+                    + N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id)) + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id))
+                    + N' ADD CONSTRAINT ' + QUOTENAME(name) + N' CHECK ([status] IN (''ACTIVE'', ''INACTIVE'', ''DELETED''));' + CHAR(13)
+                FROM sys.check_constraints
+                WHERE COL_NAME(parent_object_id, parent_column_id) = 'status'
+                  AND definition NOT LIKE '%DELETED%';
+
+                IF LEN(@statusConstraintSql) > 0
+                    EXEC sp_executesql @statusConstraintSql;
+            END
             """;
         await context.Database.ExecuteSqlRawAsync(ensureBookImagesTableSql);
 
@@ -703,8 +723,8 @@ public static class DbInitializer
 
             var copyCleanCodeBorrowed = await context.BookCopies.FirstAsync(x => x.Barcode == "BC-202610-0003");
             var copyCleanArchOverdue = await context.BookCopies.FirstAsync(x => x.Barcode == "BC-202610-0006");
-            copyCleanCodeBorrowed.CopyStatus = LibraryConstants.CopyStatus.Borrowed;
-            copyCleanArchOverdue.CopyStatus = LibraryConstants.CopyStatus.Borrowed;
+            // Lưu ý: Trigger trg_borrow_details_sync_copy yêu cầu bản sao đang AVAILABLE trước khi INSERT borrow_details,
+            // và trigger sẽ tự động chuyển copy_status sang BORROWED sau khi INSERT.
 
             // Phiếu 1: Đang mượn hợp lệ (Chưa đến hạn)
             var slipActive = new BorrowSlip
@@ -926,9 +946,7 @@ public static class DbInitializer
 
                 if (copyToBorrow != null)
                 {
-                    copyToBorrow.CopyStatus = LibraryConstants.CopyStatus.Borrowed;
-                    copyToBorrow.UpdatedAt = DateTimeOffset.UtcNow;
-
+                    // Lưu ý: Trigger trg_borrow_details_sync_copy tự động chuyển copy_status -> BORROWED khi INSERT borrow_details (returned_at IS NULL)
                     var activeSlip = new BorrowSlip
                     {
                         Id = Guid.NewGuid(),

@@ -46,7 +46,9 @@ public class ApplicationDbContext(
     private void ApplyAuditInformation()
     {
         var now = _dateTimeProvider?.UtcNow ?? DateTimeOffset.UtcNow;
-        var currentUserId = _userContext?.CurrentUserId;
+        var isStaffUser = _userContext != null &&
+            (_userContext.IsInRole(Constant.AppRoles.Admin) || _userContext.IsInRole(Constant.AppRoles.Librarian));
+        var currentStaffId = isStaffUser ? _userContext?.CurrentUserId : null;
 
         foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
         {
@@ -61,21 +63,21 @@ public class ApplicationDbContext(
                     {
                         entry.Entity.UpdatedAt = now;
                     }
-                    if (entry.Entity.CreatedBy == null && currentUserId.HasValue)
+                    if (entry.Entity.CreatedBy == null && currentStaffId.HasValue)
                     {
-                        entry.Entity.CreatedBy = currentUserId;
+                        entry.Entity.CreatedBy = currentStaffId;
                     }
-                    if (entry.Entity.UpdatedBy == null && currentUserId.HasValue)
+                    if (entry.Entity.UpdatedBy == null && currentStaffId.HasValue)
                     {
-                        entry.Entity.UpdatedBy = currentUserId;
+                        entry.Entity.UpdatedBy = currentStaffId;
                     }
                     break;
 
                 case EntityState.Modified:
                     entry.Entity.UpdatedAt = now;
-                    if (currentUserId.HasValue)
+                    if (currentStaffId.HasValue)
                     {
-                        entry.Entity.UpdatedBy = currentUserId;
+                        entry.Entity.UpdatedBy = currentStaffId;
                     }
                     break;
             }

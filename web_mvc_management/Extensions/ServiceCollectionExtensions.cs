@@ -277,6 +277,13 @@ public static class ServiceCollectionExtensions
             {
                 options.Folder = envFolder;
             }
+
+            options.CloudName = options.CloudName?.Trim().Trim('"', '\'') ?? string.Empty;
+            options.ApiKey = options.ApiKey?.Trim().Trim('"', '\'') ?? string.Empty;
+            options.ApiSecret = options.ApiSecret?.Trim().Trim('"', '\'') ?? string.Empty;
+            options.Folder = string.IsNullOrWhiteSpace(options.Folder)
+                ? "library_management/books"
+                : options.Folder.Trim().Trim('"', '\'').Trim('/');
         });
 
         services.AddScoped<ICloudinaryService, CloudinaryService>();

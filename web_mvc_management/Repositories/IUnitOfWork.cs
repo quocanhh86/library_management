@@ -42,6 +42,27 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Bắt đầu một database transaction với mức cô lập tùy chỉnh.
+    /// </summary>
+    Task<IDbContextTransaction> BeginTransactionAsync(
+        System.Data.IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bắt đầu một database transaction kèm khóa Pessimistic (sp_getapplock) gắn theo vòng đời Transaction
+    /// để chống Race Condition (TOCTOU) và Deadlock khi xóa mềm / xóa cứng / mượn trả đồng thời.
+    /// </summary>
+    Task<IDbContextTransaction> BeginTransactionWithLockAsync(
+        string lockResource = "LIB_MUTATION_LOCK",
+        int lockTimeoutMs = 10000,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gỡ tham chiếu audit (created_by, updated_by) của một Staff trước khi xóa vĩnh viễn.
+    /// </summary>
+    Task ClearStaffAuditReferencesAsync(Guid staffId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Xác nhận (commit) transaction hiện tại.
     /// </summary>
     Task CommitTransactionAsync(CancellationToken cancellationToken = default);

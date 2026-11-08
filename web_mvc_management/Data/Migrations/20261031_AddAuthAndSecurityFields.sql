@@ -63,3 +63,24 @@ BEGIN
 
     CREATE INDEX idx_otps_lookup ON otps (email, purpose, is_used, expires_at);
 END
+
+-- 4. Nâng cấp toàn bộ ràng buộc CHECK trên cột [status] để hỗ trợ trạng thái xóa mềm 'DELETED'
+IF EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE COL_NAME(parent_object_id, parent_column_id) = 'status'
+      AND definition NOT LIKE '%DELETED%'
+)
+BEGIN
+    DECLARE @statusConstraintSql NVARCHAR(MAX) = N'';
+    SELECT @statusConstraintSql += N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id)) + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id))
+        + N' DROP CONSTRAINT ' + QUOTENAME(name) + N';' + CHAR(13)
+        + N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id)) + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id))
+        + N' ADD CONSTRAINT ' + QUOTENAME(name) + N' CHECK ([status] IN (''ACTIVE'', ''INACTIVE'', ''DELETED''));' + CHAR(13)
+    FROM sys.check_constraints
+    WHERE COL_NAME(parent_object_id, parent_column_id) = 'status'
+      AND definition NOT LIKE '%DELETED%';
+
+    IF LEN(@statusConstraintSql) > 0
+        EXEC sp_executesql @statusConstraintSql;
+END
