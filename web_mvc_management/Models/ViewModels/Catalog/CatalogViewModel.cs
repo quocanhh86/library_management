@@ -11,6 +11,7 @@ public class CatalogViewModel
     public IReadOnlyList<SelectOptionViewModel> Authors { get; init; } = [];
     public IReadOnlyList<SelectOptionViewModel> Publishers { get; init; } = [];
     public string? Keyword { get; init; }
+    public string? Scope { get; init; }
     public string? Category { get; init; }
     public Guid? AuthorId { get; init; }
     public Guid? PublisherId { get; init; }

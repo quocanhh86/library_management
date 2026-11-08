@@ -5,12 +5,13 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using web_mvc_management.Common;
 using web_mvc_management.Models;
+using web_mvc_management.Util;
 
 namespace web_mvc_management.Services;
 
 /// <summary>
 /// Triển khai dịch vụ lưu trữ hình ảnh sách qua Cloudinary REST API (SHA-1 Signed Upload).
-/// Tự động kiểm tra định dạng/dung lượng an toàn và fallback lưu trữ tại wwwroot/uploads/books trong môi trường Dev nếu chưa điền khóa Cloudinary.
+/// Tự động kiểm tra định dạng/dung lượng/Magic Bytes/Polyglot/SVG XSS an toàn và fallback lưu trữ tại wwwroot/uploads/books trong môi trường Dev.
 /// </summary>
 public class CloudinaryService(
     IOptions<CloudinarySettings> cloudinaryOptions,
@@ -39,13 +40,21 @@ public class CloudinaryService(
 
         if (file.Length > MaxFileSizeBytes)
         {
-            return ServiceResult<ImageUploadResult>.Failure($"Dung lượng ảnh \"{file.FileName}\" vượt quá giới hạn 5 MB.");
+            return ServiceResult<ImageUploadResult>.Failure($"Dung lượng ảnh \"{Path.GetFileName(file.FileName)}\" vượt quá giới hạn 10 MB.");
         }
 
         var ext = Path.GetExtension(file.FileName);
         if (string.IsNullOrWhiteSpace(ext) || !AllowedExtensions.Contains(ext) || !AllowedContentTypes.Contains(file.ContentType))
         {
-            return ServiceResult<ImageUploadResult>.Failure($"Định dạng tệp \"{file.FileName}\" không hợp lệ. Chỉ chấp nhận ảnh .jpg, .jpeg, .png hoặc .webp.");
+            return ServiceResult<ImageUploadResult>.Failure($"Định dạng tệp \"{Path.GetFileName(file.FileName)}\" không hợp lệ. Chỉ chấp nhận ảnh .jpg, .jpeg, .png, .webp, .gif hoặc .svg.");
+        }
+
+        // Kiểm tra sâu Magic Bytes, Double Extension, Polyglot File & SVG XSS
+        var (isValidFile, fileSecurityError) = await InputSanitizer.ValidateUploadedImageAsync(file, MaxFileSizeBytes, ct);
+        if (!isValidFile)
+        {
+            logger.LogWarning("[FILE UPLOAD BLOCKED] Từ chối tệp tải lên '{FileName}': {Reason}", file.FileName, fileSecurityError);
+            return ServiceResult<ImageUploadResult>.Failure(fileSecurityError);
         }
 
         if (_settings.IsConfigured)
@@ -62,7 +71,7 @@ public class CloudinaryService(
                 using var streamContent = new StreamContent(fileStream);
                 streamContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
 
-                form.Add(streamContent, "file", file.FileName);
+                form.Add(streamContent, "file", Path.GetFileName(file.FileName));
                 form.Add(new StringContent(_settings.ApiKey), "api_key");
                 form.Add(new StringContent(timestamp), "timestamp");
                 form.Add(new StringContent(folder), "folder");

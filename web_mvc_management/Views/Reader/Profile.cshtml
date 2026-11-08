@@ -1,0 +1,167 @@
+@model web_mvc_management.Models.ViewModels.Reader.ReaderPortalPageViewModel
+@using web_mvc_management.Constant
+@using web_mvc_management.Models.ViewModels.Shared
+@{
+    ViewData["Title"] = "Sách đang mượn";
+    ViewData["ScreenId"] = ScreenId.ReaderProfile;
+}
+
+<div class="reader-portal">
+    @await Html.PartialAsync("_ReaderPortalHeader", Model)
+
+    <section class="reader-section-card" aria-labelledby="active-loans-heading">
+        <div class="reader-section-card__header">
+            <div>
+                <h2 id="active-loans-heading" class="reader-section-card__title">Tài liệu đang mượn hiện hành</h2>
+                <p class="reader-section-card__subtitle">
+                    Gia hạn trực tuyến miễn phí tối đa @Model.MaxRenewals lần (+@Model.RenewDays ngày/lần) nếu sách chưa quá hạn và không có bạn đọc khác đặt trước.
+                </p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-outline-secondary btn-sm" asp-controller="Books" asp-action="Index">
+                    <i class="bi bi-search me-1" aria-hidden="true"></i>Tra cứu danh mục sách
+                </a>
+            </div>
+        </div>
+
+        @if (Model.ActiveLoans.Count == 0)
+        {
+            <div class="reader-empty-box">
+                <h3 class="reader-empty-box__title">Bạn hiện không có cuốn sách nào đang mượn</h3>
+                <p class="reader-empty-box__desc">
+                    Hãy tra cứu danh mục tài liệu trực tuyến để kiểm tra vị trí kệ sách hoặc đặt trước đầu sách bạn cần.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <a class="btn btn-primary" asp-controller="Books" asp-action="Index">Khám phá kho sách</a>
+                    <a class="btn btn-outline-secondary" asp-controller="Reader" asp-action="BorrowHistory">Xem lịch sử đã mượn</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table data-table mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Mã phiếu / Barcode</th>
+                            <th>Tài liệu</th>
+                            <th>Ngày mượn</th>
+                            <th>Hạn trả</th>
+                            <th>Trạng thái</th>
+                            <th class="num">Gia hạn</th>
+                            <th class="num">Phạt tạm tính</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var loan in Model.ActiveLoans)
+                        {
+                            var overdueDays = Math.Max(0, Model.Today.DayNumber - loan.DueDate.DayNumber);
+                            <tr>
+                                <td class="text-nowrap">
+                                    <div class="d-flex flex-column align-items-start gap-1">
+                                        <span class="reader-code-chip" title="Mã phiếu mượn">@loan.SlipNo</span>
+                                        <span class="mono text-muted" style="font-size: var(--fs-xs);" title="Mã vạch bản sách">
+                                            <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@loan.Barcode
+                                        </span>
+                                        @if (!string.IsNullOrWhiteSpace(loan.ShelfCode))
+                                        {
+                                            <span class="text-muted" style="font-size: var(--fs-xs);">Kệ: @loan.ShelfCode</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (loan.BookId != Guid.Empty)
+                                    {
+                                        <a class="reader-book-title"
+                                           asp-controller="Books"
+                                           asp-action="Detail"
+                                           asp-route-id="@loan.BookId">
+                                            @loan.BookTitle
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="reader-book-title">@loan.BookTitle</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(loan.Authors))
+                                    {
+                                        <span class="reader-book-meta">@loan.Authors</span>
+                                    }
+                                </td>
+                                <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
+                                    @loan.BorrowedAt.ToString("dd/MM/yyyy")
+                                </td>
+                                <td class="text-nowrap">
+                                    @await Html.PartialAsync("_DueStamp", new DueStamp(loan.DueDate, Model.Today))
+                                </td>
+                                <td class="text-nowrap">
+                                    @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Loan, loan.LoanStatusCode))
+                                </td>
+                                <td class="num">
+                                    <span class="mono">@loan.RenewCount / @loan.MaxRenewals</span>
+                                </td>
+                                <td class="num">
+                                    @if (loan.EstimatedOverdueFine > 0)
+                                    {
+                                        <span class="fw-semibold" style="color: var(--c-stamp-text);">
+                                            @loan.EstimatedOverdueFine.ToString("N0") đ
+                                        </span>
+                                        <small class="d-block text-muted">(@overdueDays ngày trễ)</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    @if (loan.CanRenew)
+                                    {
+                                        <form asp-controller="Reader"
+                                              asp-action="Renew"
+                                              method="post"
+                                              class="d-inline"
+                                              data-confirm="Gia hạn cuốn &quot;@loan.BookTitle&quot; (@loan.Barcode) thêm @loan.RenewDays ngày (hạn trả mới: @loan.DueDate.AddDays(loan.RenewDays).ToString("dd/MM/yyyy"))?"
+                                              data-confirm-title="Xác nhận gia hạn sách"
+                                              data-confirm-ok="Gia hạn ngay">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="detailId" value="@loan.DetailId" />
+                                            <button type="submit" class="btn btn-primary btn-sm">
+                                                <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Gia hạn (+@loan.RenewDays ngày)
+                                            </button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-inline-flex flex-column align-items-end">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                                                Không thể gia hạn
+                                            </button>
+                                            @if (!string.IsNullOrWhiteSpace(loan.RenewBlockReason))
+                                            {
+                                                <small class="text-muted mt-1 text-end" style="max-width: 210px; white-space: normal; font-size: var(--fs-xs);">
+                                                    @loan.RenewBlockReason
+                                                </small>
+                                            }
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="reader-card-footer">
+                <span>
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                    Mức phạt quá hạn theo quy định thư viện: <strong>@Model.OverdueFinePerDay.ToString("N0") đ / ngày / cuốn</strong>.
+                </span>
+                <div class="d-flex gap-3">
+                    <a asp-controller="Reader" asp-action="BorrowHistory">Toàn bộ lịch sử mượn →</a>
+                    <a asp-controller="Reader" asp-action="Fines">Chi tiết tiền phạt →</a>
+                </div>
+            </div>
+        }
+    </section>
+</div>

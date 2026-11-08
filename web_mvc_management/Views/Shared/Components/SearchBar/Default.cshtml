@@ -1,10 +1,11 @@
-@model (string Keyword, bool Hero, bool Autofocus)
+@model (string Keyword, string Scope, bool Hero, bool Autofocus)
 @{
     var id = Model.Hero ? "searchHero" : "searchHeader";
 }
 @* Cùng form GET và combobox gợi ý cho trang chủ lẫn header. *@
 <form class="searchbar @(Model.Hero ? "searchbar--hero" : "")" role="search" method="get" action="@Screens.GetPath(ScreenId.BookCatalog)"
       data-suggest-url="@Url.Action("Suggest", "Books")">
+    <input type="hidden" name="scope" value="@Model.Scope" data-search-scope-input />
     <label for="@id" class="visually-hidden">Tìm sách trong thư viện</label>
     <div class="searchbar__field">
         @if (Model.Hero){<i class="bi bi-search searchbar__icon" aria-hidden="true"></i>}

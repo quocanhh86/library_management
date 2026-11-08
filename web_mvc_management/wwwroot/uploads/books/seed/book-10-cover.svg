@@ -1,0 +1,17 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#311B47"/>
+      <stop offset="100%" stop-color="#4E2A70"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="840" rx="18" fill="url(#bg)"/>
+  <rect x="24" y="24" width="552" height="792" rx="12" fill="none" stroke="#C084FC" stroke-width="2" stroke-opacity="0.45"/>
+  <rect x="60" y="70" width="170" height="32" rx="6" fill="#C084FC"/>
+  <text x="145" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0F172A" text-anchor="middle">THƯ VIỆN ĐH GTVT</text>
+  <text x="60" y="210" font-family="Georgia, Times New Roman, serif" font-size="33" font-weight="700" fill="#FFFFFF"><tspan x="60" dy="0">Luận văn Thạc sĩ: Ứng</tspan><tspan x="60" dy="42">dụng học s&#226;u dự b&#225;o lưu</tspan></text>
+  <line x1="60" y1="365" x2="240" y2="365" stroke="#C084FC" stroke-width="4"/>
+  <circle cx="460" cy="540" r="95" fill="#C084FC" fill-opacity="0.12" stroke="#C084FC" stroke-width="2" stroke-opacity="0.4"/>
+  <text x="60" y="720" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="600" fill="#E2E8F0">NXB Giao Th&#244;ng Vận Tải</text>
+  <text x="60" y="752" font-family="Consolas, monospace" font-size="15" fill="#C084FC">ISBN: 978-6047625011</text>
+</svg>

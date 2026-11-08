@@ -73,7 +73,7 @@ public class CirculationTests : IAsyncLifetime
         Assert.True((await f.Circulation.CancelBorrowSlipAsync(id, "Entered by mistake")).Succeeded);
         Assert.Null(await f.Circulation.GetBorrowSlipDetailAsync(id));
         Assert.Equal(CopyStatus.Available, (await f.Db.BookCopies.AsNoTracking().SingleAsync()).CopyStatus);
-        Assert.Empty((await f.Circulation.GetReaderLoansAsync(f.Reader.Id)).Loans);
+        Assert.False(await f.Db.BorrowDetails.AsNoTracking().AnyAsync(d => d.SlipId == id && d.Status != EntityStatus.Deleted));
     }
     [Fact] public async Task ReservationQueueReceivesReturnedCopyAndCancellationReleasesIt()
     {

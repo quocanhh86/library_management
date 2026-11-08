@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Caching.Memory;
 using web_mvc_management.Constant;
 using web_mvc_management.Repositories;
 
@@ -37,6 +38,14 @@ public static class SecurityStampValidator
             return;
         }
 
+        // Bỏ qua truy vấn DB lặp lại trong vòng 3 giây cho các request song song cùng một phiên
+        var cache = context.HttpContext.RequestServices.GetService<IMemoryCache>();
+        var cacheKey = $"sec_stamp_ok:{roleClaim}:{userId}:{stampClaim}";
+        if (cache != null && cache.TryGetValue(cacheKey, out bool isValid) && isValid)
+        {
+            return;
+        }
+
         var unitOfWork = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
         var dateTimeProvider = context.HttpContext.RequestServices.GetRequiredService<IDateTimeProvider>();
         var now = dateTimeProvider.UtcNow;
@@ -52,6 +61,7 @@ public static class SecurityStampValidator
             {
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return;
             }
         }
         else if (roleClaim == AppRoles.Admin || roleClaim == AppRoles.Librarian)
@@ -64,12 +74,16 @@ public static class SecurityStampValidator
             {
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return;
             }
         }
         else
         {
             context.RejectPrincipal();
             await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return;
         }
+
+        cache?.Set(cacheKey, true, TimeSpan.FromSeconds(3));
     }
 }

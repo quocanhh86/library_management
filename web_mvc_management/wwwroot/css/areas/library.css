@@ -109,6 +109,11 @@
 .library-empty p { margin-inline: auto; }
 .catalog-heading { margin-bottom: 28px; }
 .catalog-filters { display: grid; grid-template-columns: 2fr 1.4fr 1fr auto; gap: 16px; align-items: end; padding: 24px; margin-block: 24px; background: var(--c-library-linen); }
+.catalog-filters__scopes { grid-column: 1 / -1; padding-bottom: 12px; border-bottom: 1px solid var(--c-rule); }
+.catalog-filters__scopes .portal-search__scopes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.catalog-filters__scopes .portal-search__scopes > button { border: 0; padding: 8px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; background: transparent; color: var(--c-ink-muted); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.catalog-filters__scopes .portal-search__scopes > button:hover:not([aria-current]) { background: var(--c-rule); color: var(--c-indigo); }
+.catalog-filters__scopes .portal-search__scopes > button[aria-current] { background: var(--c-indigo); color: var(--c-surface); }
 .catalog-filters__bottom { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 15px; }
 .catalog-filter-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .catalog-count { color: var(--c-ink-muted); font-size: 13px; }

@@ -1,0 +1,194 @@
+@model web_mvc_management.Models.ViewModels.Reader.ReaderPortalPageViewModel
+@using web_mvc_management.Constant
+@{
+    ViewData["Title"] = "Tiền phạt thư viện";
+    ViewData["ScreenId"] = ScreenId.ReaderFines;
+    var currentFineStatus = Model.FineFilter.FineStatus ?? string.Empty;
+    var currentFineType = Model.FineFilter.FineType ?? string.Empty;
+}
+
+<div class="reader-portal">
+    @await Html.PartialAsync("_ReaderPortalHeader", Model)
+
+    <section class="reader-section-card" aria-labelledby="fines-heading">
+        <div class="reader-section-card__header">
+            <div>
+                <h2 id="fines-heading" class="reader-section-card__title">Bảng kê tiền phạt &amp; công nợ</h2>
+                <p class="reader-section-card__subtitle">
+                    Vui lòng thanh toán các khoản phạt chưa nộp tại Quầy Lưu Hành Thư Viện UTC để mở khóa quyền mượn mới và gia hạn sách.
+                </p>
+            </div>
+            <a class="btn btn-outline-secondary btn-sm" asp-controller="Reader" asp-action="Profile">
+                <i class="bi bi-journal-bookmark me-1" aria-hidden="true"></i>Sách đang mượn (@Model.ActiveLoanCount)
+            </a>
+        </div>
+
+        <div class="fine-summary-strip" aria-label="Tổng hợp số liệu tiền phạt">
+            <div class="fine-summary-item">
+                <span class="fine-summary-item__label">Cần thanh toán (đã lập phiếu)</span>
+                <span class="fine-summary-item__amount @(Model.TotalUnpaidFine > 0 ? "fine-summary-item__amount--unpaid" : "")">
+                    @Model.TotalUnpaidFine.ToString("N0") đ
+                </span>
+            </div>
+            <div class="fine-summary-item">
+                <span class="fine-summary-item__label">Phạt tạm tính (sách đang quá hạn)</span>
+                <span class="fine-summary-item__amount @(Model.EstimatedAccruingFine > 0 ? "fine-summary-item__amount--unpaid" : "")">
+                    @Model.EstimatedAccruingFine.ToString("N0") đ
+                </span>
+            </div>
+            <div class="fine-summary-item">
+                <span class="fine-summary-item__label">Đã thanh toán</span>
+                <span class="fine-summary-item__amount fine-summary-item__amount--paid">
+                    @Model.TotalPaidFine.ToString("N0") đ
+                </span>
+            </div>
+            <div class="fine-summary-item">
+                <span class="fine-summary-item__label">Được miễn giảm</span>
+                <span class="fine-summary-item__amount">
+                    @Model.TotalWaivedFine.ToString("N0") đ
+                </span>
+            </div>
+        </div>
+
+        <form id="finesFilterForm"
+              asp-controller="Reader"
+              asp-action="Fines"
+              method="get"
+              class="reader-filter-bar"
+              role="search"
+              aria-label="Bộ lọc tiền phạt">
+            <input type="hidden" name="FineStatus" id="fineStatusInput" value="@currentFineStatus" />
+
+            <div class="reader-filter-pills" role="group" aria-label="Lọc theo trạng thái thanh toán">
+                <button type="button"
+                        class="reader-filter-pill @(string.IsNullOrEmpty(currentFineStatus) ? "reader-filter-pill--active" : "")"
+                        data-fine-status="">
+                    Tất cả
+                </button>
+                <button type="button"
+                        class="reader-filter-pill @(currentFineStatus == "UNPAID" ? "reader-filter-pill--active" : "")"
+                        data-fine-status="UNPAID">
+                    Chưa thanh toán (@Model.UnpaidFineCount)
+                </button>
+                <button type="button"
+                        class="reader-filter-pill @(currentFineStatus == "PAID" ? "reader-filter-pill--active" : "")"
+                        data-fine-status="PAID">
+                    Đã thanh toán
+                </button>
+                <button type="button"
+                        class="reader-filter-pill @(currentFineStatus == "WAIVED" ? "reader-filter-pill--active" : "")"
+                        data-fine-status="WAIVED">
+                    Đã miễn giảm
+                </button>
+            </div>
+
+            <div class="reader-filter-controls">
+                <select name="FineType"
+                        id="fineTypeSelect"
+                        class="form-select form-select-sm"
+                        style="width: auto; min-width: 175px;"
+                        aria-label="Loại tiền phạt">
+                    <option value="" selected="@(string.IsNullOrEmpty(currentFineType) ? "selected" : null)">Tất cả loại phạt</option>
+                    <option value="OVERDUE" selected="@(currentFineType == "OVERDUE" ? "selected" : null)">Trả sách quá hạn</option>
+                    <option value="DAMAGED" selected="@(currentFineType == "DAMAGED" ? "selected" : null)">Làm hư hỏng sách</option>
+                    <option value="LOST" selected="@(currentFineType == "LOST" ? "selected" : null)">Làm mất sách</option>
+                </select>
+
+                <div class="input-group input-group-sm" style="min-width: 240px;">
+                    <span class="input-group-text bg-white border-end-0">
+                        <i class="bi bi-search text-muted" aria-hidden="true"></i>
+                    </span>
+                    <input type="search"
+                           name="Keyword"
+                           id="fineKeywordInput"
+                           value="@Model.FineFilter.Keyword"
+                           class="form-control border-start-0"
+                           placeholder="Tìm tên sách, mã phiếu, ghi chú..." />
+                    <button type="submit" class="btn btn-primary">Lọc</button>
+                </div>
+            </div>
+        </form>
+
+        <div id="finesTableContainer" aria-live="polite">
+            @await Html.PartialAsync("_FinesTable", Model)
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            var $form = $('#finesFilterForm');
+            var $container = $('#finesTableContainer');
+            var $statusInput = $('#fineStatusInput');
+            var $typeSelect = $('#fineTypeSelect');
+            var $keywordInput = $('#fineKeywordInput');
+            var debounceTimer = null;
+
+            function loadFines(url) {
+                $container.css('opacity', '0.55');
+                $.ajax({
+                    url: url,
+                    type: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                }).done(function (html) {
+                    $container.html(html);
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', url);
+                    }
+                }).always(function () {
+                    $container.css('opacity', '1');
+                });
+            }
+
+            function submitFilterForm() {
+                var query = $form.serialize();
+                var baseUrl = $form.attr('action');
+                var fullUrl = query ? (baseUrl + '?' + query) : baseUrl;
+                loadFines(fullUrl);
+            }
+
+            $form.on('click', '[data-fine-status]', function () {
+                var status = $(this).attr('data-fine-status') || '';
+                $statusInput.val(status);
+                $form.find('[data-fine-status]').removeClass('reader-filter-pill--active');
+                $(this).addClass('reader-filter-pill--active');
+                submitFilterForm();
+            });
+
+            $typeSelect.on('change', function () {
+                submitFilterForm();
+            });
+
+            $form.on('submit', function (e) {
+                e.preventDefault();
+                submitFilterForm();
+            });
+
+            $keywordInput.on('input', function () {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    submitFilterForm();
+                }, 320);
+            });
+
+            $container.on('click', '.pagination a.page-link', function (e) {
+                var href = $(this).attr('href');
+                if (!href || $(this).closest('.page-item').hasClass('disabled')) {
+                    return;
+                }
+                e.preventDefault();
+                loadFines(href);
+            });
+
+            $container.on('change', '[data-pager-size]', function (e) {
+                var targetUrl = $(this).val();
+                if (!targetUrl) {
+                    return;
+                }
+                e.stopImmediatePropagation();
+                loadFines(targetUrl);
+            });
+        });
+    </script>
+}

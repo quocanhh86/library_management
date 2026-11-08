@@ -6,6 +6,8 @@ public class HomeViewModel
 {
     public IReadOnlyList<BookSummaryViewModel> NewArrivals { get; init; } = [];
     public IReadOnlyList<TopicViewModel> Topics { get; init; } = [];
+    public IReadOnlyList<SelectOptionViewModel> Authors { get; init; } = [];
+    public IReadOnlyList<SelectOptionViewModel> Publishers { get; init; } = [];
     public LibraryInfoViewModel Info { get; init; } = new();
 
     /// <summary>Chỉ có khi người xem là độc giả đã đăng nhập.</summary>

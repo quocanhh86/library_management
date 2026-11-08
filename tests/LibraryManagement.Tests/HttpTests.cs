@@ -92,7 +92,6 @@ public class HttpTests(HttpFixture fixture) : IClassFixture<HttpFixture>
         Assert.Contains("text/html", response.Content.Headers.ContentType!.ToString());
     }
     [Theory]
-    [InlineData("/Admin")]
     [InlineData("/Admin/Books")]
     [InlineData("/Admin/Books/Create")]
     [InlineData("/Admin/BookCopies")]

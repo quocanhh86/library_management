@@ -1,0 +1,150 @@
+@model web_mvc_management.Models.ViewModels.Reader.ReaderPortalPageViewModel
+@using web_mvc_management.Constant
+@using web_mvc_management.Models.ViewModels.Shared
+@{
+    ViewData["Title"] = "Sách đặt trước";
+    ViewData["ScreenId"] = ScreenId.ReaderReservations;
+}
+
+<div class="reader-portal">
+    @await Html.PartialAsync("_ReaderPortalHeader", Model)
+
+    <section class="reader-section-card" aria-labelledby="reservations-heading">
+        <div class="reader-section-card__header">
+            <div>
+                <h2 id="reservations-heading" class="reader-section-card__title">Danh sách yêu cầu đặt trước sách</h2>
+                <p class="reader-section-card__subtitle">
+                    Khi các bản sao của một đầu sách đều đang được mượn hết, bạn có thể đặt trước để hệ thống ưu tiên giữ sách ngay khi có người trả.
+                </p>
+            </div>
+            <a class="btn btn-outline-secondary btn-sm" asp-controller="Books" asp-action="Index">
+                <i class="bi bi-search me-1" aria-hidden="true"></i>Tra cứu danh mục sách
+            </a>
+        </div>
+
+        @if (Model.Reservations.Count == 0)
+        {
+            <div class="reader-empty-box">
+                <h3 class="reader-empty-box__title">Bạn chưa có yêu cầu đặt trước nào</h3>
+                <p class="reader-empty-box__desc">
+                    Nếu đầu sách bạn cần hiện đã hết bản có sẵn trên kệ, hãy nhấn nút <strong>Đặt trước</strong> tại trang chi tiết đầu sách đó.
+                </p>
+                <a class="btn btn-primary" asp-controller="Books" asp-action="Index">Tìm sách trong thư viện</a>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table data-table mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Đầu sách</th>
+                            <th>Thứ tự hàng đợi / Bản giữ</th>
+                            <th>Ngày đăng ký</th>
+                            <th>Hạn nhận tại quầy</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Reservations)
+                        {
+                            <tr>
+                                <td>
+                                    @if (item.BookId != Guid.Empty)
+                                    {
+                                        <a class="reader-book-title"
+                                           asp-controller="Books"
+                                           asp-action="Detail"
+                                           asp-route-id="@item.BookId">
+                                            @item.BookTitle
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="reader-book-title">@item.BookTitle</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(item.Authors))
+                                    {
+                                        <span class="reader-book-meta">@item.Authors</span>
+                                    }
+                                </td>
+                                <td class="text-nowrap">
+                                    @if (item.ReservationStatus == "READY" && !string.IsNullOrWhiteSpace(item.AssignedBarcode))
+                                    {
+                                        <div class="d-flex flex-column align-items-start gap-1">
+                                            <span class="reader-code-chip">
+                                                <i class="bi bi-upc-scan me-1" aria-hidden="true"></i>@item.AssignedBarcode
+                                            </span>
+                                            @if (!string.IsNullOrWhiteSpace(item.ShelfCode))
+                                            {
+                                                <small class="text-muted">Kệ: @item.ShelfCode</small>
+                                            }
+                                        </div>
+                                    }
+                                    else if (item.ReservationStatus == "PENDING" && item.QueuePosition > 0)
+                                    {
+                                        <span class="fw-medium" style="font-size: var(--fs-sm);">Vị trí #@item.QueuePosition trong hàng chờ</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
+                                    @item.ReservedAt.ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                                <td class="mono text-nowrap" style="font-size: var(--fs-sm);">
+                                    @if (item.ExpiresAt.HasValue)
+                                    {
+                                        <span class="@(item.ReservationStatus == "READY" ? "fw-semibold" : "")">
+                                            @item.ExpiresAt.Value.ToString("dd/MM/yyyy HH:mm")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Chờ có bản trả về</span>
+                                    }
+                                </td>
+                                <td class="text-nowrap">
+                                    @await Html.PartialAsync("_StatusBadge", new StatusBadge(StatusKind.Reservation, item.ReservationStatus))
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    @if (item.CanCancel)
+                                    {
+                                        <form asp-controller="Reader"
+                                              asp-action="CancelReservation"
+                                              method="post"
+                                              class="d-inline"
+                                              data-confirm="Bạn chắc chắn muốn hủy yêu cầu đặt trước đầu sách &quot;@item.BookTitle&quot;?"
+                                              data-confirm-title="Xác nhận hủy đặt trước"
+                                              data-confirm-ok="Hủy đặt trước"
+                                              data-confirm-danger="true">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="reservationId" value="@item.Id" />
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                Hủy yêu cầu
+                                            </button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted" style="font-size: var(--fs-xs);">Đã đóng</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="reader-card-footer">
+                <span>
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                    Bản sao ở trạng thái <strong>Sẵn sàng nhận sách</strong> được giữ tại quầy thủ thư trong vòng 48 giờ.
+                </span>
+                <a asp-controller="Books" asp-action="Index">Tra cứu thêm tài liệu →</a>
+            </div>
+        }
+    </section>
+</div>

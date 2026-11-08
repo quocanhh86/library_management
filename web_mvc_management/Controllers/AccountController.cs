@@ -65,7 +65,6 @@ public class AccountController(
         HttpContext.Session.SetObject(SessionPendingRegistration, model);
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeRegister);
 
-        // Trang nhập mã đã ghi rõ mã gửi tới đâu, không cần toast lặp lại
         if (result.Message.Contains("Log của Server", StringComparison.OrdinalIgnoreCase))
         {
             SetWarningMessage(result.Message);
@@ -151,7 +150,7 @@ public class AccountController(
         }
 
         // Lưu trạng thái đăng nhập cán bộ vào Stateful Session
-        HttpContext.Session.SetString(SessionPendingLoginEmail, model.Email);
+        HttpContext.Session.SetString(SessionPendingLoginEmail, model.Email.Trim().ToLowerInvariant());
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeStaffLogin);
         HttpContext.Session.SetString(SessionPendingReturnUrl, model.ReturnUrl ?? string.Empty);
 
@@ -169,10 +168,21 @@ public class AccountController(
     [AllowAnonymous]
     public IActionResult VerifyOtp(string? purpose = null)
     {
-        purpose ??= HttpContext.Session.GetString(SessionPendingOtpPurpose) ?? AuthService.PurposeReaderLogin;
+        var sessionPurpose = HttpContext.Session.GetString(SessionPendingOtpPurpose);
+        var effectivePurpose = !string.IsNullOrWhiteSpace(sessionPurpose)
+            ? sessionPurpose
+            : (purpose ?? AuthService.PurposeReaderLogin);
+
+        // Chống giả mạo query string purpose lệch với phiên thực tế trong Session
+        if (!string.IsNullOrWhiteSpace(sessionPurpose) &&
+            !string.IsNullOrWhiteSpace(purpose) &&
+            !string.Equals(sessionPurpose, purpose, StringComparison.Ordinal))
+        {
+            effectivePurpose = sessionPurpose;
+        }
 
         string targetEmail;
-        if (purpose == AuthService.PurposeRegister)
+        if (effectivePurpose == AuthService.PurposeRegister)
         {
             var pendingReg = HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration);
             if (pendingReg == null)
@@ -188,7 +198,7 @@ public class AccountController(
             if (string.IsNullOrWhiteSpace(email))
             {
                 SetErrorMessage(ErrorMessages.Get(ErrorCode.AuthSessionExpired));
-                return RedirectToAction(purpose == AuthService.PurposeStaffLogin ? nameof(StaffLogin) : nameof(Login));
+                return RedirectToAction(effectivePurpose == AuthService.PurposeStaffLogin ? nameof(StaffLogin) : nameof(Login));
             }
             targetEmail = email;
         }
@@ -197,7 +207,7 @@ public class AccountController(
         {
             Email = targetEmail,
             MaskedEmail = StringUtil.MaskEmail(targetEmail),
-            Purpose = purpose,
+            Purpose = effectivePurpose,
             ReturnUrl = HttpContext.Session.GetString(SessionPendingReturnUrl)
         };
 
@@ -209,26 +219,52 @@ public class AccountController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> VerifyOtp(VerifyOtpViewModel model)
     {
+        var sessionPurpose = HttpContext.Session.GetString(SessionPendingOtpPurpose);
+        if (string.IsNullOrWhiteSpace(sessionPurpose) ||
+            !string.Equals(model.Purpose, sessionPurpose, StringComparison.Ordinal))
+        {
+            SetErrorMessage(ErrorMessages.Get(ErrorCode.OtpPurposeMismatch));
+            return RedirectToAction(nameof(Login));
+        }
+
+        // Luôn trích xuất Email từ Server-Side Session, không tin tưởng hidden input từ client
+        var pendingReg = sessionPurpose == AuthService.PurposeRegister
+            ? HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration)
+            : null;
+        var sessionEmail = sessionPurpose == AuthService.PurposeRegister
+            ? pendingReg?.Email
+            : HttpContext.Session.GetString(SessionPendingLoginEmail);
+
+        if (string.IsNullOrWhiteSpace(sessionEmail))
+        {
+            SetErrorMessage(ErrorMessages.Get(
+                sessionPurpose == AuthService.PurposeRegister
+                    ? ErrorCode.RegisterSessionExpired
+                    : ErrorCode.AuthSessionExpired));
+            return RedirectToAction(sessionPurpose switch
+            {
+                AuthService.PurposeRegister => nameof(Register),
+                AuthService.PurposeStaffLogin => nameof(StaffLogin),
+                _ => nameof(Login)
+            });
+        }
+
+        model.Email = sessionEmail;
+        model.MaskedEmail = StringUtil.MaskEmail(sessionEmail);
+        model.Purpose = sessionPurpose;
+
         if (!ModelState.IsValid)
         {
             return View(model);
         }
 
         // 4.1. Xác thực hoàn tất Đăng ký mở thẻ
-        if (model.Purpose == AuthService.PurposeRegister)
+        if (sessionPurpose == AuthService.PurposeRegister)
         {
-            var pendingReg = HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration);
-            if (pendingReg == null)
-            {
-                SetErrorMessage(ErrorMessages.Get(ErrorCode.RegisterSessionExpired));
-                return RedirectToAction(nameof(Register));
-            }
-
-            var result = await authService.CompleteRegistrationAsync(pendingReg, model.OtpCode, ClientIp);
+            var result = await authService.CompleteRegistrationAsync(pendingReg!, model.OtpCode, ClientIp);
             if (!result.Succeeded)
             {
                 ModelState.AddModelError(nameof(model.OtpCode), result.Message);
-                model.MaskedEmail = StringUtil.MaskEmail(pendingReg.Email);
                 return View(model);
             }
 
@@ -241,20 +277,12 @@ public class AccountController(
         }
 
         // 4.2. Xác thực 2FA Đăng nhập Độc giả
-        if (model.Purpose == AuthService.PurposeReaderLogin)
+        if (sessionPurpose == AuthService.PurposeReaderLogin)
         {
-            var email = HttpContext.Session.GetString(SessionPendingLoginEmail);
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                SetErrorMessage(ErrorMessages.Get(ErrorCode.AuthSessionExpired));
-                return RedirectToAction(nameof(Login));
-            }
-
-            var result = await authService.CompleteReaderLoginOtpAsync(email, model.OtpCode, ClientIp);
+            var result = await authService.CompleteReaderLoginOtpAsync(sessionEmail, model.OtpCode, ClientIp);
             if (!result.Succeeded || result.Data == null)
             {
                 ModelState.AddModelError(nameof(model.OtpCode), result.Message);
-                model.MaskedEmail = StringUtil.MaskEmail(email);
                 return View(model);
             }
 
@@ -283,20 +311,12 @@ public class AccountController(
         }
 
         // 4.3. Xác thực Passwordless Đăng nhập Cán bộ / Thủ thư
-        if (model.Purpose == AuthService.PurposeStaffLogin)
+        if (sessionPurpose == AuthService.PurposeStaffLogin)
         {
-            var email = HttpContext.Session.GetString(SessionPendingLoginEmail);
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                SetErrorMessage(ErrorMessages.Get(ErrorCode.AuthSessionExpired));
-                return RedirectToAction(nameof(StaffLogin));
-            }
-
-            var result = await authService.CompleteStaffLoginOtpAsync(email, model.OtpCode, ClientIp);
+            var result = await authService.CompleteStaffLoginOtpAsync(sessionEmail, model.OtpCode, ClientIp);
             if (!result.Succeeded || result.Data == null)
             {
                 ModelState.AddModelError(nameof(model.OtpCode), result.Message);
-                model.MaskedEmail = StringUtil.MaskEmail(email);
                 return View(model);
             }
 
@@ -338,8 +358,16 @@ public class AccountController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ResendOtp(string purpose)
     {
+        var sessionPurpose = HttpContext.Session.GetString(SessionPendingOtpPurpose);
+        if (string.IsNullOrWhiteSpace(sessionPurpose) ||
+            !string.Equals(purpose, sessionPurpose, StringComparison.Ordinal))
+        {
+            SetErrorMessage(ErrorMessages.Get(ErrorCode.OtpPurposeMismatch));
+            return RedirectToAction(nameof(Login));
+        }
+
         string? email = null;
-        if (purpose == AuthService.PurposeRegister)
+        if (sessionPurpose == AuthService.PurposeRegister)
         {
             var pendingReg = HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration);
             email = pendingReg?.Email;
@@ -352,10 +380,10 @@ public class AccountController(
         if (string.IsNullOrWhiteSpace(email))
         {
             SetErrorMessage(ErrorMessages.Get(ErrorCode.OtpNotFound));
-            return RedirectToAction(purpose == AuthService.PurposeStaffLogin ? nameof(StaffLogin) : nameof(Login));
+            return RedirectToAction(sessionPurpose == AuthService.PurposeStaffLogin ? nameof(StaffLogin) : nameof(Login));
         }
 
-        var result = await authService.ResendOtpAsync(email, purpose, ClientIp);
+        var result = await authService.ResendOtpAsync(email, sessionPurpose, ClientIp);
         if (!result.Succeeded)
         {
             SetErrorMessage(result.Message);
@@ -365,7 +393,7 @@ public class AccountController(
             SetSuccessMessage(result.Message);
         }
 
-        return RedirectToAction(nameof(VerifyOtp), new { purpose });
+        return RedirectToAction(nameof(VerifyOtp), new { purpose = sessionPurpose });
     }
 
     // =========================================================================

@@ -24,7 +24,6 @@ public class BookService(
     public async Task<IReadOnlyList<BookSummaryViewModel>> GetNewArrivalsAsync(int count, CancellationToken ct = default)
     {
         var books = await unitOfWork.Books.GetQueryable(asNoTracking: true)
-            .AsSplitQuery()
             .Include(b => b.Category)
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
@@ -53,7 +52,25 @@ public class BookService(
         return [.. categories.Select(c => new TopicViewModel(c.Id.ToString(), c.Name))];
     }
 
-    public async Task<IReadOnlyList<BookSummaryViewModel>> SuggestAsync(string keyword, int limit = 6, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SelectOptionViewModel>> GetActiveAuthorsSelectAsync(CancellationToken ct = default)
+    {
+        return await unitOfWork.Authors.GetQueryable(asNoTracking: true)
+            .Where(a => a.Status == EntityStatus.Active)
+            .OrderBy(a => a.FullName)
+            .Select(a => new SelectOptionViewModel(a.Id, a.FullName))
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<SelectOptionViewModel>> GetActivePublishersSelectAsync(CancellationToken ct = default)
+    {
+        return await unitOfWork.Publishers.GetQueryable(asNoTracking: true)
+            .Where(p => p.Status == EntityStatus.Active)
+            .OrderBy(p => p.Name)
+            .Select(p => new SelectOptionViewModel(p.Id, p.Name))
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<BookSummaryViewModel>> SuggestAsync(string keyword, int limit = 6, string? scope = null, CancellationToken ct = default)
     {
         var term = StringUtil.RemoveVietnameseSigns(keyword.Trim()).ToLowerInvariant();
         if (term.Length < 2)
@@ -62,7 +79,10 @@ public class BookService(
         }
 
         var allActive = await GetNewArrivalsAsync(200, ct);
+        var normalizedScope = NormalizeDocumentScope(scope);
+
         return [.. allActive
+            .Where(b => string.IsNullOrEmpty(normalizedScope) || b.DocumentScope.Equals(normalizedScope, StringComparison.OrdinalIgnoreCase))
             .Where(b => StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Authors} {b.Isbn}").ToLowerInvariant().Contains(term))
             .Take(limit)];
     }
@@ -75,10 +95,10 @@ public class BookService(
         int? year,
         bool available,
         int page,
+        string? scope = null,
         CancellationToken ct = default)
     {
         var query = unitOfWork.Books.GetQueryable(asNoTracking: true)
-            .AsSplitQuery()
             .Include(b => b.Category)
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
@@ -119,6 +139,12 @@ public class BookService(
 
         var mapped = books.Select(b => MapToSummaryViewModel(b, includeCopies: false)).ToList();
 
+        var normalizedScope = NormalizeDocumentScope(scope);
+        if (!string.IsNullOrEmpty(normalizedScope))
+        {
+            mapped = [.. mapped.Where(b => b.DocumentScope.Equals(normalizedScope, StringComparison.OrdinalIgnoreCase))];
+        }
+
         if (!string.IsNullOrWhiteSpace(category) && !Guid.TryParse(category, out _))
         {
             mapped = [.. mapped.Where(b => b.CategoryKey.Equals(category, StringComparison.OrdinalIgnoreCase))];
@@ -142,17 +168,8 @@ public class BookService(
         var safePage = Math.Clamp(page <= 0 ? 1 : page, 1, totalPages);
 
         var topics = await GetTopicsAsync(ct);
-        var authors = await unitOfWork.Authors.GetQueryable(asNoTracking: true)
-            .Where(a => a.Status == EntityStatus.Active)
-            .OrderBy(a => a.FullName)
-            .Select(a => new SelectOptionViewModel(a.Id, a.FullName))
-            .ToListAsync(ct);
-
-        var publishers = await unitOfWork.Publishers.GetQueryable(asNoTracking: true)
-            .Where(p => p.Status == EntityStatus.Active)
-            .OrderBy(p => p.Name)
-            .Select(p => new SelectOptionViewModel(p.Id, p.Name))
-            .ToListAsync(ct);
+        var authors = await GetActiveAuthorsSelectAsync(ct);
+        var publishers = await GetActivePublishersSelectAsync(ct);
 
         return new CatalogViewModel
         {
@@ -161,6 +178,7 @@ public class BookService(
             Authors = authors,
             Publishers = publishers,
             Keyword = keyword,
+            Scope = normalizedScope,
             Category = category,
             AuthorId = authorId,
             PublisherId = publisherId,
@@ -175,7 +193,6 @@ public class BookService(
     public async Task<BookSummaryViewModel?> GetPublicBookDetailAsync(Guid id, CancellationToken ct = default)
     {
         var book = await unitOfWork.Books.GetQueryable(asNoTracking: true)
-            .AsSplitQuery()
             .Include(b => b.Category)
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
@@ -249,7 +266,6 @@ public class BookService(
         var pageSize = filter.PageItemSize;
 
         var rawItems = await query
-            .AsSplitQuery()
             .Include(b => b.Category)
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
@@ -1319,6 +1335,8 @@ public class BookService(
                 .ToList()
             : [];
 
+        var documentScope = ResolveDocumentScope(b);
+
         return new BookSummaryViewModel
         {
             Id = b.Id,
@@ -1338,6 +1356,8 @@ public class BookService(
             CategoryId = b.CategoryId,
             CategoryName = categoryName,
             CategoryKey = categoryKey,
+            DocumentScope = documentScope,
+            DocumentScopeLabel = GetDocumentScopeLabel(documentScope),
             AvailableCopies = availableCount,
             TotalCopies = totalCount,
             EarliestDueDate = earliestDue,
@@ -1345,6 +1365,48 @@ public class BookService(
             Images = imageViewModels
         };
     }
+
+    private static string? NormalizeDocumentScope(string? scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return null;
+        }
+
+        var s = scope.Trim().ToLowerInvariant();
+        return s switch
+        {
+            "textbook" or "giaotrinh" => "textbook",
+            "thesis" or "luanvan" or "doan" => "thesis",
+            "journal" or "tapchi" => "journal",
+            _ => null
+        };
+    }
+
+    private static string ResolveDocumentScope(Book b)
+    {
+        var combined = StringUtil.RemoveVietnameseSigns($"{b.Title} {b.Edition} {b.Description}").ToLowerInvariant();
+        if (combined.Contains("luan van") || combined.Contains("do an") || combined.Contains("khoa luan") ||
+            combined.Contains("luan an") || combined.Contains("tot nghiep") || combined.Contains("thac si"))
+        {
+            return "thesis";
+        }
+
+        if (combined.Contains("tap chi") || combined.Contains("journal") || combined.Contains("ky yeu") ||
+            combined.Contains("hoi nghi khoa hoc") || combined.Contains("issn"))
+        {
+            return "journal";
+        }
+
+        return "textbook";
+    }
+
+    private static string GetDocumentScopeLabel(string scope) => scope switch
+    {
+        "thesis" => "Luận văn & Đồ án",
+        "journal" => "Tạp chí khoa học",
+        _ => "Giáo trình"
+    };
 
     private static string ResolveCategoryKey(string categoryName)
     {
