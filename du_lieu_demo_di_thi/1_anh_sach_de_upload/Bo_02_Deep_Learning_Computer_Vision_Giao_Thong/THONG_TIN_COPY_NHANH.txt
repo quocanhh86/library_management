@@ -1,0 +1,21 @@
+﻿======================================================================
+THÔNG TIN COPY NHANH KHI DEMO THÊM SÁCH MỚI (/Admin/Books/Create)
+======================================================================
+Tên đầu sách   : Thị giác Máy tính & Học sâu Ứng dụng trong Giao thông Thông minh
+Mã ISBN        : 978-6047688102
+Chuyên ngành   : Trí tuệ nhân tạo & Công nghệ số
+Tác giả        : GS.TS. Nguyễn Thanh Thủy, PGS.TS. Trần Đình Quế
+Nhà xuất bản   : NXB Giao Thông Vận Tải
+Năm xuất bản   : 2026
+Ấn bản         : Xuất bản lần 1 (2026)
+Ngôn ngữ       : Tiếng Việt
+Số trang       : 360
+Số bản nhập kho: 3
+Đơn giá        : 250000
+Mô tả tóm tắt  : Trình bày mạng nơ-ron tích chập (CNN), kiến trúc YOLO, Vision Transformer (ViT), nhận diện biển số xe tự động, đếm lưu lượng phương tiện thời gian thực và điều khiển đèn tín hiệu giao thông thích ứng.
+
+HƯỚNG DẪN CHỌN ẢNH TRONG THƯ MỤC NÀY:
+- Ô "Tải lên ảnh bìa chính" : Chọn file 01_bia_truoc.png (hoặc 06_bia_truoc_ban_jpg.jpg)
+- Ô "Tải lên nhiều ảnh trang sách / mục lục" : Bôi đen chọn cùng lúc 4 file:
+  02_bia_sau.png, 03_muc_luc.png, 04_doc_thu_chuong_1.png, 05_doc_thu_chuong_2.png
+======================================================================

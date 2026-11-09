@@ -80,12 +80,22 @@ using (var scope = app.Services.CreateScope())
     {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-        await DbInitializer.InitializeAsync(context, configuration);
+        var forceResetSeed = args.Any(a => string.Equals(a, "--reseed", StringComparison.OrdinalIgnoreCase));
+        var seedOnly = args.Any(a => string.Equals(a, "--seed-only", StringComparison.OrdinalIgnoreCase));
+        await DbInitializer.InitializeAsync(context, configuration, forceReset: forceResetSeed);
+        if (seedOnly)
+        {
+            return;
+        }
     }
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         logger.LogWarning(ex, "Chưa thể kết nối Database để seed dữ liệu mẫu. Vui lòng kiểm tra file .env và cập nhật migration.");
+        if (args.Any(a => string.Equals(a, "--seed-only", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw;
+        }
     }
 }
 

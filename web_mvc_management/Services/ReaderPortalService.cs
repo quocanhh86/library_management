@@ -1067,7 +1067,7 @@ public class ReaderPortalService(
         const string demoMarker = "Phiếu mượn tổng hợp học kỳ [DEMO-FULL-FLOW-V2]";
 
         var alreadySeeded = await unitOfWork.BorrowSlips.GetQueryable(asNoTracking: true)
-            .AnyAsync(s => s.ReaderId == readerId && s.Note == demoMarker, ct);
+            .AnyAsync(s => s.ReaderId == readerId && (s.Note == demoMarker || s.Status != EntityStatus.Deleted), ct);
         if (alreadySeeded)
         {
             return;

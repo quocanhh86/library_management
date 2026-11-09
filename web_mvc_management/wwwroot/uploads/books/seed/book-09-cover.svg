@@ -1,17 +1,33 @@
 ﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#143D34"/>
-      <stop offset="100%" stop-color="#1F6354"/>
+      <stop offset="0%" stop-color="#0F2A4A"/>
+      <stop offset="100%" stop-color="#1E4E79"/>
+    </linearGradient>
+    <linearGradient id="spine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#020617" stop-opacity="0.55"/>
+      <stop offset="65%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
     </linearGradient>
   </defs>
-  <rect width="600" height="840" rx="18" fill="url(#bg)"/>
-  <rect x="24" y="24" width="552" height="792" rx="12" fill="none" stroke="#34D399" stroke-width="2" stroke-opacity="0.45"/>
-  <rect x="60" y="70" width="170" height="32" rx="6" fill="#34D399"/>
-  <text x="145" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0F172A" text-anchor="middle">THƯ VIỆN ĐH GTVT</text>
-  <text x="60" y="210" font-family="Georgia, Times New Roman, serif" font-size="33" font-weight="700" fill="#FFFFFF"><tspan x="60" dy="0">Đồ &#225;n Tốt nghiệp: Thiết</tspan><tspan x="60" dy="42">kế kết cấu nhịp cầu d&#226;y</tspan></text>
-  <line x1="60" y1="365" x2="240" y2="365" stroke="#34D399" stroke-width="4"/>
-  <circle cx="460" cy="540" r="95" fill="#34D399" fill-opacity="0.12" stroke="#34D399" stroke-width="2" stroke-opacity="0.4"/>
-  <text x="60" y="720" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="600" fill="#E2E8F0">NXB Giao Th&#244;ng Vận Tải</text>
-  <text x="60" y="752" font-family="Consolas, monospace" font-size="15" fill="#34D399">ISBN: 978-6047625028</text>
+  <rect width="600" height="840" rx="16" fill="url(#bg)"/>
+  <rect width="34" height="840" rx="8" fill="url(#spine)"/>
+  <rect x="42" y="26" width="532" height="788" rx="12" fill="none" stroke="#F59E0B" stroke-width="2" stroke-opacity="0.45"/>
+  <rect x="64" y="56" width="215" height="32" rx="6" fill="#F59E0B"/>
+  <text x="171" y="77" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="800" fill="#0F172A" text-anchor="middle">GI&#193;O TR&#204;NH CHUY&#202;N NG&#192;NH</text>
+  <text x="550" y="77" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#E2E8F0" text-anchor="end">UTC LIBRARY • 2024</text>
+  <text x="64" y="130" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#F59E0B" letter-spacing="0.5">C&#212;NG NGHỆ TH&#212;NG TIN &amp; LẬP TR&#204;NH</text>
+  <text x="64" y="188" font-family="Georgia, Times New Roman, serif" font-size="31" font-weight="700" fill="#FFFFFF"><tspan x="64" dy="0">Cấu tr&#250;c dữ liệu v&#224; Giải</tspan><tspan x="64" dy="40">thuật n&#226;ng cao</tspan><tspan x="64" dy="40">(Introduction to</tspan></text>
+  <line x1="64" y1="358" x2="265" y2="358" stroke="#F59E0B" stroke-width="4"/>
+  <text x="64" y="395" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" fill="#F8FAFC">GS. Thomas H. Cormen, TS. L&#234; Minh Ho&#224;ng</text>
+  <g transform="translate(340, 445)">
+    <circle cx="110" cy="110" r="105" fill="#F59E0B" fill-opacity="0.10" stroke="#F59E0B" stroke-width="2" stroke-opacity="0.45"/>
+    <circle cx="110" cy="110" r="72" fill="#F59E0B" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.35"/>
+    <polygon points="110,52 162,142 58,142" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-opacity="0.7"/>
+    <circle cx="110" cy="112" r="16" fill="#F59E0B" fill-opacity="0.85"/>
+  </g>
+  <rect x="64" y="685" width="486" height="96" rx="10" fill="#0F172A" fill-opacity="0.45" stroke="#FFFFFF" stroke-opacity="0.16"/>
+  <text x="84" y="722" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">NXB Đại Học Quốc Gia H&#224; Nội</text>
+  <text x="84" y="752" font-family="Consolas, monospace" font-size="15" font-weight="600" fill="#F59E0B">ISBN: 978-0262046305</text>
+  <text x="530" y="752" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#CBD5E1" text-anchor="end">ĐH GIAO THÔNG VẬN TẢI</text>
 </svg>

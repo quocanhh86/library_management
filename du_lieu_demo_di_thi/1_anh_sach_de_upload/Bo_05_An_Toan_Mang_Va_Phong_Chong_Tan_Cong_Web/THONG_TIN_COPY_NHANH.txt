@@ -1,0 +1,21 @@
+﻿======================================================================
+THÔNG TIN COPY NHANH KHI DEMO THÊM SÁCH MỚI (/Admin/Books/Create)
+======================================================================
+Tên đầu sách   : An toàn Hệ thống Thông tin & Phòng chống Tấn công Ứng dụng Web (OWASP)
+Mã ISBN        : 978-6048088409
+Chuyên ngành   : Cơ sở dữ liệu & Hệ thống thông tin
+Tác giả        : Andrew S. Tanenbaum, TS. Lê Minh Hoàng
+Nhà xuất bản   : NXB Thông Tin & Truyền Thông
+Năm xuất bản   : 2026
+Ấn bản         : Xuất bản lần 1 (2026)
+Ngôn ngữ       : Tiếng Việt
+Số trang       : 360
+Số bản nhập kho: 3
+Đơn giá        : 250000
+Mô tả tóm tắt  : Phân tích 38 kịch bản tấn công ứng dụng Web thực tế: Brute-Force OTP, can thiệp DevTools F12, SQL Injection, XSS, CSRF, tải tệp giả mạo Magic Bytes/Polyglot và kỹ thuật phòng thủ đa lớp.
+
+HƯỚNG DẪN CHỌN ẢNH TRONG THƯ MỤC NÀY:
+- Ô "Tải lên ảnh bìa chính" : Chọn file 01_bia_truoc.png (hoặc 06_bia_truoc_ban_jpg.jpg)
+- Ô "Tải lên nhiều ảnh trang sách / mục lục" : Bôi đen chọn cùng lúc 4 file:
+  02_bia_sau.png, 03_muc_luc.png, 04_doc_thu_chuong_1.png, 05_doc_thu_chuong_2.png
+======================================================================
