@@ -1,23 +1,31 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
-  <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
-  <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
-  <text x="65" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748B">Đồ &#225;n Tốt nghiệp: Ứng dụng c&#244;ng nghệ qu&#233;t Laser 3...</text>
-  <line x1="65" y1="90" x2="535" y2="90" stroke="#CBD5E1" stroke-width="1.5"/>
-  <rect x="65" y="114" width="470" height="44" rx="6" fill="#2E1A47" fill-opacity="0.09" stroke="#2E1A47" stroke-opacity="0.25"/>
-  <text x="80" y="142" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#2E1A47">CHƯƠNG 1: TỔNG QUAN &amp; CƠ SỞ L&#221; THUYẾT CỐT L&#213;I</text>
-  <text x="65" y="205" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.1. Đặt vấn đề v&#224; bối cảnh nghi&#234;n cứu (NXB Giao Th&#244;ng Vận</text>
-<text x="65" y="231" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Tải, 2025):</text>
-<text x="65" y="271" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Đồ &#225;n tốt nghiệp ứng dụng đ&#225;m m&#226;y điểm (Point Cloud) từ</text>
-<text x="65" y="297" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">thiết bị Terrestrial Laser Scanner kết hợp WebGIS để theo</text>
-<text x="65" y="337" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.2. T&#225;c giả bi&#234;n soạn: PGS.TS. Đinh C&#244;ng Tuấn.</text>
-<text x="65" y="377" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.3. C&#225;c nguy&#234;n l&#253; v&#224; ti&#234;u chuẩn kỹ thuật bắt buộc tu&#226;n</text>
-<text x="65" y="403" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">thủ:</text>
-<text x="65" y="443" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• Đảm bảo t&#237;nh ch&#237;nh x&#225;c to&#225;n học, to&#224;n vẹn dữ liệu v&#224; khả</text>
-<text x="65" y="469" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">năng mở rộng hệ thống.</text>
-<text x="65" y="509" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• Kết hợp chặt chẽ giữa m&#244; h&#236;nh l&#253; thuyết với quy chuẩn kỹ</text>
-<text x="65" y="535" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">thuật quốc gia (TCVN / Quốc tế).</text>
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
+  <defs>
+    <clipPath id="pageClip">
+      <rect x="40" y="36" width="520" height="758"/>
+    </clipPath>
+  </defs>
+  <rect width="600" height="830" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+  <rect x="36" y="32" width="528" height="766" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+  <g clip-path="url(#pageClip)">
+    <text x="64" y="68" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#64748B">Đồ án Tốt nghiệp: Ứng dụng công nghệ quét Laser 3D...</text>
+    <line x1="64" y1="82" x2="536" y2="82" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect x="64" y="102" width="472" height="44" rx="6" fill="#2E1A47" fill-opacity="0.09" stroke="#2E1A47" stroke-opacity="0.25"/>
+    <text x="80" y="129" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="#2E1A47">CHƯƠNG 1: TỔNG QUAN &amp; CƠ SỞ LÝ THUYẾT CỐT LÕI</text>
+      <text x="64" y="182" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">1.1. Đặt vấn đề và bối cảnh nghiên cứu (NXB Giao Thông</text>
+      <text x="64" y="205" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">Vận Tải, 2025):</text>
+      <text x="64" y="238" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">Đồ án tốt nghiệp ứng dụng đám mây điểm (Point Cloud) từ</text>
+      <text x="64" y="261" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">thiết bị Terrestrial Laser Scanner kết hợp WebGIS để</text>
+      <text x="64" y="284" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">theo dõi chuyển vị vỏ hầm xuyên núi.</text>
+      <text x="64" y="317" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">1.2. Tác giả biên soạn: PGS.TS. Đinh Công Tuấn.</text>
+      <text x="64" y="350" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">1.3. Các nguyên lý và tiêu chuẩn kỹ thuật bắt buộc tuân</text>
+      <text x="64" y="373" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">thủ:</text>
+      <text x="64" y="406" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">• Đảm bảo tính chính xác toán học, toàn vẹn dữ liệu và</text>
+      <text x="64" y="429" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">khả năng mở rộng hệ thống.</text>
+      <text x="64" y="462" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">• Kết hợp chặt chẽ giữa mô hình lý thuyết với quy chuẩn</text>
+      <text x="64" y="485" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">kỹ thuật quốc gia (TCVN / Quốc tế).</text>
 
-  <line x1="65" y1="742" x2="535" y2="742" stroke="#CBD5E1" stroke-width="1"/>
-  <text x="65" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
-  <text x="535" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#475569" text-anchor="end">Trang 12 — Đọc thử Chương 1</text>
+    <line x1="64" y1="736" x2="536" y2="736" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="64" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
+    <text x="536" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#475569" text-anchor="end">Trang 12 — Đọc thử Chương 1</text>
+  </g>
 </svg>

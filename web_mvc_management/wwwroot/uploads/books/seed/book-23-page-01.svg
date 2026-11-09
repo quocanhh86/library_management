@@ -1,24 +1,32 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
-  <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
-  <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
-  <text x="65" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748B">Tạp ch&#237; C&#244;ng nghệ Th&#244;ng tin v&#224; Truyền th&#244;ng - Chu...</text>
-  <line x1="65" y1="90" x2="535" y2="90" stroke="#CBD5E1" stroke-width="1.5"/>
-  <rect x="65" y="114" width="470" height="44" rx="6" fill="#064E3B" fill-opacity="0.09" stroke="#064E3B" stroke-opacity="0.25"/>
-  <text x="80" y="142" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#064E3B">CHƯƠNG 1: TỔNG QUAN &amp; CƠ SỞ L&#221; THUYẾT CỐT L&#213;I</text>
-  <text x="65" y="205" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.1. Đặt vấn đề v&#224; bối cảnh nghi&#234;n cứu (NXB Th&#244;ng Tin &amp;</text>
-<text x="65" y="231" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Truyền Th&#244;ng, 2025):</text>
-<text x="65" y="271" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Chuy&#234;n san khoa học c&#244;ng bố c&#225;c nghi&#234;n cứu về ph&#225;t hiện</text>
-<text x="65" y="297" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">x&#226;m nhập mạng bằng học s&#226;u, mật m&#227; hậu lượng tử v&#224; bảo mật</text>
-<text x="65" y="337" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.2. T&#225;c giả bi&#234;n soạn: GS.TS. Nguyễn Thanh Thủy, TS. L&#234;</text>
-<text x="65" y="363" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Minh Ho&#224;ng.</text>
-<text x="65" y="403" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.3. C&#225;c nguy&#234;n l&#253; v&#224; ti&#234;u chuẩn kỹ thuật bắt buộc tu&#226;n</text>
-<text x="65" y="429" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">thủ:</text>
-<text x="65" y="469" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• Đảm bảo t&#237;nh ch&#237;nh x&#225;c to&#225;n học, to&#224;n vẹn dữ liệu v&#224; khả</text>
-<text x="65" y="495" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">năng mở rộng hệ thống.</text>
-<text x="65" y="535" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• Kết hợp chặt chẽ giữa m&#244; h&#236;nh l&#253; thuyết với quy chuẩn kỹ</text>
-<text x="65" y="561" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">thuật quốc gia (TCVN / Quốc tế).</text>
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
+  <defs>
+    <clipPath id="pageClip">
+      <rect x="40" y="36" width="520" height="758"/>
+    </clipPath>
+  </defs>
+  <rect width="600" height="830" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+  <rect x="36" y="32" width="528" height="766" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+  <g clip-path="url(#pageClip)">
+    <text x="64" y="68" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#64748B">Tạp chí Công nghệ Thông tin và Truyền thông - Chuyê...</text>
+    <line x1="64" y1="82" x2="536" y2="82" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect x="64" y="102" width="472" height="44" rx="6" fill="#064E3B" fill-opacity="0.09" stroke="#064E3B" stroke-opacity="0.25"/>
+    <text x="80" y="129" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="#064E3B">CHƯƠNG 1: TỔNG QUAN &amp; CƠ SỞ LÝ THUYẾT CỐT LÕI</text>
+      <text x="64" y="182" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">1.1. Đặt vấn đề và bối cảnh nghiên cứu (NXB Thông Tin &amp;</text>
+      <text x="64" y="205" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">Truyền Thông, 2025):</text>
+      <text x="64" y="238" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">Chuyên san khoa học công bố các nghiên cứu về phát hiện</text>
+      <text x="64" y="261" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">xâm nhập mạng bằng học sâu, mật mã hậu lượng tử và bảo</text>
+      <text x="64" y="284" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">mật ứng dụng Web trước các tấn công OWASP Top 10.</text>
+      <text x="64" y="317" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">1.2. Tác giả biên soạn: GS.TS. Nguyễn Thanh Thủy, TS. Lê</text>
+      <text x="64" y="340" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">Minh Hoàng.</text>
+      <text x="64" y="373" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">1.3. Các nguyên lý và tiêu chuẩn kỹ thuật bắt buộc tuân</text>
+      <text x="64" y="396" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A">thủ:</text>
+      <text x="64" y="429" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">• Đảm bảo tính chính xác toán học, toàn vẹn dữ liệu và</text>
+      <text x="64" y="452" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">khả năng mở rộng hệ thống.</text>
+      <text x="64" y="485" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">• Kết hợp chặt chẽ giữa mô hình lý thuyết với quy chuẩn</text>
+      <text x="64" y="508" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#1E293B">kỹ thuật quốc gia (TCVN / Quốc tế).</text>
 
-  <line x1="65" y1="742" x2="535" y2="742" stroke="#CBD5E1" stroke-width="1"/>
-  <text x="65" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
-  <text x="535" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#475569" text-anchor="end">Trang 12 — Đọc thử Chương 1</text>
+    <line x1="64" y1="736" x2="536" y2="736" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="64" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
+    <text x="536" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#475569" text-anchor="end">Trang 12 — Đọc thử Chương 1</text>
+  </g>
 </svg>

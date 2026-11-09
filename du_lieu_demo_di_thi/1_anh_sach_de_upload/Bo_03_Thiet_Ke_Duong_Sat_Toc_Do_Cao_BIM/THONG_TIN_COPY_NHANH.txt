@@ -12,7 +12,7 @@ Ngôn ngữ       : Tiếng Việt
 Số trang       : 360
 Số bản nhập kho: 3
 Đơn giá        : 250000
-Mô tả tóm tắt  : Giáo trình chuyên sâu về kết cấu tầng trên đường sắt không đá балласт (Slab Track), cầu cạn vượt địa hình phức tạp, tương tác động lực học tàu - cầu và quản lý vòng đời dự án bằng công nghệ BIM 5D.
+Mô tả tóm tắt  : Giáo trình chuyên sâu về kết cấu tầng trên đường sắt không đá ballast (Slab Track), cầu cạn vượt địa hình phức tạp, tương tác động lực học tàu - cầu và quản lý vòng đời dự án bằng công nghệ BIM 5D.
 
 HƯỚNG DẪN CHỌN ẢNH TRONG THƯ MỤC NÀY:
 - Ô "Tải lên ảnh bìa chính" : Chọn file 01_bia_truoc.png (hoặc 06_bia_truoc_ban_jpg.jpg)
