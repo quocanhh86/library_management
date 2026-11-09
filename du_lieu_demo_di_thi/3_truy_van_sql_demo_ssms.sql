@@ -29,12 +29,12 @@ SELECT TOP 5
     email,
     otp_code AS [Ma_OTP_6_So],
     purpose AS [Muc_Dich],
-    AttemptCount AS [So_Lan_Nhap_Sai],
-    IsUsed AS [Da_Su_Dung],
-    ExpiresAt AS [Het_Han_Luc],
-    CreatedAt AS [Tao_Luc]
+    failed_attempts AS [So_Lan_Nhap_Sai],
+    is_used AS [Da_Su_Dung],
+    expires_at AS [Het_Han_Luc],
+    created_at AS [Tao_Luc]
 FROM dbo.otps
-ORDER BY CreatedAt DESC;
+ORDER BY created_at DESC;
 GO
 
 -- 3. Thống kê 28 Đầu sách kèm Số bản sao (Available / Borrowed / Reserved) & Số ảnh Gallery

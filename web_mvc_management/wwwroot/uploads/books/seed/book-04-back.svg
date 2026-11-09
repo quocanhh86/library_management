@@ -1,40 +1,52 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
   <defs>
     <linearGradient id="bgBack" x1="1" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#4A1D1F"/>
       <stop offset="100%" stop-color="#7A2E32"/>
     </linearGradient>
+    <clipPath id="backClip">
+      <rect x="40" y="28" width="520" height="774" rx="8"/>
+    </clipPath>
   </defs>
-  <rect width="600" height="840" rx="16" fill="url(#bgBack)"/>
-  <rect x="32" y="28" width="536" height="784" rx="12" fill="none" stroke="#F87171" stroke-width="1.8" stroke-opacity="0.4"/>
-  <text x="68" y="82" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#F87171" letter-spacing="1">GIỚI THIỆU NỘI DUNG ẤN PHẨM (BÌA SAU)</text>
-  <text x="68" y="122" font-family="Georgia, serif" font-size="21" font-weight="700" fill="#FFFFFF">Gi&#225;o tr&#236;nh Thiết kế Hệ thống Cơ sở dữ liệu v&#224; SQL...</text>
-  <line x1="68" y1="148" x2="532" y2="148" stroke="#F87171" stroke-width="2" stroke-opacity="0.6"/>
-  <text x="68" y="192" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#F8FAFC">Tóm tắt học thuật:</text>
-  <text x="68" y="235" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" fill="#E2E8F0">Gi&#225;o tr&#236;nh chuẩn đ&#224;o tạo ng&#224;nh CNTT về đại số quan</text>
-<text x="68" y="263" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" fill="#E2E8F0">hệ, chuẩn h&#243;a 3NF/BCNF, thiết kế chỉ mục B-Tree, lập</text>
-<text x="68" y="291" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" fill="#E2E8F0">tr&#236;nh Trigger, Stored Procedure v&#224; kiểm so&#225;t giao</text>
-<text x="68" y="319" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" fill="#E2E8F0">dịch đồng thời tr&#234;n SQL Server.</text>
+  <rect width="600" height="830" fill="url(#bgBack)"/>
+  <rect x="36" y="24" width="528" height="782" rx="8" fill="none" stroke="#F87171" stroke-width="1.8" stroke-opacity="0.45"/>
+  <g clip-path="url(#backClip)">
+    <text x="64" y="66" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#F87171">GIỚI THIỆU NỘI DUNG ẤN PHẨM (BÌA SAU)</text>
+      <text x="64" y="98" font-family="'Segoe UI', Arial, sans-serif" font-size="16.5" font-weight="700" fill="#FFFFFF">Giáo trình Thiết kế Hệ thống Cơ sở dữ liệu</text>
+      <text x="64" y="124" font-family="'Segoe UI', Arial, sans-serif" font-size="16.5" font-weight="700" fill="#FFFFFF">và SQL Server</text>
 
-  <rect x="68" y="405" width="464" height="165" rx="10" fill="#0F172A" fill-opacity="0.42" stroke="#FFFFFF" stroke-opacity="0.15"/>
-  <text x="90" y="440" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#F87171">THÔNG TIN LƯU HÀNH TẠI THƯ VIỆN ĐH GTVT:</text>
-  <text x="90" y="472" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Chuyên ngành: Cơ sở dữ liệu &amp; Hệ thống th&#244;ng tin</text>
-  <text x="90" y="500" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Quy cách: Khổ 16x24 cm • Số trang: 380 trang • Năm XB: 2024</text>
-  <text x="90" y="528" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Đối tượng: Sinh viên, Học viên Cao học, Nghiên cứu sinh &amp; Giảng viên</text>
-  <text x="90" y="554" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Đơn vị phát hành: NXB Th&#244;ng Tin &amp; Truyền Th&#244;ng</text>
-  <rect x="305" y="625" width="227" height="135" rx="8" fill="#FFFFFF"/>
-  <text x="418" y="648" font-family="Consolas, monospace" font-size="12" font-weight="700" fill="#0F172A" text-anchor="middle">ISBN 978-6048031234</text>
-  <g fill="#0F172A" transform="translate(328, 658)">
-    <rect x="0" y="0" width="4" height="68"/><rect x="7" y="0" width="2" height="68"/><rect x="13" y="0" width="6" height="68"/>
-    <rect x="23" y="0" width="2" height="68"/><rect x="29" y="0" width="4" height="68"/><rect x="37" y="0" width="8" height="68"/>
-    <rect x="49" y="0" width="2" height="68"/><rect x="55" y="0" width="4" height="68"/><rect x="63" y="0" width="6" height="68"/>
-    <rect x="73" y="0" width="2" height="68"/><rect x="79" y="0" width="4" height="68"/><rect x="87" y="0" width="2" height="68"/>
-    <rect x="93" y="0" width="8" height="68"/><rect x="105" y="0" width="4" height="68"/><rect x="113" y="0" width="2" height="68"/>
-    <rect x="119" y="0" width="6" height="68"/><rect x="129" y="0" width="4" height="68"/><rect x="137" y="0" width="2" height="68"/>
-    <rect x="143" y="0" width="6" height="68"/><rect x="153" y="0" width="4" height="68"/><rect x="161" y="0" width="2" height="68"/>
-    <rect x="167" y="0" width="6" height="68"/><rect x="176" y="0" width="3" height="68"/>
+    <line x1="64" y1="146" x2="536" y2="146" stroke="#F87171" stroke-width="1.8" stroke-opacity="0.6"/>
+    <text x="64" y="176" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="#F8FAFC">Tóm tắt nội dung học thuật:</text>
+      <text x="64" y="206" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" fill="#E2E8F0">Giáo trình chuẩn đào tạo ngành CNTT về đại số quan hệ,</text>
+      <text x="64" y="231" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" fill="#E2E8F0">chuẩn hóa 3NF/BCNF, thiết kế chỉ mục B-Tree, lập trình</text>
+      <text x="64" y="256" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" fill="#E2E8F0">Trigger, Stored Procedure và kiểm soát giao dịch đồng</text>
+      <text x="64" y="281" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" fill="#E2E8F0">thời trên SQL Server.</text>
+
+    <rect x="64" y="382" width="472" height="184" rx="8" fill="#0F172A" fill-opacity="0.48" stroke="#FFFFFF" stroke-opacity="0.16"/>
+    <text x="84" y="414" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="#F87171">THÔNG TIN LƯU HÀNH TẠI THƯ VIỆN ĐH GTVT:</text>
+    <text x="84" y="446" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Chuyên ngành: Cơ sở dữ liệu &amp; Hệ thống thông tin</text>
+    <text x="84" y="476" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Quy cách: Khổ 16x24 cm • Số trang: 380 trang • Năm XB: 2024</text>
+    <text x="84" y="506" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Đối tượng: Sinh viên, Học viên Cao học &amp; Giảng viên UTC</text>
+    <text x="84" y="536" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Đơn vị phát hành: NXB Thông Tin &amp; Truyền Thông</text>
+
+    <text x="64" y="632" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI</text>
+    <text x="64" y="658" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" fill="#E2E8F0">Trung tâm Thông tin - Thư viện</text>
+    <text x="64" y="682" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#CBD5E1">Số 3 Cầu Giấy, Đống Đa, Hà Nội</text>
+    <rect x="64" y="702" width="216" height="30" rx="5" fill="#0F172A" fill-opacity="0.55" stroke="#F87171" stroke-opacity="0.5"/>
+    <text x="172" y="722" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="700" fill="#F87171" text-anchor="middle">TÀI LIỆU HỌC THUẬT CHUẨN</text>
+
+    <rect x="312" y="598" width="224" height="142" rx="8" fill="#FFFFFF"/>
+    <text x="424" y="620" font-family="Consolas, 'Courier New', monospace" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">ISBN 978-6048031234</text>
+    <g fill="#0F172A" transform="translate(334, 630)">
+      <rect x="0" y="0" width="4" height="68"/><rect x="7" y="0" width="2" height="68"/><rect x="13" y="0" width="6" height="68"/>
+      <rect x="23" y="0" width="2" height="68"/><rect x="29" y="0" width="4" height="68"/><rect x="37" y="0" width="8" height="68"/>
+      <rect x="49" y="0" width="2" height="68"/><rect x="55" y="0" width="4" height="68"/><rect x="63" y="0" width="6" height="68"/>
+      <rect x="73" y="0" width="2" height="68"/><rect x="79" y="0" width="4" height="68"/><rect x="87" y="0" width="2" height="68"/>
+      <rect x="93" y="0" width="8" height="68"/><rect x="105" y="0" width="4" height="68"/><rect x="113" y="0" width="2" height="68"/>
+      <rect x="119" y="0" width="6" height="68"/><rect x="129" y="0" width="4" height="68"/><rect x="137" y="0" width="2" height="68"/>
+      <rect x="143" y="0" width="6" height="68"/><rect x="153" y="0" width="4" height="68"/><rect x="161" y="0" width="2" height="68"/>
+      <rect x="167" y="0" width="6" height="68"/><rect x="176" y="0" width="3" height="68"/>
+    </g>
+    <text x="424" y="722" font-family="Consolas, 'Courier New', monospace" font-size="12" font-weight="700" fill="#1E293B" text-anchor="middle">978-6048031234</text>
   </g>
-  <text x="418" y="746" font-family="Consolas, monospace" font-size="13" font-weight="700" fill="#1E293B" text-anchor="middle">9 786047 625008</text>
-  <text x="68" y="700" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">TRƯỜNG ĐẠI HỌC GIAO THÔNG VẬN TẢI</text>
-  <text x="68" y="726" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#CBD5E1">Trung tâm Thông tin - Thư viện (Số 3 Cầu Giấy, Hà Nội)</text>
 </svg>

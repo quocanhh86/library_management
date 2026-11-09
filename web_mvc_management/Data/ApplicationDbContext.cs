@@ -455,7 +455,7 @@ public class ApplicationDbContext(
             b.HasOne(x => x.Book)
                 .WithMany(x => x.Reservations)
                 .HasForeignKey(x => x.BookId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             b.HasOne(x => x.AssignedCopy)
                 .WithMany(x => x.Reservations)

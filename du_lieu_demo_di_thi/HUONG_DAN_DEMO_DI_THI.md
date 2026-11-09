@@ -28,7 +28,7 @@ dotnet run --project web_mvc_management
 ## 2. CƠ CHẾ ĐĂNG NHẬP & DANH SÁCH TÀI KHOẢN CHUẨN
 
 > **Mẹo cực nhanh khi đi thi (nếu mạng phòng thi chập chờn khi nhận Gmail OTP)**:
-> Mở sẵn file [`du_lieu_demo_di_thi/3_truy_van_sql_demo_ssms.sql`](./3_truy_van_sql_demo_ssms.sql) trên SSMS và chạy **Câu truy vấn số 2 (`SELECT TOP 5 ... FROM dbo.otps ORDER BY CreatedAt DESC`)** để lấy ngay mã OTP 6 số vừa phát sinh trong 1 giây!
+> Mở sẵn file [`du_lieu_demo_di_thi/3_truy_van_sql_demo_ssms.sql`](./3_truy_van_sql_demo_ssms.sql) trên SSMS và chạy **Câu truy vấn số 2 (`SELECT TOP 5 ... FROM dbo.otps ORDER BY created_at DESC`)** để lấy ngay mã OTP 6 số vừa phát sinh trong 1 giây!
 
 ### 2.1. Hai luồng đăng nhập tách biệt theo vai trò
 1. **Cổng Cán bộ / Thủ thư / Admin (`/Account/StaffLogin`)**:

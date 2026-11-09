@@ -1,33 +1,46 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#3B2F1E"/>
       <stop offset="100%" stop-color="#66502C"/>
     </linearGradient>
     <linearGradient id="spine" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#020617" stop-opacity="0.55"/>
-      <stop offset="65%" stop-color="#FFFFFF" stop-opacity="0.08"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
+      <stop offset="0%" stop-color="#020617" stop-opacity="0.58"/>
+      <stop offset="68%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.24"/>
     </linearGradient>
+    <clipPath id="coverClip">
+      <rect x="48" y="28" width="524" height="774" rx="8"/>
+    </clipPath>
   </defs>
-  <rect width="600" height="840" rx="16" fill="url(#bg)"/>
-  <rect width="34" height="840" rx="8" fill="url(#spine)"/>
-  <rect x="42" y="26" width="532" height="788" rx="12" fill="none" stroke="#FBBF24" stroke-width="2" stroke-opacity="0.45"/>
-  <rect x="64" y="56" width="215" height="32" rx="6" fill="#FBBF24"/>
-  <text x="171" y="77" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="800" fill="#0F172A" text-anchor="middle">GI&#193;O TR&#204;NH CHUY&#202;N NG&#192;NH</text>
-  <text x="550" y="77" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#E2E8F0" text-anchor="end">UTC LIBRARY • 2025</text>
-  <text x="64" y="130" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#FBBF24" letter-spacing="0.5">CƠ KH&#205; GIAO TH&#212;NG &amp; KỸ THUẬT &#212; T&#212;</text>
-  <text x="64" y="188" font-family="Georgia, Times New Roman, serif" font-size="31" font-weight="700" fill="#FFFFFF"><tspan x="64" dy="0">Gi&#225;o tr&#236;nh Kỹ thuật &#212; t&#244;</tspan><tspan x="64" dy="40">điện, Hybrid v&#224; Hệ thống</tspan><tspan x="64" dy="40">điều khiển tự động</tspan></text>
-  <line x1="64" y1="358" x2="265" y2="358" stroke="#FBBF24" stroke-width="4"/>
-  <text x="64" y="395" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" fill="#F8FAFC">GS.TS. Phạm Văn Lang</text>
-  <g transform="translate(340, 445)">
-    <circle cx="110" cy="110" r="105" fill="#FBBF24" fill-opacity="0.10" stroke="#FBBF24" stroke-width="2" stroke-opacity="0.45"/>
-    <circle cx="110" cy="110" r="72" fill="#FBBF24" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.35"/>
-    <polygon points="110,52 162,142 58,142" fill="none" stroke="#FBBF24" stroke-width="2.5" stroke-opacity="0.7"/>
-    <circle cx="110" cy="112" r="16" fill="#FBBF24" fill-opacity="0.85"/>
+  <rect width="600" height="830" fill="url(#bg)"/>
+  <rect width="28" height="830" fill="url(#spine)"/>
+  <rect x="44" y="24" width="532" height="782" rx="8" fill="none" stroke="#FBBF24" stroke-width="2" stroke-opacity="0.48"/>
+  <g clip-path="url(#coverClip)">
+    <rect x="68" y="48" width="232" height="32" rx="5" fill="#FBBF24"/>
+    <text x="184" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">GIÁO TRÌNH CHUYÊN NGÀNH</text>
+    <text x="552" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#E2E8F0" text-anchor="end">UTC LIBRARY • 2025</text>
+    <text x="68" y="112" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#FBBF24">CƠ KHÍ GIAO THÔNG &amp; KỸ THUẬT Ô TÔ</text>
+      <text x="68" y="154" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">Giáo trình Kỹ thuật Ô tô</text>
+      <text x="68" y="186" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">điện, Hybrid và Hệ thống</text>
+      <text x="68" y="218" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">điều khiển tự động</text>
+
+    <line x1="68" y1="242" x2="216" y2="242" stroke="#FBBF24" stroke-width="4" stroke-linecap="round"/>
+    <text x="68" y="268" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="700" fill="#CBD5E1">TÁC GIẢ / NHÓM BIÊN SOẠN:</text>
+      <text x="68" y="292" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="600" fill="#F8FAFC">GS.TS. Phạm Văn Lang</text>
+
+    <g transform="translate(310, 540)">
+      <line x1="-190" y1="0" x2="-106" y2="0" stroke="#FBBF24" stroke-width="1.5" stroke-opacity="0.38"/>
+      <line x1="106" y1="0" x2="190" y2="0" stroke="#FBBF24" stroke-width="1.5" stroke-opacity="0.38"/>
+      <circle cx="0" cy="0" r="84" fill="#FBBF24" fill-opacity="0.10" stroke="#FBBF24" stroke-width="2" stroke-opacity="0.45"/>
+      <circle cx="0" cy="0" r="58" fill="#FBBF24" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.32"/>
+      <polygon points="0,-36 38,24 -38,24" fill="none" stroke="#FBBF24" stroke-width="2.4" stroke-opacity="0.8"/>
+      <circle cx="0" cy="2" r="12" fill="#FBBF24" fill-opacity="0.9"/>
+    </g>
+    <rect x="68" y="668" width="484" height="110" rx="8" fill="#0F172A" fill-opacity="0.52" stroke="#FFFFFF" stroke-opacity="0.18"/>
+    <text x="88" y="698" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">NXB Khoa Học &amp; Kỹ Thuật</text>
+    <text x="88" y="726" font-family="Consolas, 'Courier New', monospace" font-size="13.5" font-weight="700" fill="#FBBF24">ISBN: 978-6047631036</text>
+    <text x="88" y="754" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#CBD5E1">TRƯỜNG ĐẠI HỌC GIAO THÔNG VẬN TẢI</text>
+    <text x="532" y="754" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#FBBF24" text-anchor="end">ẤN PHẨM HỌC THUẬT</text>
   </g>
-  <rect x="64" y="685" width="486" height="96" rx="10" fill="#0F172A" fill-opacity="0.45" stroke="#FFFFFF" stroke-opacity="0.16"/>
-  <text x="84" y="722" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">NXB Khoa Học &amp; Kỹ Thuật</text>
-  <text x="84" y="752" font-family="Consolas, monospace" font-size="15" font-weight="600" fill="#FBBF24">ISBN: 978-6047631036</text>
-  <text x="530" y="752" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#CBD5E1" text-anchor="end">ĐH GIAO THÔNG VẬN TẢI</text>
 </svg>

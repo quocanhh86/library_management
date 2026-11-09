@@ -16,7 +16,34 @@ public static class DbInitializer
 
     public static async Task InitializeAsync(ApplicationDbContext context, IConfiguration? configuration = null, bool forceReset = false)
     {
-        // 0. Đảm bảo bảng dbo.book_images và các constraint chuẩn tồn tại trên SQL Server
+        // 0a. Tự động đồng bộ EF Core Migration (InitialCreate) cho cả DB mới tinh hoặc DB đã có bảng từ trước
+        if (await context.Database.CanConnectAsync())
+        {
+            const string syncMigrationHistoryIfTablesExistSql = """
+                IF OBJECT_ID(N'dbo.authors', N'U') IS NOT NULL
+                BEGIN
+                    IF OBJECT_ID(N'[__EFMigrationsHistory]', N'U') IS NULL
+                    BEGIN
+                        CREATE TABLE [__EFMigrationsHistory] (
+                            [MigrationId] nvarchar(150) NOT NULL,
+                            [ProductVersion] nvarchar(32) NOT NULL,
+                            CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY ([MigrationId])
+                        );
+                    END;
+
+                    IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20261104021457_InitialCreate')
+                    BEGIN
+                        INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+                        VALUES (N'20261104021457_InitialCreate', N'8.0.11');
+                    END;
+                END;
+                """;
+            await context.Database.ExecuteSqlRawAsync(syncMigrationHistoryIfTablesExistSql);
+        }
+
+        await context.Database.MigrateAsync();
+
+        // 0b. Đảm bảo bảng dbo.book_images và các constraint chuẩn tồn tại trên SQL Server
         const string ensureSchemaSql = """
             IF OBJECT_ID('dbo.book_images', 'U') IS NULL
             BEGIN
@@ -1959,21 +1986,20 @@ public static class DbInitializer
 
             // 3. Ảnh Mục lục (TABLE_OF_CONTENTS)
             var tocRelUrl = $"/uploads/books/seed/{slug}-toc.svg";
-            var tocSvg = BuildPageSvg(
+            var tocSvg = BuildTocPageSvg(
                 book.Title,
-                "MỤC LỤC CHI TIẾT (TABLE OF CONTENTS)",
+                scopeBadge,
+                categoryTitle,
                 [
-                    $"Lời nói đầu & Hướng dẫn sử dụng tài liệu ({scopeBadge}) ............. Trang 03",
-                    $"Chương 1: Cơ sở lý thuyết và nguyên lý nền tảng về {categoryTitle} ... Trang 12",
-                    "Chương 2: Phân tích mô hình, kiến trúc hệ thống & Tiêu chuẩn kỹ thuật . Trang 54",
-                    "Chương 3: Phương pháp tính toán, thiết kế và thuật toán tối ưu ........ Trang 118",
-                    "Chương 4: Ứng dụng thực tiễn và Nghiên cứu tình huống (Case Studies) .. Trang 186",
-                    "Chương 5: Đánh giá thực nghiệm, Kiểm định chất lượng & An toàn ........ Trang 242",
-                    "Tài liệu tham khảo, Phụ lục tra cứu & Bài tập thực hành ............... Trang 295"
+                    ("LỜI NÓI ĐẦU", $"Hướng dẫn sử dụng tài liệu ({scopeBadge})", "Trang 03"),
+                    ("CHƯƠNG 1", $"Cơ sở lý thuyết và nguyên lý nền tảng về {categoryTitle}", "Trang 12"),
+                    ("CHƯƠNG 2", "Phân tích mô hình, kiến trúc hệ thống & Tiêu chuẩn kỹ thuật", "Trang 54"),
+                    ("CHƯƠNG 3", "Phương pháp tính toán, thiết kế và thuật toán tối ưu", "Trang 118"),
+                    ("CHƯƠNG 4", "Ứng dụng thực tiễn và Nghiên cứu tình huống (Case Studies)", "Trang 186"),
+                    ("CHƯƠNG 5", "Đánh giá thực nghiệm, Kiểm định chất lượng & An toàn vận hành", "Trang 242"),
+                    ("PHỤ LỤC", "Tài liệu tham khảo, Danh mục tra cứu & Bài tập thực hành", "Trang 295")
                 ],
-                "Trang i — Mục lục ấn phẩm",
-                palette.Bg1,
-                includeDiagram: false);
+                palette.Bg1);
             await File.WriteAllTextAsync(Path.Combine(seedDir, $"{slug}-toc.svg"), tocSvg, Encoding.UTF8);
 
             // 4. Ảnh Trang đọc thử 1 (PREVIEW_PAGE)
@@ -2001,7 +2027,7 @@ public static class DbInitializer
                 "CHƯƠNG 2: MÔ HÌNH KIẾN TRÚC & BÀI TẬP THỰC HÀNH",
                 [
                     "2.1. Sơ đồ quy trình phân tích, thiết kế và kiểm định 4 giai đoạn:",
-                    "Quy trình chuẩn áp dụng cho sinh viên, kỹ sư và học viên cao học khi triển khai đề tài.",
+                    "Quy trình chuẩn áp dụng cho sinh viên, kỹ sư và học viên cao học khi triển khai đề tài thực tế.",
                     "2.2. Câu hỏi ôn tập và Bài tập thảo luận cuối chương:",
                     $"• Câu 1: Phân tích các yếu tố ảnh hưởng trực tiếp đến hiệu năng mô hình trong {categoryTitle}.",
                     $"• Câu 2: Thực hành bài toán mẫu (Mã ISBN: {isbnText}) và đối chiếu kết quả tại phòng đọc UTC."
@@ -2125,6 +2151,34 @@ public static class DbInitializer
         return "GIÁO TRÌNH CHUYÊN NGÀNH";
     }
 
+    private static string EscapeXml(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal)
+            .Replace("\"", "&quot;", StringComparison.Ordinal)
+            .Replace("'", "&#39;", StringComparison.Ordinal);
+    }
+
+    private static string TruncateText(string? value, int maxChars)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxChars
+            ? trimmed
+            : trimmed[..(maxChars - 3)].TrimEnd() + "...";
+    }
+
     private static string BuildCoverSvg(
         string title,
         string authors,
@@ -2137,50 +2191,72 @@ public static class DbInitializer
         string bg2,
         string accent)
     {
-        var lines = WrapText(title, 25, 4);
-        var titleTspans = new StringBuilder();
-        for (var i = 0; i < lines.Count; i++)
+        var titleLines = WrapText(title, 28, 5);
+        var titleBuilder = new StringBuilder();
+        var titleStartY = 154;
+        for (var i = 0; i < titleLines.Count; i++)
         {
-            var dy = i == 0 ? "0" : "40";
-            titleTspans.Append($"<tspan x=\"64\" dy=\"{dy}\">{WebUtility.HtmlEncode(lines[i])}</tspan>");
+            var y = titleStartY + i * 32;
+            titleBuilder.AppendLine(
+                $"      <text x=\"68\" y=\"{y}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"22\" font-weight=\"700\" fill=\"#FFFFFF\">{EscapeXml(titleLines[i])}</text>");
         }
 
-        var shortAuthors = authors.Length > 46 ? authors[..43] + "..." : authors;
-        var shortCategory = category.Length > 42 ? category[..39] + "..." : category;
+        var dividerY = Math.Clamp(titleStartY + (titleLines.Count - 1) * 32 + 24, 240, 318);
+        var authorLabelY = dividerY + 26;
+        var authorLines = WrapText(authors, 42, 2);
+        var authorBuilder = new StringBuilder();
+        for (var i = 0; i < authorLines.Count; i++)
+        {
+            var y = authorLabelY + 24 + i * 24;
+            authorBuilder.AppendLine(
+                $"      <text x=\"68\" y=\"{y}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"15\" font-weight=\"600\" fill=\"#F8FAFC\">{EscapeXml(authorLines[i])}</text>");
+        }
+
+        var shortCategory = TruncateText(category.ToUpperInvariant(), 44);
+        var shortPublisher = TruncateText(publisher, 42);
 
         return $$"""
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
               <defs>
                 <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0%" stop-color="{{bg1}}"/>
                   <stop offset="100%" stop-color="{{bg2}}"/>
                 </linearGradient>
                 <linearGradient id="spine" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stop-color="#020617" stop-opacity="0.55"/>
-                  <stop offset="65%" stop-color="#FFFFFF" stop-opacity="0.08"/>
-                  <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
+                  <stop offset="0%" stop-color="#020617" stop-opacity="0.58"/>
+                  <stop offset="68%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+                  <stop offset="100%" stop-color="#000000" stop-opacity="0.24"/>
                 </linearGradient>
+                <clipPath id="coverClip">
+                  <rect x="48" y="28" width="524" height="774" rx="8"/>
+                </clipPath>
               </defs>
-              <rect width="600" height="840" rx="16" fill="url(#bg)"/>
-              <rect width="34" height="840" rx="8" fill="url(#spine)"/>
-              <rect x="42" y="26" width="532" height="788" rx="12" fill="none" stroke="{{accent}}" stroke-width="2" stroke-opacity="0.45"/>
-              <rect x="64" y="56" width="215" height="32" rx="6" fill="{{accent}}"/>
-              <text x="171" y="77" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="800" fill="#0F172A" text-anchor="middle">{{WebUtility.HtmlEncode(scopeBadge)}}</text>
-              <text x="550" y="77" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#E2E8F0" text-anchor="end">UTC LIBRARY • {{WebUtility.HtmlEncode(year)}}</text>
-              <text x="64" y="130" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="{{accent}}" letter-spacing="0.5">{{WebUtility.HtmlEncode(shortCategory.ToUpperInvariant())}}</text>
-              <text x="64" y="188" font-family="Georgia, Times New Roman, serif" font-size="31" font-weight="700" fill="#FFFFFF">{{titleTspans}}</text>
-              <line x1="64" y1="358" x2="265" y2="358" stroke="{{accent}}" stroke-width="4"/>
-              <text x="64" y="395" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" fill="#F8FAFC">{{WebUtility.HtmlEncode(shortAuthors)}}</text>
-              <g transform="translate(340, 445)">
-                <circle cx="110" cy="110" r="105" fill="{{accent}}" fill-opacity="0.10" stroke="{{accent}}" stroke-width="2" stroke-opacity="0.45"/>
-                <circle cx="110" cy="110" r="72" fill="{{accent}}" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.35"/>
-                <polygon points="110,52 162,142 58,142" fill="none" stroke="{{accent}}" stroke-width="2.5" stroke-opacity="0.7"/>
-                <circle cx="110" cy="112" r="16" fill="{{accent}}" fill-opacity="0.85"/>
+              <rect width="600" height="830" fill="url(#bg)"/>
+              <rect width="28" height="830" fill="url(#spine)"/>
+              <rect x="44" y="24" width="532" height="782" rx="8" fill="none" stroke="{{accent}}" stroke-width="2" stroke-opacity="0.48"/>
+              <g clip-path="url(#coverClip)">
+                <rect x="68" y="48" width="232" height="32" rx="5" fill="{{accent}}"/>
+                <text x="184" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">{{EscapeXml(scopeBadge)}}</text>
+                <text x="552" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#E2E8F0" text-anchor="end">UTC LIBRARY • {{EscapeXml(year)}}</text>
+                <text x="68" y="112" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" font-weight="700" fill="{{accent}}">{{EscapeXml(shortCategory)}}</text>
+            {{titleBuilder}}
+                <line x1="68" y1="{{dividerY}}" x2="216" y2="{{dividerY}}" stroke="{{accent}}" stroke-width="4" stroke-linecap="round"/>
+                <text x="68" y="{{authorLabelY}}" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="700" fill="#CBD5E1">TÁC GIẢ / NHÓM BIÊN SOẠN:</text>
+            {{authorBuilder}}
+                <g transform="translate(310, 540)">
+                  <line x1="-190" y1="0" x2="-106" y2="0" stroke="{{accent}}" stroke-width="1.5" stroke-opacity="0.38"/>
+                  <line x1="106" y1="0" x2="190" y2="0" stroke="{{accent}}" stroke-width="1.5" stroke-opacity="0.38"/>
+                  <circle cx="0" cy="0" r="84" fill="{{accent}}" fill-opacity="0.10" stroke="{{accent}}" stroke-width="2" stroke-opacity="0.45"/>
+                  <circle cx="0" cy="0" r="58" fill="{{accent}}" fill-opacity="0.14" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.32"/>
+                  <polygon points="0,-36 38,24 -38,24" fill="none" stroke="{{accent}}" stroke-width="2.4" stroke-opacity="0.8"/>
+                  <circle cx="0" cy="2" r="12" fill="{{accent}}" fill-opacity="0.9"/>
+                </g>
+                <rect x="68" y="668" width="484" height="110" rx="8" fill="#0F172A" fill-opacity="0.52" stroke="#FFFFFF" stroke-opacity="0.18"/>
+                <text x="88" y="698" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">{{EscapeXml(shortPublisher)}}</text>
+                <text x="88" y="726" font-family="Consolas, 'Courier New', monospace" font-size="13.5" font-weight="700" fill="{{accent}}">ISBN: {{EscapeXml(isbn)}}</text>
+                <text x="88" y="754" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#CBD5E1">TRƯỜNG ĐẠI HỌC GIAO THÔNG VẬN TẢI</text>
+                <text x="532" y="754" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="{{accent}}" text-anchor="end">ẤN PHẨM HỌC THUẬT</text>
               </g>
-              <rect x="64" y="685" width="486" height="96" rx="10" fill="#0F172A" fill-opacity="0.45" stroke="#FFFFFF" stroke-opacity="0.16"/>
-              <text x="84" y="722" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" fill="#FFFFFF">{{WebUtility.HtmlEncode(publisher)}}</text>
-              <text x="84" y="752" font-family="Consolas, monospace" font-size="15" font-weight="600" fill="{{accent}}">ISBN: {{WebUtility.HtmlEncode(isbn)}}</text>
-              <text x="530" y="752" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#CBD5E1" text-anchor="end">ĐH GIAO THÔNG VẬN TẢI</text>
             </svg>
             """;
     }
@@ -2197,58 +2273,138 @@ public static class DbInitializer
         string bg2,
         string accent)
     {
+        var titleLines = WrapText(title, 44, 2);
+        var titleBuilder = new StringBuilder();
+        for (var i = 0; i < titleLines.Count; i++)
+        {
+            var ty = 98 + i * 26;
+            titleBuilder.AppendLine(
+                $"      <text x=\"64\" y=\"{ty}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"16.5\" font-weight=\"700\" fill=\"#FFFFFF\">{EscapeXml(titleLines[i])}</text>");
+        }
+
         var descLines = WrapText(
             string.IsNullOrWhiteSpace(description)
                 ? "Ấn phẩm học thuật chuẩn mực phục vụ công tác giảng dạy, học tập và nghiên cứu khoa học tại Trường Đại học Giao thông Vận tải."
                 : description,
-            52,
-            5);
+            54,
+            6);
         var descSvg = new StringBuilder();
-        var y = 235;
+        var y = 206;
         foreach (var line in descLines)
         {
-            descSvg.AppendLine($"<text x=\"68\" y=\"{y}\" font-family=\"Segoe UI, Arial, sans-serif\" font-size=\"15.5\" fill=\"#E2E8F0\">{WebUtility.HtmlEncode(line)}</text>");
-            y += 28;
+            descSvg.AppendLine($"      <text x=\"64\" y=\"{y}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"13.5\" fill=\"#E2E8F0\">{EscapeXml(line)}</text>");
+            y += 25;
         }
 
-        var shortTitle = title.Length > 52 ? title[..49] + "..." : title;
+        var shortCategory = TruncateText(category, 42);
+        var shortPublisher = TruncateText(publisher, 42);
 
         return $$"""
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
               <defs>
                 <linearGradient id="bgBack" x1="1" y1="0" x2="0" y2="1">
                   <stop offset="0%" stop-color="{{bg1}}"/>
                   <stop offset="100%" stop-color="{{bg2}}"/>
                 </linearGradient>
+                <clipPath id="backClip">
+                  <rect x="40" y="28" width="520" height="774" rx="8"/>
+                </clipPath>
               </defs>
-              <rect width="600" height="840" rx="16" fill="url(#bgBack)"/>
-              <rect x="32" y="28" width="536" height="784" rx="12" fill="none" stroke="{{accent}}" stroke-width="1.8" stroke-opacity="0.4"/>
-              <text x="68" y="82" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="{{accent}}" letter-spacing="1">GIỚI THIỆU NỘI DUNG ẤN PHẨM (BÌA SAU)</text>
-              <text x="68" y="122" font-family="Georgia, serif" font-size="21" font-weight="700" fill="#FFFFFF">{{WebUtility.HtmlEncode(shortTitle)}}</text>
-              <line x1="68" y1="148" x2="532" y2="148" stroke="{{accent}}" stroke-width="2" stroke-opacity="0.6"/>
-              <text x="68" y="192" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#F8FAFC">Tóm tắt học thuật:</text>
-              {{descSvg}}
-              <rect x="68" y="405" width="464" height="165" rx="10" fill="#0F172A" fill-opacity="0.42" stroke="#FFFFFF" stroke-opacity="0.15"/>
-              <text x="90" y="440" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="{{accent}}">THÔNG TIN LƯU HÀNH TẠI THƯ VIỆN ĐH GTVT:</text>
-              <text x="90" y="472" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Chuyên ngành: {{WebUtility.HtmlEncode(category)}}</text>
-              <text x="90" y="500" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Quy cách: Khổ 16x24 cm • Số trang: {{pageCount}} trang • Năm XB: {{WebUtility.HtmlEncode(year)}}</text>
-              <text x="90" y="528" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Đối tượng: Sinh viên, Học viên Cao học, Nghiên cứu sinh &amp; Giảng viên</text>
-              <text x="90" y="554" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#F1F5F9">• Đơn vị phát hành: {{WebUtility.HtmlEncode(publisher)}}</text>
-              <rect x="305" y="625" width="227" height="135" rx="8" fill="#FFFFFF"/>
-              <text x="418" y="648" font-family="Consolas, monospace" font-size="12" font-weight="700" fill="#0F172A" text-anchor="middle">ISBN {{WebUtility.HtmlEncode(isbn)}}</text>
-              <g fill="#0F172A" transform="translate(328, 658)">
-                <rect x="0" y="0" width="4" height="68"/><rect x="7" y="0" width="2" height="68"/><rect x="13" y="0" width="6" height="68"/>
-                <rect x="23" y="0" width="2" height="68"/><rect x="29" y="0" width="4" height="68"/><rect x="37" y="0" width="8" height="68"/>
-                <rect x="49" y="0" width="2" height="68"/><rect x="55" y="0" width="4" height="68"/><rect x="63" y="0" width="6" height="68"/>
-                <rect x="73" y="0" width="2" height="68"/><rect x="79" y="0" width="4" height="68"/><rect x="87" y="0" width="2" height="68"/>
-                <rect x="93" y="0" width="8" height="68"/><rect x="105" y="0" width="4" height="68"/><rect x="113" y="0" width="2" height="68"/>
-                <rect x="119" y="0" width="6" height="68"/><rect x="129" y="0" width="4" height="68"/><rect x="137" y="0" width="2" height="68"/>
-                <rect x="143" y="0" width="6" height="68"/><rect x="153" y="0" width="4" height="68"/><rect x="161" y="0" width="2" height="68"/>
-                <rect x="167" y="0" width="6" height="68"/><rect x="176" y="0" width="3" height="68"/>
+              <rect width="600" height="830" fill="url(#bgBack)"/>
+              <rect x="36" y="24" width="528" height="782" rx="8" fill="none" stroke="{{accent}}" stroke-width="1.8" stroke-opacity="0.45"/>
+              <g clip-path="url(#backClip)">
+                <text x="64" y="66" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="{{accent}}">GIỚI THIỆU NỘI DUNG ẤN PHẨM (BÌA SAU)</text>
+            {{titleBuilder}}
+                <line x1="64" y1="146" x2="536" y2="146" stroke="{{accent}}" stroke-width="1.8" stroke-opacity="0.6"/>
+                <text x="64" y="176" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="#F8FAFC">Tóm tắt nội dung học thuật:</text>
+            {{descSvg}}
+                <rect x="64" y="382" width="472" height="184" rx="8" fill="#0F172A" fill-opacity="0.48" stroke="#FFFFFF" stroke-opacity="0.16"/>
+                <text x="84" y="414" font-family="'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="700" fill="{{accent}}">THÔNG TIN LƯU HÀNH TẠI THƯ VIỆN ĐH GTVT:</text>
+                <text x="84" y="446" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Chuyên ngành: {{EscapeXml(shortCategory)}}</text>
+                <text x="84" y="476" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Quy cách: Khổ 16x24 cm • Số trang: {{pageCount}} trang • Năm XB: {{EscapeXml(year)}}</text>
+                <text x="84" y="506" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Đối tượng: Sinh viên, Học viên Cao học &amp; Giảng viên UTC</text>
+                <text x="84" y="536" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#F1F5F9">• Đơn vị phát hành: {{EscapeXml(shortPublisher)}}</text>
+
+                <text x="64" y="632" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">TRƯỜNG ĐH GIAO THÔNG VẬN TẢI</text>
+                <text x="64" y="658" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" fill="#E2E8F0">Trung tâm Thông tin - Thư viện</text>
+                <text x="64" y="682" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#CBD5E1">Số 3 Cầu Giấy, Đống Đa, Hà Nội</text>
+                <rect x="64" y="702" width="216" height="30" rx="5" fill="#0F172A" fill-opacity="0.55" stroke="{{accent}}" stroke-opacity="0.5"/>
+                <text x="172" y="722" font-family="'Segoe UI', Arial, sans-serif" font-size="11" font-weight="700" fill="{{accent}}" text-anchor="middle">TÀI LIỆU HỌC THUẬT CHUẨN</text>
+
+                <rect x="312" y="598" width="224" height="142" rx="8" fill="#FFFFFF"/>
+                <text x="424" y="620" font-family="Consolas, 'Courier New', monospace" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">ISBN {{EscapeXml(isbn)}}</text>
+                <g fill="#0F172A" transform="translate(334, 630)">
+                  <rect x="0" y="0" width="4" height="68"/><rect x="7" y="0" width="2" height="68"/><rect x="13" y="0" width="6" height="68"/>
+                  <rect x="23" y="0" width="2" height="68"/><rect x="29" y="0" width="4" height="68"/><rect x="37" y="0" width="8" height="68"/>
+                  <rect x="49" y="0" width="2" height="68"/><rect x="55" y="0" width="4" height="68"/><rect x="63" y="0" width="6" height="68"/>
+                  <rect x="73" y="0" width="2" height="68"/><rect x="79" y="0" width="4" height="68"/><rect x="87" y="0" width="2" height="68"/>
+                  <rect x="93" y="0" width="8" height="68"/><rect x="105" y="0" width="4" height="68"/><rect x="113" y="0" width="2" height="68"/>
+                  <rect x="119" y="0" width="6" height="68"/><rect x="129" y="0" width="4" height="68"/><rect x="137" y="0" width="2" height="68"/>
+                  <rect x="143" y="0" width="6" height="68"/><rect x="153" y="0" width="4" height="68"/><rect x="161" y="0" width="2" height="68"/>
+                  <rect x="167" y="0" width="6" height="68"/><rect x="176" y="0" width="3" height="68"/>
+                </g>
+                <text x="424" y="722" font-family="Consolas, 'Courier New', monospace" font-size="12" font-weight="700" fill="#1E293B" text-anchor="middle">{{EscapeXml(isbn)}}</text>
               </g>
-              <text x="418" y="746" font-family="Consolas, monospace" font-size="13" font-weight="700" fill="#1E293B" text-anchor="middle">9 786047 625008</text>
-              <text x="68" y="700" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">TRƯỜNG ĐẠI HỌC GIAO THÔNG VẬN TẢI</text>
-              <text x="68" y="726" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#CBD5E1">Trung tâm Thông tin - Thư viện (Số 3 Cầu Giấy, Hà Nội)</text>
+            </svg>
+            """;
+    }
+
+    private static string BuildTocPageSvg(
+        string bookTitle,
+        string scopeBadge,
+        string categoryTitle,
+        IReadOnlyList<(string Code, string Title, string Page)> items,
+        string accentColor)
+    {
+        var rowsBuilder = new StringBuilder();
+        var currentY = 192;
+
+        foreach (var item in items)
+        {
+            var wrappedTitle = WrapText(item.Title, 44, 2);
+            rowsBuilder.AppendLine(
+                $"      <rect x=\"64\" y=\"{currentY - 15}\" width=\"92\" height=\"22\" rx=\"4\" fill=\"{accentColor}\" fill-opacity=\"0.12\"/>");
+            rowsBuilder.AppendLine(
+                $"      <text x=\"110\" y=\"{currentY}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"11\" font-weight=\"700\" fill=\"{accentColor}\" text-anchor=\"middle\">{EscapeXml(item.Code)}</text>");
+            rowsBuilder.AppendLine(
+                $"      <text x=\"536\" y=\"{currentY}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"12.5\" font-weight=\"700\" fill=\"{accentColor}\" text-anchor=\"end\">{EscapeXml(item.Page)}</text>");
+
+            for (var i = 0; i < wrappedTitle.Count; i++)
+            {
+                var lineY = currentY + i * 22;
+                rowsBuilder.AppendLine(
+                    $"      <text x=\"168\" y=\"{lineY}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"13.5\" font-weight=\"{(i == 0 ? "600" : "400")}\" fill=\"#1E293B\">{EscapeXml(wrappedTitle[i])}</text>");
+            }
+
+            var bottomRuleY = currentY + (wrappedTitle.Count - 1) * 22 + 14;
+            rowsBuilder.AppendLine(
+                $"      <line x1=\"64\" y1=\"{bottomRuleY}\" x2=\"536\" y2=\"{bottomRuleY}\" stroke=\"#E2E8F0\" stroke-width=\"1\" stroke-dasharray=\"3,3\"/>");
+            currentY = bottomRuleY + 26;
+        }
+
+        var shortTitle = TruncateText(bookTitle, 54);
+        var shortCategory = TruncateText($"{scopeBadge} • {categoryTitle}", 58);
+
+        return $$"""
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
+              <defs>
+                <clipPath id="tocClip">
+                  <rect x="40" y="36" width="520" height="758"/>
+                </clipPath>
+              </defs>
+              <rect width="600" height="830" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+              <rect x="36" y="32" width="528" height="766" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+              <g clip-path="url(#tocClip)">
+                <text x="64" y="68" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#64748B">{{EscapeXml(shortTitle)}}</text>
+                <line x1="64" y1="82" x2="536" y2="82" stroke="#CBD5E1" stroke-width="1.5"/>
+                <rect x="64" y="100" width="472" height="52" rx="6" fill="{{accentColor}}" fill-opacity="0.09" stroke="{{accentColor}}" stroke-opacity="0.25"/>
+                <text x="80" y="123" font-family="'Segoe UI', Arial, sans-serif" font-size="14.5" font-weight="700" fill="{{accentColor}}">MỤC LỤC CHI TIẾT (TABLE OF CONTENTS)</text>
+                <text x="80" y="142" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#475569">{{EscapeXml(shortCategory)}}</text>
+            {{rowsBuilder}}
+                <line x1="64" y1="736" x2="536" y2="736" stroke="#CBD5E1" stroke-width="1"/>
+                <text x="64" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
+                <text x="536" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#475569" text-anchor="end">Trang i — Mục lục ấn phẩm</text>
+              </g>
             </svg>
             """;
     }
@@ -2262,60 +2418,88 @@ public static class DbInitializer
         bool includeDiagram)
     {
         var bodyBuilder = new StringBuilder();
-        var currentY = 205;
+        var currentY = 182;
+        var maxBodyY = includeDiagram ? 490 : 700;
 
         foreach (var para in paragraphs)
         {
-            var wrapped = WrapText(para, 58, 3);
+            var isHeadingLine = para.StartsWith("1.", StringComparison.Ordinal) || para.StartsWith("2.", StringComparison.Ordinal);
+            var wrapped = WrapText(para, 56, 5);
             foreach (var line in wrapped)
             {
-                bodyBuilder.AppendLine($"<text x=\"65\" y=\"{currentY}\" font-family=\"Georgia, serif\" font-size=\"15.5\" fill=\"#1E293B\">{WebUtility.HtmlEncode(line)}</text>");
-                currentY += 26;
+                if (currentY > maxBodyY)
+                {
+                    break;
+                }
+                var weight = isHeadingLine ? "700" : "400";
+                var color = isHeadingLine ? "#0F172A" : "#1E293B";
+                bodyBuilder.AppendLine(
+                    $"      <text x=\"64\" y=\"{currentY}\" font-family=\"'Segoe UI', Arial, sans-serif\" font-size=\"13.5\" font-weight=\"{weight}\" fill=\"{color}\">{EscapeXml(line)}</text>");
+                currentY += 23;
             }
-            currentY += 14;
+            currentY += 10;
         }
 
         if (includeDiagram)
         {
-            var diagY = Math.Min(currentY + 10, 520);
+            var diagY = Math.Clamp(currentY + 8, 460, 520);
             bodyBuilder.AppendLine($$"""
-                <g transform="translate(65, {{diagY}})">
-                  <rect x="0" y="0" width="470" height="150" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
-                  <text x="235" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="{{accentColor}}" text-anchor="middle">HÌNH 2.1 — SƠ ĐỒ KIẾN TRÚC &amp; QUY TRÌNH THỰC THI TIÊU CHUẨN</text>
-                  <rect x="18" y="48" width="96" height="54" rx="6" fill="{{accentColor}}" fill-opacity="0.12" stroke="{{accentColor}}" stroke-width="1.5"/>
-                  <text x="66" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">1. Khảo sát</text>
-                  <text x="66" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Đặc tả</text>
-                  <text x="124" y="80" font-family="Segoe UI, sans-serif" font-size="16" font-weight="700" fill="{{accentColor}}">→</text>
-                  <rect x="138" y="48" width="96" height="54" rx="6" fill="{{accentColor}}" fill-opacity="0.12" stroke="{{accentColor}}" stroke-width="1.5"/>
-                  <text x="186" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">2. Mô hình</text>
-                  <text x="186" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Thiết kế</text>
-                  <text x="244" y="80" font-family="Segoe UI, sans-serif" font-size="16" font-weight="700" fill="{{accentColor}}">→</text>
-                  <rect x="258" y="48" width="96" height="54" rx="6" fill="{{accentColor}}" fill-opacity="0.12" stroke="{{accentColor}}" stroke-width="1.5"/>
-                  <text x="306" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">3. Thực thi</text>
-                  <text x="306" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Tối ưu</text>
-                  <text x="364" y="80" font-family="Segoe UI, sans-serif" font-size="16" font-weight="700" fill="{{accentColor}}">→</text>
-                  <rect x="376" y="48" width="78" height="54" rx="6" fill="{{accentColor}}" fill-opacity="0.18" stroke="{{accentColor}}" stroke-width="1.5"/>
-                  <text x="415" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">4. Kiểm định</text>
-                  <text x="415" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Nghiệm thu</text>
-                  <text x="235" y="132" font-family="Georgia, serif" font-size="12" font-style="italic" fill="#64748B" text-anchor="middle">Chú thích: Quy trình chuẩn áp dụng trong đào tạo và nghiên cứu thực nghiệm tại UTC.</text>
+                <g transform="translate(64, {{diagY}})">
+                  <rect x="0" y="0" width="472" height="162" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+                  <text x="236" y="26" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="{{accentColor}}" text-anchor="middle">HÌNH 2.1 — SƠ ĐỒ KIẾN TRÚC &amp; QUY TRÌNH THỰC THI TIÊU CHUẨN</text>
+
+                  <rect x="18" y="44" width="94" height="58" rx="6" fill="{{accentColor}}" fill-opacity="0.11" stroke="{{accentColor}}" stroke-width="1.5"/>
+                  <text x="65" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">1. Khảo sát</text>
+                  <text x="65" y="88" font-family="'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="600" fill="#475569" text-anchor="middle">&amp; Đặc tả</text>
+
+                  <line x1="114" y1="73" x2="124" y2="73" stroke="{{accentColor}}" stroke-width="2"/>
+                  <polygon points="124,69 130,73 124,77" fill="{{accentColor}}"/>
+
+                  <rect x="132" y="44" width="94" height="58" rx="6" fill="{{accentColor}}" fill-opacity="0.11" stroke="{{accentColor}}" stroke-width="1.5"/>
+                  <text x="179" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">2. Mô hình</text>
+                  <text x="179" y="88" font-family="'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="600" fill="#475569" text-anchor="middle">&amp; Thiết kế</text>
+
+                  <line x1="228" y1="73" x2="238" y2="73" stroke="{{accentColor}}" stroke-width="2"/>
+                  <polygon points="238,69 244,73 238,77" fill="{{accentColor}}"/>
+
+                  <rect x="246" y="44" width="94" height="58" rx="6" fill="{{accentColor}}" fill-opacity="0.11" stroke="{{accentColor}}" stroke-width="1.5"/>
+                  <text x="293" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">3. Thực thi</text>
+                  <text x="293" y="88" font-family="'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="600" fill="#475569" text-anchor="middle">&amp; Tối ưu</text>
+
+                  <line x1="342" y1="73" x2="352" y2="73" stroke="{{accentColor}}" stroke-width="2"/>
+                  <polygon points="352,69 358,73 352,77" fill="{{accentColor}}"/>
+
+                  <rect x="360" y="44" width="94" height="58" rx="6" fill="{{accentColor}}" fill-opacity="0.16" stroke="{{accentColor}}" stroke-width="1.5"/>
+                  <text x="407" y="69" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">4. Kiểm định</text>
+                  <text x="407" y="88" font-family="'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="600" fill="#475569" text-anchor="middle">&amp; Nghiệm thu</text>
+
+                  <text x="236" y="134" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-style="italic" fill="#64748B" text-anchor="middle">Chú thích: Quy trình chuẩn áp dụng trong đào tạo và nghiên cứu thực nghiệm tại UTC.</text>
                 </g>
                 """);
         }
 
-        var shortTitle = bookTitle.Length > 52 ? bookTitle[..49] + "..." : bookTitle;
+        var shortTitle = TruncateText(bookTitle, 54);
+        var shortHeading = TruncateText(heading, 52);
 
         return $$"""
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
-              <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
-              <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
-              <text x="65" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748B">{{WebUtility.HtmlEncode(shortTitle)}}</text>
-              <line x1="65" y1="90" x2="535" y2="90" stroke="#CBD5E1" stroke-width="1.5"/>
-              <rect x="65" y="114" width="470" height="44" rx="6" fill="{{accentColor}}" fill-opacity="0.09" stroke="{{accentColor}}" stroke-opacity="0.25"/>
-              <text x="80" y="142" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" font-weight="700" fill="{{accentColor}}">{{WebUtility.HtmlEncode(heading)}}</text>
-              {{bodyBuilder}}
-              <line x1="65" y1="742" x2="535" y2="742" stroke="#CBD5E1" stroke-width="1"/>
-              <text x="65" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
-              <text x="535" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#475569" text-anchor="end">{{WebUtility.HtmlEncode(footerPage)}}</text>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 830" width="600" height="830">
+              <defs>
+                <clipPath id="pageClip">
+                  <rect x="40" y="36" width="520" height="758"/>
+                </clipPath>
+              </defs>
+              <rect width="600" height="830" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+              <rect x="36" y="32" width="528" height="766" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+              <g clip-path="url(#pageClip)">
+                <text x="64" y="68" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="700" fill="#64748B">{{EscapeXml(shortTitle)}}</text>
+                <line x1="64" y1="82" x2="536" y2="82" stroke="#CBD5E1" stroke-width="1.5"/>
+                <rect x="64" y="102" width="472" height="44" rx="6" fill="{{accentColor}}" fill-opacity="0.09" stroke="{{accentColor}}" stroke-opacity="0.25"/>
+                <text x="80" y="129" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="{{accentColor}}">{{EscapeXml(shortHeading)}}</text>
+            {{bodyBuilder}}
+                <line x1="64" y1="736" x2="536" y2="736" stroke="#CBD5E1" stroke-width="1"/>
+                <text x="64" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
+                <text x="536" y="764" font-family="'Segoe UI', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#475569" text-anchor="end">{{EscapeXml(footerPage)}}</text>
+              </g>
             </svg>
             """;
     }
@@ -2326,16 +2510,27 @@ public static class DbInitializer
         var lines = new List<string>();
         var current = new StringBuilder();
 
-        foreach (var word in words)
+        for (var i = 0; i < words.Length; i++)
         {
-            if (current.Length + word.Length + 1 > maxCharsPerLine && current.Length > 0)
+            var word = words[i];
+            var needed = current.Length == 0 ? word.Length : current.Length + 1 + word.Length;
+
+            if (needed > maxCharsPerLine && current.Length > 0)
             {
-                lines.Add(current.ToString());
-                current.Clear();
                 if (lines.Count >= maxLines - 1)
                 {
+                    var finalLine = current.ToString();
+                    if (finalLine.Length + 3 > maxCharsPerLine)
+                    {
+                        finalLine = finalLine[..Math.Max(1, maxCharsPerLine - 3)].TrimEnd();
+                    }
+                    lines.Add(finalLine + "...");
+                    current.Clear();
                     break;
                 }
+
+                lines.Add(current.ToString());
+                current.Clear();
             }
 
             if (current.Length > 0)
