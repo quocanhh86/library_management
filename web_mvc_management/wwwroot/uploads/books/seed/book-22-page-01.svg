@@ -1,0 +1,24 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+  <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+  <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="65" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748B">Kỷ yếu Hội nghị Khoa học C&#244;ng nghệ Giao th&#244;ng Vận...</text>
+  <line x1="65" y1="90" x2="535" y2="90" stroke="#CBD5E1" stroke-width="1.5"/>
+  <rect x="65" y="114" width="470" height="44" rx="6" fill="#3B2F1E" fill-opacity="0.09" stroke="#3B2F1E" stroke-opacity="0.25"/>
+  <text x="80" y="142" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#3B2F1E">CHƯƠNG 1: TỔNG QUAN &amp; CƠ SỞ L&#221; THUYẾT CỐT L&#213;I</text>
+  <text x="65" y="205" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.1. Đặt vấn đề v&#224; bối cảnh nghi&#234;n cứu (NXB Th&#244;ng Tin &amp;</text>
+<text x="65" y="231" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Truyền Th&#244;ng, 2024):</text>
+<text x="65" y="271" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Tập hợp 42 b&#224;i b&#225;o khoa học phản biện độc lập về chuyển</text>
+<text x="65" y="297" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">đổi xanh trong vận tải đa phương thức, cảng th&#244;ng minh v&#224;</text>
+<text x="65" y="337" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.2. T&#225;c giả bi&#234;n soạn: GS.TS. Từ Sỹ S&#249;a, GS.TS. Nguyễn</text>
+<text x="65" y="363" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Thanh Thủy.</text>
+<text x="65" y="403" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">1.3. C&#225;c nguy&#234;n l&#253; v&#224; ti&#234;u chuẩn kỹ thuật bắt buộc tu&#226;n</text>
+<text x="65" y="429" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">thủ:</text>
+<text x="65" y="469" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• Đảm bảo t&#237;nh ch&#237;nh x&#225;c to&#225;n học, to&#224;n vẹn dữ liệu v&#224; khả</text>
+<text x="65" y="495" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">năng mở rộng hệ thống.</text>
+<text x="65" y="535" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• Kết hợp chặt chẽ giữa m&#244; h&#236;nh l&#253; thuyết với quy chuẩn kỹ</text>
+<text x="65" y="561" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">thuật quốc gia (TCVN / Quốc tế).</text>
+
+  <line x1="65" y1="742" x2="535" y2="742" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="65" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
+  <text x="535" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#475569" text-anchor="end">Trang 12 — Đọc thử Chương 1</text>
+</svg>

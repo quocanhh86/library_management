@@ -46,9 +46,48 @@ public sealed class FastLocalSqlConnectionInterceptor : DbConnectionInterceptor
     }
 }
 
+/// <summary>
+/// Interceptor thực thi DbCommand qua đường dẫn đồng bộ trên kết nối Loopback cục bộ
+/// nhằm triệt tiêu hoàn toàn lỗi Win32Exception (258) wait timeout của native SNI.dll
+/// trong EndExecuteNonQueryAsync / EndExecuteReaderAsync trên .NET 10.0.
+/// </summary>
+public sealed class FastLocalSqlCommandInterceptor : DbCommandInterceptor
+{
+    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<DbDataReader> result,
+        CancellationToken cancellationToken = default)
+    {
+        var reader = command.ExecuteReader();
+        return ValueTask.FromResult(InterceptionResult<DbDataReader>.SuppressWithResult(reader));
+    }
+
+    public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = command.ExecuteNonQuery();
+        return ValueTask.FromResult(InterceptionResult<int>.SuppressWithResult(rows));
+    }
+
+    public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<object> result,
+        CancellationToken cancellationToken = default)
+    {
+        var scalar = command.ExecuteScalar();
+        return ValueTask.FromResult(InterceptionResult<object>.SuppressWithResult(scalar!));
+    }
+}
+
 public static class ServiceCollectionExtensions
 {
     private static readonly FastLocalSqlConnectionInterceptor SqlConnectionInterceptor = new();
+    private static readonly FastLocalSqlCommandInterceptor SqlCommandInterceptor = new();
 
     /// <summary>
     /// Đăng ký DbContext với kết nối bảo mật và tối ưu tốc độ kết nối IPv4 Loopback.
@@ -69,7 +108,7 @@ public static class ServiceCollectionExtensions
                     sqlOptions.CommandTimeout(commandTimeout);
                 }
             )
-            .AddInterceptors(SqlConnectionInterceptor)
+            .AddInterceptors(SqlConnectionInterceptor, SqlCommandInterceptor)
             .ConfigureWarnings(w => w.Ignore(RelationalEventId.MultipleCollectionIncludeWarning))
         );
 

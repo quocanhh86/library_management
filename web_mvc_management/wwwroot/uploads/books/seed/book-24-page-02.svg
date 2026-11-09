@@ -1,0 +1,41 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" width="600" height="840">
+  <rect width="600" height="840" rx="12" fill="#FCFBF7" stroke="#CBD5E1" stroke-width="3"/>
+  <rect x="36" y="36" width="528" height="768" fill="none" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="65" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748B">Journal of Transportation Science and Engineering...</text>
+  <line x1="65" y1="90" x2="535" y2="90" stroke="#CBD5E1" stroke-width="1.5"/>
+  <rect x="65" y="114" width="470" height="44" rx="6" fill="#312E81" fill-opacity="0.09" stroke="#312E81" stroke-opacity="0.25"/>
+  <text x="80" y="142" font-family="Segoe UI, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#312E81">CHƯƠNG 2: M&#212; H&#204;NH KIẾN TR&#218;C &amp; B&#192;I TẬP THỰC H&#192;NH</text>
+  <text x="65" y="205" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">2.1. Sơ đồ quy tr&#236;nh ph&#226;n t&#237;ch, thiết kế v&#224; kiểm định 4</text>
+<text x="65" y="231" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">giai đoạn:</text>
+<text x="65" y="271" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">Quy tr&#236;nh chuẩn &#225;p dụng cho sinh vi&#234;n, kỹ sư v&#224; học vi&#234;n</text>
+<text x="65" y="297" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">cao học khi triển khai đề t&#224;i.</text>
+<text x="65" y="337" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">2.2. C&#226;u hỏi &#244;n tập v&#224; B&#224;i tập thảo luận cuối chương:</text>
+<text x="65" y="377" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• C&#226;u 1: Ph&#226;n t&#237;ch c&#225;c yếu tố ảnh hưởng trực tiếp đến hiệu</text>
+<text x="65" y="403" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">năng m&#244; h&#236;nh trong Cơ kh&#237; Giao th&#244;ng &amp; Kỹ thuật &#212; t&#244;.</text>
+<text x="65" y="443" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">• C&#226;u 2: Thực h&#224;nh b&#224;i to&#225;n mẫu (M&#227; ISBN: 978-6047625080)</text>
+<text x="65" y="469" font-family="Georgia, serif" font-size="15.5" fill="#1E293B">v&#224; đối chiếu kết quả tại ph&#242;ng đọc UTC.</text>
+<g transform="translate(65, 519)">
+  <rect x="0" y="0" width="470" height="150" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+  <text x="235" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#312E81" text-anchor="middle">HÌNH 2.1 — SƠ ĐỒ KIẾN TRÚC &amp; QUY TRÌNH THỰC THI TIÊU CHUẨN</text>
+  <rect x="18" y="48" width="96" height="54" rx="6" fill="#312E81" fill-opacity="0.12" stroke="#312E81" stroke-width="1.5"/>
+  <text x="66" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">1. Khảo sát</text>
+  <text x="66" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Đặc tả</text>
+  <text x="124" y="80" font-family="Segoe UI, sans-serif" font-size="16" font-weight="700" fill="#312E81">→</text>
+  <rect x="138" y="48" width="96" height="54" rx="6" fill="#312E81" fill-opacity="0.12" stroke="#312E81" stroke-width="1.5"/>
+  <text x="186" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">2. Mô hình</text>
+  <text x="186" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Thiết kế</text>
+  <text x="244" y="80" font-family="Segoe UI, sans-serif" font-size="16" font-weight="700" fill="#312E81">→</text>
+  <rect x="258" y="48" width="96" height="54" rx="6" fill="#312E81" fill-opacity="0.12" stroke="#312E81" stroke-width="1.5"/>
+  <text x="306" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">3. Thực thi</text>
+  <text x="306" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Tối ưu</text>
+  <text x="364" y="80" font-family="Segoe UI, sans-serif" font-size="16" font-weight="700" fill="#312E81">→</text>
+  <rect x="376" y="48" width="78" height="54" rx="6" fill="#312E81" fill-opacity="0.18" stroke="#312E81" stroke-width="1.5"/>
+  <text x="415" y="72" font-family="Segoe UI, sans-serif" font-size="11.5" font-weight="700" fill="#0F172A" text-anchor="middle">4. Kiểm định</text>
+  <text x="415" y="90" font-family="Segoe UI, sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Nghiệm thu</text>
+  <text x="235" y="132" font-family="Georgia, serif" font-size="12" font-style="italic" fill="#64748B" text-anchor="middle">Chú thích: Quy trình chuẩn áp dụng trong đào tạo và nghiên cứu thực nghiệm tại UTC.</text>
+</g>
+
+  <line x1="65" y1="742" x2="535" y2="742" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="65" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#94A3B8">THƯ VIỆN ĐẠI HỌC GIAO THÔNG VẬN TẢI — BẢN ĐỌC THỬ</text>
+  <text x="535" y="772" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#475569" text-anchor="end">Trang 25 — Đọc thử Chương 2</text>
+</svg>
