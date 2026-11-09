@@ -339,6 +339,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICirculationService, CirculationService>();
         services.AddScoped<IReaderAdminService, ReaderAdminService>();
         services.AddScoped<IReaderPortalService, ReaderPortalService>();
+        services.AddScoped<IReportService, ReportService>();
 
         return services;
     }

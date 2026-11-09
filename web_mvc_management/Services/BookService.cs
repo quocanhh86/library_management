@@ -173,7 +173,7 @@ public class BookService(
 
         return new CatalogViewModel
         {
-            Books = [.. mapped.Skip((safePage - 1) * pageSize).Take(pageSize)],
+            Books = [.. mapped.Skip(PaginationParams.CalculateSkip(safePage, pageSize)).Take(pageSize)],
             Topics = topics,
             Authors = authors,
             Publishers = publishers,

@@ -7,6 +7,14 @@ namespace web_mvc_management.Helper;
 /// </summary>
 public static class DateTimeHelper
 {
+    // Translate a local calendar boundary to UTC, including DateOnly.Min/MaxValue.
+    public static DateTimeOffset UtcDayBoundary(DateOnly date, TimeSpan offset, bool endOfDay = false)
+    {
+        var localTicks = date.ToDateTime(endOfDay ? TimeOnly.MaxValue : TimeOnly.MinValue).Ticks;
+        var utcTicks = Math.Clamp(localTicks - offset.Ticks, DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks);
+        return new DateTimeOffset(utcTicks, TimeSpan.Zero);
+    }
+
     public static string ToVietnameseDateString(DateTimeOffset? dateTime) =>
         dateTime?.ToString(AppConstants.DefaultDateFormat) ?? "-";
 

@@ -120,3 +120,7 @@ scripts/
 docs/*
 !docs/*.md
 MODULE_STATUS.md
+
+screenshots/
+home.png
+

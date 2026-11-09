@@ -1,0 +1,216 @@
+@model BorrowSlipDetailViewModel
+@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = $"Chi tiết phiếu mượn {Model.SlipCode}";
+    ViewData["Screen"] = ScreenId.CirculationHistory;
+}
+
+<div class="staff-page-head">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <a href="@Screens.GetPath(ScreenId.CirculationHistory)" class="btn btn-quiet btn-sm">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Quay lại danh sách
+            </a>
+            <span class="badge bg-secondary-subtle text-secondary font-monospace">@Model.SlipCode</span>
+        </div>
+        <h1 class="h3 mb-0">Chi tiết phiếu mượn</h1>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/Circulation/History/Print/@Model.Id" target="_blank" class="btn btn-quiet">
+            <i class="bi bi-printer me-1" aria-hidden="true"></i>In phiếu mượn
+        </a>
+        @if (Model.CanCancel)
+        {
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelSlipModal">
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Hủy phiếu này
+            </button>
+        }
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-5">
+        <div class="panel h-100">
+            <h2 class="h6 text-uppercase text-muted-ink fw-semibold mb-3">
+                <i class="bi bi-person-badge me-2" aria-hidden="true"></i>Thông tin độc giả
+            </h2>
+            <div class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">
+                <div class="rounded-circle bg-primary-subtle text-primary p-3 fs-3">
+                    <i class="bi bi-person" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="fw-bold fs-5">@Model.ReaderName</div>
+                    <div class="text-muted-ink fs-sm num">
+                        Mã thẻ: <strong class="text-body font-monospace">@Model.CardNo</strong>
+                    </div>
+                </div>
+            </div>
+            <dl class="row mb-0 fs-sm">
+                <dt class="col-sm-5 text-muted-ink">Loại độc giả:</dt>
+                <dd class="col-sm-7"><span class="badge bg-secondary-subtle text-secondary">@Model.ReaderTypeName</span></dd>
+
+                <dt class="col-sm-5 text-muted-ink">Email:</dt>
+                <dd class="col-sm-7">@(string.IsNullOrEmpty(Model.ReaderEmail) ? "—" : Model.ReaderEmail)</dd>
+
+                <dt class="col-sm-5 text-muted-ink">Số điện thoại:</dt>
+                <dd class="col-sm-7 num">@(string.IsNullOrEmpty(Model.ReaderPhone) ? "—" : Model.ReaderPhone)</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="panel h-100">
+            <h2 class="h6 text-uppercase text-muted-ink fw-semibold mb-3">
+                <i class="bi bi-file-earmark-text me-2" aria-hidden="true"></i>Thông tin phiếu mượn
+            </h2>
+            <dl class="row mb-0 fs-sm">
+                <dt class="col-sm-4 text-muted-ink">Thời gian lập phiếu:</dt>
+                <dd class="col-sm-8 num">@DateTimeHelper.ToVietnameseDateTimeString(Model.BorrowedAt)</dd>
+
+                <dt class="col-sm-4 text-muted-ink">Cán bộ lập phiếu:</dt>
+                <dd class="col-sm-8 fw-medium">@Model.IssuedByStaffName</dd>
+
+                <dt class="col-sm-4 text-muted-ink">Tiến độ tài liệu:</dt>
+                <dd class="col-sm-8">
+                    <span class="num fw-bold">@Model.ReturnedBooks / @Model.TotalBooks cuốn</span>
+                    @if (Model.TotalBooks > 0 && Model.ReturnedBooks >= Model.TotalBooks)
+                    {
+                        <span class="badge bg-success-subtle text-success ms-2">Đã trả đủ</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-primary-subtle text-primary ms-2">Đang mượn</span>
+                    }
+                </dd>
+
+                <dt class="col-sm-4 text-muted-ink">Ghi chú khi mượn:</dt>
+                <dd class="col-sm-8">@(string.IsNullOrWhiteSpace(Model.Note) ? "Không có ghi chú." : Model.Note)</dd>
+            </dl>
+        </div>
+    </div>
+</div>
+
+<div class="panel mb-4">
+    <div class="panel-head d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Danh sách tài liệu trong phiếu (@Model.TotalBooks cuốn)</h2>
+    </div>
+
+    <div class="table-frame">
+        <table class="table table-hover data-table mb-0">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 50px;">STT</th>
+                    <th scope="col">Mã vạch</th>
+                    <th scope="col">Tên tài liệu / Vị trí</th>
+                    <th scope="col" class="num">Hạn trả</th>
+                    <th scope="col" class="text-center">Gia hạn</th>
+                    <th scope="col">Trạng thái trả</th>
+                    <th scope="col">Cán bộ nhận trả</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ int index = 1; }
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td class="num text-muted-ink">@(index++)</td>
+                        <td>
+                            <span class="num font-monospace fw-semibold">@item.Barcode</span>
+                            @if (item.Price.HasValue)
+                            {
+                                <div class="fs-xs text-muted-ink">@CurrencyHelper.ToVnd(item.Price.Value)</div>
+                            }
+                        </td>
+                        <td>
+                            <div class="fw-medium">@item.BookTitle</div>
+                            @if (!string.IsNullOrEmpty(item.ShelfLocation))
+                            {
+                                <div class="fs-xs text-muted-ink">
+                                    <i class="bi bi-geo-alt me-1" aria-hidden="true"></i>Kệ: <strong>@item.ShelfLocation</strong>
+                                </div>
+                            }
+                        </td>
+                        <td class="num">
+                            <span class="@(item.IsOverdue ? "text-danger fw-bold" : "")">
+                                @item.DueDate.ToString(AppConstants.DefaultDateFormat)
+                            </span>
+                            @if (item.IsOverdue)
+                            {
+                                <div class="fs-xs text-danger">Quá hạn @item.OverdueDays ngày</div>
+                            }
+                        </td>
+                        <td class="text-center num">
+                            @item.RenewCount lần
+                        </td>
+                        <td>
+                            @if (item.IsReturned)
+                            {
+                                <div class="text-success fw-medium">
+                                    <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>Đã trả
+                                </div>
+                                <div class="fs-xs text-muted-ink num">
+                                    @DateTimeHelper.ToVietnameseDateTimeString(item.ReturnedAt!.Value)
+                                </div>
+                                @if (!string.IsNullOrEmpty(item.ReturnCondition))
+                                {
+                                    <div class="fs-xs mt-1">
+                                        <span class="badge bg-secondary-subtle text-secondary">@item.ReturnCondition</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(item.ReturnNote))
+                                {
+                                    <div class="fs-xs text-muted-ink mt-1">@item.ReturnNote</div>
+                                }
+                            }
+                            else if (item.IsOverdue)
+                            {
+                                <span class="badge bg-danger-subtle text-danger">Quá hạn</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-info-subtle text-info">Đang mượn</span>
+                            }
+                        </td>
+                        <td>
+                            @(item.ReceivedByStaffName ?? "—")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (Model.CanCancel)
+{
+    <div class="modal fade" id="cancelSlipModal" tabindex="-1" aria-labelledby="cancelSlipTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="/Circulation/History/Cancel/@Model.Id">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-header">
+                        <h2 class="modal-title h5 text-danger" id="cancelSlipTitle">
+                            <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>Hủy phiếu mượn @Model.SlipCode
+                        </h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-2">Bạn có chắc chắn muốn hủy phiếu mượn này?</p>
+                        <div class="alert alert-warning fs-sm mb-3">
+                            <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                            Tất cả <strong>@Model.TotalBooks</strong> cuốn sách sẽ được giải phóng trạng thái trong kho để sẵn sàng phục vụ độc giả khác.
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="detailCancelReason">Lý do hủy phiếu <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="detailCancelReason" name="Reason" rows="3" required maxlength="500" placeholder="Nhập lý do hủy phiếu..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-quiet" data-bs-dismiss="modal">Đóng</button>
+                        <button type="submit" class="btn btn-danger">Xác nhận hủy phiếu</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}

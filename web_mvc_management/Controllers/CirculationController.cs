@@ -22,7 +22,13 @@ public class CirculationController(ICirculationService circulationService) : Bas
     {
         var result = ModelState.IsValid
             ? await circulationService.CreateBorrowSlipAsync(model, ct)
-            : ServiceResult.ValidationError(ErrorCode.CommonValidationError);
+            : ServiceResult<Guid>.ValidationError(ErrorCode.CommonValidationError);
+
+        if (result.Succeeded)
+        {
+            TempData["JustCreatedSlipId"] = result.Data.ToString();
+        }
+
         Flash(result);
         return RedirectToAction(nameof(Borrow), new { card });
     }
@@ -52,6 +58,51 @@ public class CirculationController(ICirculationService circulationService) : Bas
         return RedirectToAction(nameof(Return), new { card });
     }
 
+    // ===== Quản lý phiếu mượn & Lịch sử =====
+
+    [HttpGet("Circulation/History")]
+    public async Task<IActionResult> History([FromQuery] BorrowSlipFilter filter, CancellationToken ct)
+    {
+        return View(await circulationService.GetBorrowHistoryPageAsync(filter, ct));
+    }
+
+    [HttpGet("Circulation/History/Detail/{id:guid}")]
+    public async Task<IActionResult> Detail(Guid id, CancellationToken ct)
+    {
+        var model = await circulationService.GetBorrowSlipDetailAsync(id, ct);
+        if (model is null)
+        {
+            SetErrorMessage(ErrorMessages.Get(ErrorCode.BorrowSlipNotFound));
+            return RedirectToAction(nameof(History));
+        }
+        return View(model);
+    }
+
+    [HttpGet("Circulation/History/Print/{id:guid}")]
+    public async Task<IActionResult> Print(Guid id, CancellationToken ct)
+    {
+        var model = await circulationService.GetBorrowSlipDetailAsync(id, ct);
+        if (model is null)
+        {
+            SetErrorMessage(ErrorMessages.Get(ErrorCode.BorrowSlipNotFound));
+            return RedirectToAction(nameof(History));
+        }
+        return View(model);
+    }
+
+    [HttpPost("Circulation/History/Cancel/{id:guid}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(Guid id, BorrowCancelViewModel model, CancellationToken ct)
+    {
+        var result = ModelState.IsValid
+            ? await circulationService.CancelBorrowSlipAsync(id, model.Reason, ct)
+            : ServiceResult.ValidationError(ErrorCode.BorrowSlipCancelReasonRequired);
+        Flash(result);
+        return RedirectToAction(nameof(History));
+    }
+
+    // ===== Đặt trước =====
+
     [HttpGet("Reservations")]
     public async Task<IActionResult> Reservations([FromQuery] ReservationFilter filter, CancellationToken ct)
     {
@@ -76,6 +127,8 @@ public class CirculationController(ICirculationService circulationService) : Bas
         Flash(await circulationService.CancelReservationAsync(id, ct));
         return RedirectToAction(nameof(Reservations));
     }
+
+    // ===== Thu phạt =====
 
     [HttpGet("Fines")]
     public async Task<IActionResult> Fines([FromQuery] FineFilter filter, CancellationToken ct)

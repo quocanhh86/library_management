@@ -1,0 +1,250 @@
+@model ReportDashboardViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Báo cáo lưu thông thư viện - @Model.RangeStart.ToString("dd/MM/yyyy") đến @Model.RangeEnd.ToString("dd/MM/yyyy")</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="~/images/favicon-32.png" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <style>
+        body {
+            background-color: #f8fafc;
+            color: #0f172a;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
+            padding: 24px;
+        }
+        .report-page {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .table th, .table td {
+            padding: 6px 10px;
+            vertical-align: middle;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 4px;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }
+        .signature-block {
+            margin-top: 40px;
+            page-break-inside: avoid;
+        }
+        @@media print {
+            body {
+                background: #ffffff;
+                padding: 0;
+            }
+            .report-page {
+                box-shadow: none;
+                padding: 0;
+                max-width: 100%;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="report-page">
+        <div class="no-print d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+            <a href="/Reports" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Quay lại trang báo cáo
+            </a>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-primary" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i>In báo cáo (Ctrl + P)
+                </button>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-start pb-3 border-bottom mb-4">
+            <div>
+                <div class="fw-bold text-uppercase fs-6">Trường Đại học Giao thông Vận tải</div>
+                <div class="fw-semibold text-primary">TRUNG TÂM THÔNG TIN - THƯ VIỆN UTC</div>
+                <div class="text-muted fs-xs">Số 3 Cầu Giấy, Láng Thượng, Đống Đa, Hà Nội</div>
+            </div>
+            <div class="text-end">
+                <div class="fs-xs text-muted">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                <div class="fs-xs fw-semibold">Độc lập - Tự do - Hạnh phúc</div>
+                <div class="fs-xs text-muted mt-2">Hà Nội, ngày @DateTime.Now.ToString("dd 'tháng' MM 'năm' yyyy")</div>
+            </div>
+        </div>
+
+        <div class="text-center my-3">
+            <h1 class="h4 fw-bold text-uppercase mb-1">Báo Cáo Hoạt Động Lưu Thông Thư Viện</h1>
+            <p class="text-muted mb-0">
+                Kỳ báo cáo: Từ ngày <strong>@Model.RangeStart.ToString("dd/MM/yyyy")</strong> đến ngày <strong>@Model.RangeEnd.ToString("dd/MM/yyyy")</strong>
+            </p>
+        </div>
+
+        <div class="section-title">I. Tổng hợp chỉ số lưu thông tài liệu</div>
+        <table class="table table-bordered mb-3">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Chỉ số thống kê</th>
+                    <th scope="col" class="text-end" style="width: 160px;">Giá trị</th>
+                    <th scope="col">Ghi chú</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Tổng số lượt lập phiếu mượn</td>
+                    <td class="text-end fw-bold">@Model.Metrics.TotalBorrowSlips lượt</td>
+                    <td class="text-muted">Số phiếu được thủ thư xác nhận tại quầy</td>
+                </tr>
+                <tr>
+                    <td>Tổng số cuốn sách được mượn</td>
+                    <td class="text-end fw-bold text-primary">@Model.Metrics.TotalBooksBorrowed cuốn</td>
+                    <td class="text-muted">Tổng số bản sao tài liệu lưu hành trong kỳ</td>
+                </tr>
+                <tr>
+                    <td>Số cuốn sách đã hoàn trả</td>
+                    <td class="text-end fw-bold text-success">@Model.Metrics.TotalBooksReturned cuốn</td>
+                    <td class="text-muted">Tỷ lệ trả đúng hạn: <strong>@Model.Metrics.OnTimeReturnRate%</strong></td>
+                </tr>
+                <tr>
+                    <td>Số cuốn sách đang lưu thông (bạn đọc đang giữ)</td>
+                    <td class="text-end fw-bold">@Model.Metrics.TotalBooksCurrentlyBorrowing cuốn</td>
+                    <td class="text-muted">Trong đó quá hạn: <strong class="text-danger">@Model.Metrics.TotalBooksOverdue cuốn</strong></td>
+                </tr>
+                <tr>
+                    <td>Tình trạng sách khi trả</td>
+                    <td class="text-end">
+                        Tốt: @Model.ReturnConditionGood | Hỏng: @Model.ReturnConditionDamaged | Mất: @Model.ReturnConditionLost
+                    </td>
+                    <td class="text-muted">Các bản hỏng/mất đã lập biên bản xử phạt bồi thường</td>
+                </tr>
+                <tr>
+                    <td>Tổng tiền phạt phát sinh trong kỳ</td>
+                    <td class="text-end fw-bold text-danger">@CurrencyHelper.ToVnd(Model.Metrics.TotalFineIncurred)</td>
+                    <td class="text-muted">Đã thu: @CurrencyHelper.ToVnd(Model.Metrics.TotalFineCollected) | Còn nợ: @CurrencyHelper.ToVnd(Model.Metrics.TotalFineUnpaid)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="section-title">II. Top 10 tài liệu được mượn nhiều nhất</div>
+        <table class="table table-bordered mb-3">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" class="text-center" style="width: 45px;">STT</th>
+                    <th scope="col">Tên tài liệu / Tác phẩm</th>
+                    <th scope="col">Tác giả</th>
+                    <th scope="col">Thể loại</th>
+                    <th scope="col" class="text-center" style="width: 80px;">Số bản</th>
+                    <th scope="col" class="text-end" style="width: 90px;">Lượt mượn</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.TopBooks.Count == 0)
+                {
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">Không có dữ liệu trong kỳ báo cáo.</td>
+                    </tr>
+                }
+                @{ int rank = 1; }
+                @foreach (var b in Model.TopBooks)
+                {
+                    <tr>
+                        <td class="text-center">@(rank++)</td>
+                        <td class="fw-medium">@b.Title</td>
+                        <td>@b.Authors</td>
+                        <td>@b.Categories</td>
+                        <td class="text-center">@b.TotalCopies</td>
+                        <td class="text-end fw-bold">@b.BorrowCount</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="section-title">III. Thống kê tiền phạt theo loại vi phạm</div>
+        <table class="table table-bordered mb-3">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Loại vi phạm</th>
+                    <th scope="col" class="text-center">Số trường hợp</th>
+                    <th scope="col" class="text-end">Tiền phát sinh</th>
+                    <th scope="col" class="text-end">Đã thu</th>
+                    <th scope="col" class="text-end">Được miễn</th>
+                    <th scope="col" class="text-end">Còn nợ</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var f in Model.FineSummary)
+                {
+                    <tr>
+                        <td class="fw-medium">@f.TypeLabel</td>
+                        <td class="text-center">@f.Count</td>
+                        <td class="text-end">@CurrencyHelper.ToVnd(f.TotalAmount)</td>
+                        <td class="text-end">@CurrencyHelper.ToVnd(f.PaidAmount)</td>
+                        <td class="text-end">@CurrencyHelper.ToVnd(f.WaivedAmount)</td>
+                        <td class="text-end fw-bold">@CurrencyHelper.ToVnd(f.UnpaidAmount)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (Model.OverdueLoans.Count > 0)
+        {
+            <div class="section-title">IV. Danh sách tài liệu quá hạn tiêu biểu cần thu hồi</div>
+            <table class="table table-bordered mb-3">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Mã phiếu</th>
+                        <th scope="col">Độc giả</th>
+                        <th scope="col">Số thẻ / SĐT</th>
+                        <th scope="col">Tên sách</th>
+                        <th scope="col" class="text-center">Hạn trả</th>
+                        <th scope="col" class="text-center">Quá hạn</th>
+                        <th scope="col" class="text-end">Phạt tạm tính</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var o in Model.OverdueLoans.Take(15))
+                    {
+                        <tr>
+                            <td class="font-monospace fs-xs">@o.SlipCode</td>
+                            <td>@o.ReaderName</td>
+                            <td>@o.CardNo @(!string.IsNullOrEmpty(o.ReaderPhone) ? $"({o.ReaderPhone})" : "")</td>
+                            <td>@o.BookTitle</td>
+                            <td class="text-center">@o.DueDate.ToString(AppConstants.DefaultDateFormat)</td>
+                            <td class="text-center fw-bold text-danger">@o.OverdueDays ngày</td>
+                            <td class="text-end">@CurrencyHelper.ToVnd(o.EstimatedFine)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (Model.OverdueLoans.Count > 15)
+            {
+                <p class="fs-xs text-muted italic">*(Danh sách hiển thị 15 độc giả quá hạn đầu tiên. Tải file Excel đính kèm để xem đầy đủ).*</p>
+            }
+        }
+
+        <div class="row signature-block text-center fs-sm">
+            <div class="col-6">
+                <div class="fw-bold mb-1">NGƯỜI LẬP BÁO CÁO</div>
+                <div class="fs-xs text-muted mb-5">(Ký và ghi rõ họ tên)</div>
+            </div>
+            <div class="col-6">
+                <div class="fw-bold mb-1">GIÁM ĐỐC TRUNG TÂM / THỦ THƯ TRƯỞNG</div>
+                <div class="fs-xs text-muted mb-5">(Ký và ghi rõ họ tên)</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
