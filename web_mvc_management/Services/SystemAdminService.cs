@@ -634,185 +634,187 @@ public class SystemAdminService(
     }
 
 
- public async Task<DashboardViewModel> GetDashboardAsync(
-    int year,
-    CancellationToken ct)
-{
-    var readersQuery = unitOfWork.Readers
-        .GetQueryable(asNoTracking: true);
+    public async Task<DashboardViewModel> GetDashboardAsync(
+        int year,
+        CancellationToken ct)
+    {
+        var readersQuery = unitOfWork.Readers
+            .GetQueryable(asNoTracking: true)
+            .Where(x => x.Status != EntityStatus.Deleted);
 
-    var booksQuery = unitOfWork.Books
-        .GetQueryable(asNoTracking: true);
+        var booksQuery = unitOfWork.Books
+            .GetQueryable(asNoTracking: true)
+            .Where(x => x.Status != EntityStatus.Deleted);
 
-    var copiesQuery = unitOfWork.BookCopies
-        .GetQueryable(asNoTracking: true);
+        var copiesQuery = unitOfWork.BookCopies
+            .GetQueryable(asNoTracking: true)
+            .Where(x => x.Status != EntityStatus.Deleted && x.Book.Status != EntityStatus.Deleted);
 
-    var slipsQuery = unitOfWork.BorrowSlips
-        .GetQueryable(asNoTracking: true);
+        var slipsQuery = unitOfWork.BorrowSlips
+            .GetQueryable(asNoTracking: true)
+            .Where(x => x.Status != EntityStatus.Deleted);
 
-    var detailsQuery = unitOfWork.BorrowDetails
-        .GetQueryable(asNoTracking: true);
+        var detailsQuery = unitOfWork.BorrowDetails
+            .GetQueryable(asNoTracking: true)
+            .Where(x => x.Status != EntityStatus.Deleted && x.BorrowSlip.Status != EntityStatus.Deleted);
 
-    var finesQuery = unitOfWork.Fines
-        .GetQueryable(asNoTracking: true);
+        var finesQuery = unitOfWork.Fines
+            .GetQueryable(asNoTracking: true)
+            .Where(x => x.Status != EntityStatus.Deleted
+                        && x.FineStatus != LibraryConstants.FineStatus.Cancelled
+                        && x.BorrowDetail.Status != EntityStatus.Deleted
+                        && x.BorrowDetail.BorrowSlip.Status != EntityStatus.Deleted);
 
-    // =========================
-    // 1. Tổng quan
-    // =========================
+        // =========================
+        // 1. Tổng quan
+        // =========================
 
-    var totalReaders = await readersQuery.CountAsync(ct);
+        var totalReaders = await readersQuery.CountAsync(ct);
 
-    var totalBooks = await booksQuery.CountAsync(ct);
+        var totalBooks = await booksQuery.CountAsync(ct);
 
-    var totalBookCopies = await copiesQuery.CountAsync(ct);
+        var totalBookCopies = await copiesQuery.CountAsync(ct);
 
-    var borrowingBooks = await detailsQuery
-        .CountAsync(x => x.ReturnedAt == null, ct);
+        var borrowingBooks = await detailsQuery
+            .CountAsync(x => x.ReturnedAt == null, ct);
 
-    var totalBorrowSlips = await slipsQuery.CountAsync(ct);
+        var totalBorrowSlips = await slipsQuery.CountAsync(ct);
 
-    var totalFines = await finesQuery
-        .SumAsync(x => x.Amount, ct);
+        var totalFines = await finesQuery
+            .SumAsync(x => x.Amount, ct);
 
-    // =========================
-    // 2. Thống kê mượn theo tháng
-    // =========================
+        // =========================
+        // 2. Thống kê mượn theo tháng
+        // =========================
 
-    var monthlyData = await slipsQuery
-        .Where(x => x.BorrowedAt.Year == year)
-        .GroupBy(x => x.BorrowedAt.Month)
-        .Select(g => new
+        var monthlyData = await slipsQuery
+            .Where(x => x.BorrowedAt.Year == year)
+            .GroupBy(x => x.BorrowedAt.Month)
+            .Select(g => new
+            {
+                Month = g.Key,
+                BorrowCount = g.Count()
+            })
+            .ToListAsync(ct);
+
+        var monthlyStatistics = Enumerable.Range(1, 12)
+            .Select(month => new DashboardMonthlyItemViewModel
+            {
+                MonthNumber = month,
+                Month = $"Tháng {month}",
+                BorrowCount = monthlyData
+                    .FirstOrDefault(x => x.Month == month)?.BorrowCount ?? 0
+            })
+            .ToList();
+
+        // =========================
+        // 3. Sách được mượn nhiều nhất
+        // =========================
+
+        var mostBorrowedBooks = await detailsQuery
+            .Where(x => x.BorrowSlip.BorrowedAt.Year == year && x.BookCopy.Book.Status != EntityStatus.Deleted)
+            .GroupBy(x => new
+            {
+                x.BookCopy.BookId,
+                x.BookCopy.Book.Title
+            })
+            .Select(g => new DashboardBookRankingViewModel
+            {
+                BookId = g.Key.BookId,
+                BookTitle = g.Key.Title,
+                BorrowCount = g.Count()
+            })
+            .OrderByDescending(x => x.BorrowCount)
+            .ThenBy(x => x.BookTitle)
+            .Take(5)
+            .ToListAsync(ct);
+
+        // =========================
+        // 4. Sách ít được mượn
+        // =========================
+
+        var leastBorrowedBooks = await booksQuery
+            .Select(x => new DashboardBookRankingViewModel
+            {
+                BookId = x.Id,
+                BookTitle = x.Title,
+                BorrowCount = x.BookCopies
+                    .Where(c => c.Status != EntityStatus.Deleted)
+                    .SelectMany(c => c.BorrowDetails)
+                    .Count(d => d.Status != EntityStatus.Deleted
+                                && d.BorrowSlip.Status != EntityStatus.Deleted
+                                && d.BorrowSlip.BorrowedAt.Year == year)
+            })
+            .OrderBy(x => x.BorrowCount)
+            .ThenBy(x => x.BookTitle)
+            .Take(5)
+            .ToListAsync(ct);
+
+        // =========================
+        // 5. Thể loại được mượn nhiều nhất
+        // =========================
+
+        var mostBorrowedCategories = await detailsQuery
+            .Where(x =>
+                x.BorrowSlip.BorrowedAt.Year == year &&
+                x.BookCopy.Book.CategoryId != null &&
+                x.BookCopy.Book.Category!.Status != EntityStatus.Deleted)
+            .GroupBy(x => new
+            {
+                x.BookCopy.Book.CategoryId,
+                x.BookCopy.Book.Category!.Name
+            })
+            .Select(g => new DashboardCategoryRankingViewModel
+            {
+                CategoryId = g.Key.CategoryId,
+                CategoryName = g.Key.Name,
+                BorrowCount = g.Count()
+            })
+            .OrderByDescending(x => x.BorrowCount)
+            .ThenBy(x => x.CategoryName)
+            .Take(5)
+            .ToListAsync(ct);
+
+        // =========================
+        // 6. Độc giả mượn nhiều nhất
+        // =========================
+
+        var mostActiveReaders = await detailsQuery
+            .Where(x => x.BorrowSlip.BorrowedAt.Year == year && x.BorrowSlip.Reader.Status != EntityStatus.Deleted)
+            .GroupBy(x => new
+            {
+                x.BorrowSlip.ReaderId,
+                x.BorrowSlip.Reader.FullName
+            })
+            .Select(g => new DashboardReaderRankingViewModel
+            {
+                ReaderId = g.Key.ReaderId,
+                ReaderName = g.Key.FullName,
+                BorrowCount = g.Count()
+            })
+            .OrderByDescending(x => x.BorrowCount)
+            .ThenBy(x => x.ReaderName)
+            .Take(5)
+            .ToListAsync(ct);
+
+        return new DashboardViewModel
         {
-            Month = g.Key,
-            BorrowCount = g.Count()
-        })
-        .ToListAsync(ct);
+            TotalReaders = totalReaders,
+            TotalBooks = totalBooks,
+            TotalBookCopies = totalBookCopies,
+            BorrowingBooks = borrowingBooks,
+            TotalBorrowSlips = totalBorrowSlips,
+            TotalFines = totalFines,
 
-    var monthlyStatistics = Enumerable.Range(1, 12)
-        .Select(month => new DashboardMonthlyItemViewModel
-        {
-            MonthNumber = month,
-            Month = $"Tháng {month}",
-            BorrowCount = monthlyData
-                .FirstOrDefault(x => x.Month == month)?.BorrowCount ?? 0
-        })
-        .ToList();
-    // 3. Sách được mượn nhiều nhất
-    // =========================
+            SelectedYear = year,
 
-    var mostBorrowedBooks = await detailsQuery
-        .Where(x => x.BorrowSlip.BorrowedAt.Year == year)
-        .GroupBy(x => new
-        {
-            x.BookCopy.BookId,
-            x.BookCopy.Book.Title
-        })
-        .Select(g => new DashboardBookRankingViewModel
-        {
-            BookId = g.Key.BookId,
-            BookTitle = g.Key.Title,
-            BorrowCount = g.Count()
-        })
-        .OrderByDescending(x => x.BorrowCount)
-        .Take(5)
-        .ToListAsync(ct);
-
-    // =========================
-    // 4. Sách ít được mượn
-    // =========================
-
-    var leastBorrowedBooks = await booksQuery
-        .Select(x => new DashboardBookRankingViewModel
-        {
-            BookId = x.Id,
-            BookTitle = x.Title,
-
-            BorrowCount = x.BookCopies
-                .SelectMany(c => c.BorrowDetails)
-                .Count(d => d.BorrowSlip.BorrowedAt.Year == year)
-        })
-        .OrderBy(x => x.BorrowCount)
-        .ThenBy(x => x.BookTitle)
-        .Take(5)
-        .ToListAsync(ct);
-
-    // =========================
-    // 5. Thể loại được mượn nhiều nhất
-    // =========================
-
-    var mostBorrowedCategories = await detailsQuery
-        .Where(x =>
-            x.BorrowSlip.BorrowedAt.Year == year &&
-            x.BookCopy.Book.CategoryId != null)
-        .GroupBy(x => new
-        {
-            x.BookCopy.Book.CategoryId,
-            x.BookCopy.Book.Category!.Name
-        })
-        .Select(g => new DashboardCategoryRankingViewModel
-        {
-            CategoryId = g.Key.CategoryId,
-            CategoryName = g.Key.Name,
-            BorrowCount = g.Count()
-        })
-        .OrderByDescending(x => x.BorrowCount)
-        .Take(5)
-        .ToListAsync(ct);
-
-    // =========================
-    // 6. Độc giả mượn nhiều nhất
-    // =========================
-
-    var mostActiveReaders = await detailsQuery
-        .Where(x => x.BorrowSlip.BorrowedAt.Year == year)
-        .GroupBy(x => new
-        {
-            x.BorrowSlip.ReaderId,
-            x.BorrowSlip.Reader.FullName
-        })
-        .Select(g => new DashboardReaderRankingViewModel
-        {
-            ReaderId = g.Key.ReaderId,
-            ReaderName = g.Key.FullName,
-            BorrowCount = g.Count()
-        })
-        .OrderByDescending(x => x.BorrowCount)
-        .Take(5)
-        .ToListAsync(ct);
-
-    // return new DashboardViewModel
-    // {
-    //     TotalReaders = totalReaders,
-    //     TotalBooks = totalBooks,
-    //     TotalBookCopies = totalBookCopies,
-    //     BorrowingBooks = borrowingBooks,
-    //     TotalBorrowSlips = totalBorrowSlips,
-    //     TotalFines = totalFines,
-
-    //     MonthlyStatistics = monthlyStatistics,
-    //     MostBorrowedBooks = mostBorrowedBooks,
-    //     LeastBorrowedBooks = leastBorrowedBooks,
-    //     MostBorrowedCategories = mostBorrowedCategories,
-    //     MostActiveReaders = mostActiveReaders
-    // };
-    return new DashboardViewModel
-{
-    TotalReaders = totalReaders,
-    TotalBooks = totalBooks,
-    TotalBookCopies = totalBookCopies,
-    BorrowingBooks = borrowingBooks,
-    TotalBorrowSlips = totalBorrowSlips,
-    TotalFines = totalFines,
-
-    SelectedYear = year,
-
-    MonthlyStatistics = monthlyStatistics,
-    MostBorrowedBooks = mostBorrowedBooks,
-    LeastBorrowedBooks = leastBorrowedBooks,
-    MostBorrowedCategories = mostBorrowedCategories,
-    MostActiveReaders = mostActiveReaders
-};
-}
+            MonthlyStatistics = monthlyStatistics,
+            MostBorrowedBooks = mostBorrowedBooks,
+            LeastBorrowedBooks = leastBorrowedBooks,
+            MostBorrowedCategories = mostBorrowedCategories,
+            MostActiveReaders = mostActiveReaders
+        };
+    }
 
 
 

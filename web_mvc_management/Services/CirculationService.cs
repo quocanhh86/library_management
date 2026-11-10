@@ -13,14 +13,14 @@ using static web_mvc_management.Constant.LibraryConstants;
 namespace web_mvc_management.Services;
 
 /// <summary>
-/// Nghiá»‡p vá»¥ mÆ°á»£n â€“ tráº£ táº¡i quáº§y, Ä‘á»“ng thá»i cung cáº¥p dá»¯ liá»‡u "sÃ¡ch Ä‘ang mÆ°á»£n" cho trang chá»§ Ä‘á»™c giáº£.
+/// Nghiệp vụ mượn – trả tại quầy, đồng thời cung cấp dữ liệu lưu thông, đặt trước, thu phạt và lịch sử phiếu mượn.
 /// </summary>
 public class CirculationService(
     IUnitOfWork unitOfWork,
     IUserContext userContext,
     IDateTimeProvider dateTimeProvider) : ICirculationService
 {
-    // ===== Quáº§y mÆ°á»£n / tráº£ =====
+    // ===== Quầy mượn / trả =====
 
     public async Task<CirculationDeskViewModel> GetDeskAsync(bool returning, string? card, CancellationToken ct = default)
     {
@@ -204,7 +204,7 @@ public class CirculationService(
 
             return ServiceResult<Guid>.Success(
                 slip.Id,
-                $"ÄÃ£ láº­p phiáº¿u mÆ°á»£n {picked.Count} cuá»‘n cho {reader.FullName}. Háº¡n tráº£ {dueDate.ToString(AppConstants.DefaultDateFormat)}.");
+                $"Đã lập phiếu mượn {picked.Count} cuốn cho {reader.FullName}. Hạn trả {dueDate.ToString(AppConstants.DefaultDateFormat)}.");
         }
         catch
         {
@@ -232,7 +232,7 @@ public class CirculationService(
         var today = dateTimeProvider.Today;
         var totalFine = 0m;
 
-        // Má»—i láº§n tráº£ GOOD cÃ³ thá»ƒ lÆ°u ngay Ä‘á»ƒ chuyá»ƒn báº£n sao cho ngÆ°á»i Ä‘áº·t káº¿ tiáº¿p, nÃªn gÃ³i cáº£ lÆ°á»£t trong transaction kÃ¨m lock.
+        // Mỗi lần trả GOOD có thể lưu ngay để chuyển bản sao cho người đặt kế tiếp, nên gói cả lượt trong transaction kèm lock.
         await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
         try
         {
@@ -240,7 +240,7 @@ public class CirculationService(
                 .Include(d => d.BookCopy)
                 .Include(d => d.BorrowSlip)
                 .Include(d => d.Fines)
-                .Where(d => ids.Contains(d.Id) && d.Status != EntityStatus.Deleted)
+                .Where(d => ids.Contains(d.Id) && d.Status != EntityStatus.Deleted && d.BorrowSlip.Status != EntityStatus.Deleted)
                 .ToListAsync(ct);
 
             if (details.Count != ids.Count || details.Any(d => d.BorrowSlip.ReaderId != model.ReaderId))
@@ -262,7 +262,7 @@ public class CirculationService(
                 detail.ReturnCondition = item.Condition;
                 detail.ReturnNote = string.IsNullOrWhiteSpace(item.Note) ? null : item.Note.Trim();
 
-                // Trá»« sá»‘ ngÃ y Ä‘Ã£ láº­p pháº¡t trÆ°á»›c Ä‘Ã³ cho dÃ²ng mÆ°á»£n nÃ y Ä‘á»ƒ khÃ´ng thu trÃ¹ng.
+                // Trừ số ngày đã lập phạt trước đó cho dòng mượn này để không thu trùng.
                 var chargedDays = detail.Fines
                     .Where(f => f.Status != EntityStatus.Deleted && f.FineType == FineType.Overdue && f.FineStatus != FineStatus.Cancelled)
                     .Sum(f => f.OverdueDays ?? 0);
@@ -288,7 +288,7 @@ public class CirculationService(
                 }
                 else
                 {
-                    detail.ReturnNote = string.Join(" ", detail.ReturnNote, "TODO(xÃ¡c nháº­n): báº£n sao chÆ°a cÃ³ giÃ¡ nÃªn chÆ°a tÃ­nh pháº¡t.").Trim();
+                    detail.ReturnNote = string.Join(" ", detail.ReturnNote, "Ghi chú: Bản sao chưa có giá bìa nên chưa tính phạt bồi thường.").Trim();
                 }
             }
 
@@ -300,44 +300,70 @@ public class CirculationService(
             throw;
         }
 
-        var message = $"ÄÃ£ nháº­n tráº£ {items.Count} cuá»‘n.";
-        if (totalFine > 0) message += $" PhÃ¡t sinh pháº¡t {CurrencyHelper.ToVnd(totalFine)}, thu táº¡i mÃ n Thu pháº¡t.";
+        var message = $"Đã nhận trả {items.Count} cuốn.";
+        if (totalFine > 0) message += $" Phát sinh phạt {CurrencyHelper.ToVnd(totalFine)}, thu tại màn Thu phạt.";
         return ServiceResult.Success(message);
     }
 
     public async Task<ServiceResult> RenewAsync(Guid detailId, CancellationToken ct = default)
     {
-        var detail = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: false)
-            .Include(d => d.BookCopy)
-            .Include(d => d.BorrowSlip).ThenInclude(s => s.Reader).ThenInclude(r => r.ReaderType)
-            .FirstOrDefaultAsync(d => d.Id == detailId && d.Status != EntityStatus.Deleted, ct);
-
-        if (detail is null) return ServiceResult.Failure(ErrorCode.BorrowDetailNotFound);
-        if (detail.ReturnedAt != null) return ServiceResult.Failure(ErrorCode.BookAlreadyReturned);
-        if (detail.DueDate < dateTimeProvider.Today) return ServiceResult.Failure(ErrorCode.RenewOverdueNotAllowed);
-
-        var type = detail.BorrowSlip.Reader.ReaderType;
-        if (detail.RenewCount >= type.MaxRenewals)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.RenewalLimitReached, ErrorMessages.Format(ErrorCode.RenewalLimitReached, type.MaxRenewals));
+            var detail = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: false)
+                .Include(d => d.BookCopy)
+                .Include(d => d.BorrowSlip).ThenInclude(s => s.Reader).ThenInclude(r => r.ReaderType)
+                .FirstOrDefaultAsync(d => d.Id == detailId && d.Status != EntityStatus.Deleted && d.BorrowSlip.Status != EntityStatus.Deleted, ct);
+
+            if (detail is null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BorrowDetailNotFound);
+            }
+            if (detail.ReturnedAt != null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookAlreadyReturned);
+            }
+            if (detail.DueDate < dateTimeProvider.Today)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.RenewOverdueNotAllowed);
+            }
+
+            var type = detail.BorrowSlip.Reader.ReaderType;
+            if (detail.RenewCount >= type.MaxRenewals)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.RenewalLimitReached, ErrorMessages.Format(ErrorCode.RenewalLimitReached, type.MaxRenewals));
+            }
+
+            // Chỉ người đang chờ (PENDING) mới cần bản sao này; người READY đã được giữ bản khác.
+            var readerId = detail.BorrowSlip.ReaderId;
+            var someoneWaiting = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
+                .AnyAsync(r => r.Status != EntityStatus.Deleted && r.BookId == detail.BookCopy.BookId
+                               && r.ReaderId != readerId && r.ReservationStatus == ReservationStatus.Pending, ct);
+            if (someoneWaiting)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.RenewBlockedByReservation);
+            }
+
+            detail.DueDate = detail.DueDate.AddDays(type.RenewDays);
+            detail.RenewCount++;
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            return ServiceResult.Success(
+                $"Đã gia hạn đến {detail.DueDate.ToString(AppConstants.DefaultDateFormat)}. Còn {type.MaxRenewals - detail.RenewCount} lần gia hạn.");
         }
-
-        // Chá»‰ ngÆ°á»i Ä‘ang chá» (PENDING) má»›i cáº§n báº£n sao nÃ y; ngÆ°á»i READY Ä‘Ã£ Ä‘Æ°á»£c giá»¯ báº£n khÃ¡c.
-        var readerId = detail.BorrowSlip.ReaderId;
-        var someoneWaiting = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
-            .AnyAsync(r => r.Status != EntityStatus.Deleted && r.BookId == detail.BookCopy.BookId
-                           && r.ReaderId != readerId && r.ReservationStatus == ReservationStatus.Pending, ct);
-        if (someoneWaiting) return ServiceResult.Failure(ErrorCode.RenewBlockedByReservation);
-
-        detail.DueDate = detail.DueDate.AddDays(type.RenewDays);
-        detail.RenewCount++;
-        await unitOfWork.SaveChangesAsync(ct);
-
-        return ServiceResult.Success(
-            $"ÄÃ£ gia háº¡n Ä‘áº¿n {detail.DueDate.ToString(AppConstants.DefaultDateFormat)}. CÃ²n {type.MaxRenewals - detail.RenewCount} láº§n gia háº¡n.");
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
-    // ===== Quáº£n lÃ½ phiáº¿u mÆ°á»£n & Lá»‹ch sá»­ =====
+    // ===== Quản lý phiếu mượn & Lịch sử =====
 
     public async Task<BorrowHistoryPageViewModel> GetBorrowHistoryPageAsync(BorrowSlipFilter filter, CancellationToken ct = default)
     {
@@ -356,9 +382,20 @@ public class CirculationService(
         if (!string.IsNullOrWhiteSpace(filter.Keyword))
         {
             var kw = filter.Keyword.Trim();
+            var guidPrefix = kw;
+            if (kw.StartsWith("PM-", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = kw.Split('-', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 3)
+                {
+                    guidPrefix = parts[^1];
+                }
+            }
+
             query = query.Where(s =>
                 s.Reader.FullName.Contains(kw) ||
                 s.Reader.CardNo.Contains(kw) ||
+                s.Id.ToString().StartsWith(guidPrefix) ||
                 s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted &&
                     (d.BookCopy.Barcode.Contains(kw) || d.BookCopy.Book.Title.Contains(kw))));
         }
@@ -427,7 +464,9 @@ public class CirculationService(
             var totalBooks = s.Details.Count;
             var returnedBooks = s.Details.Count(d => d.ReturnedAt != null);
             var hasOverdue = s.Details.Any(d => d.ReturnedAt == null && d.DueDate < today);
-            var status = (totalBooks > 0 && returnedBooks == totalBooks) ? "ÄÃ£ tráº£ Ä‘á»§" : (hasOverdue ? "CÃ³ sÃ¡ch quÃ¡ háº¡n" : "Äang mÆ°á»£n");
+            var status = (totalBooks > 0 && returnedBooks == totalBooks)
+                ? "Đã trả đủ"
+                : (hasOverdue ? "Có sách quá hạn" : "Đang mượn");
             return new BorrowSlipItemViewModel
             {
                 Id = s.Id,
@@ -533,36 +572,43 @@ public class CirculationService(
         if (userContext.CurrentUserId is not { } staffId) return ServiceResult.Failure(ErrorCode.AuthUnauthorized);
         if (string.IsNullOrWhiteSpace(reason)) return ServiceResult.ValidationError(ErrorCode.BorrowSlipCancelReasonRequired);
 
-        var slip = await unitOfWork.BorrowSlips.GetQueryable(asNoTracking: false)
-            .Include(s => s.BorrowDetails)
-                .ThenInclude(d => d.BookCopy)
-            .FirstOrDefaultAsync(s => s.Id == id && s.Status != EntityStatus.Deleted, ct);
-
-        if (slip is null) return ServiceResult.Failure(ErrorCode.BorrowSlipNotFound);
-
-        if (slip.BorrowDetails.Any(d => d.ReturnedAt != null))
-        {
-            return ServiceResult.Failure(ErrorCode.BorrowSlipCannotCancelHasReturned);
-        }
-
-        var now = dateTimeProvider.UtcNow;
-        if (now - slip.BorrowedAt > TimeSpan.FromHours(24))
-        {
-            return ServiceResult.Failure(ErrorCode.BorrowSlipCannotCancelExpired);
-        }
-
         var setting = await GetSettingAsync(ct);
         var holdHours = setting?.ReservationHoldHours ?? (short)48;
 
-        // ReleaseCopyAsync saves each copy to advance the reservation queue. Keep the
-        // entire cancellation atomic if any later copy or the final slip save fails.
-        await unitOfWork.BeginTransactionAsync(ct);
+        // ReleaseCopyAsync lưu từng bản sao để chuyển hàng đợi đặt trước; dùng khóa bi quan LIB_MUTATION_LOCK bảo vệ toàn bộ giao dịch.
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
         try
         {
+            var slip = await unitOfWork.BorrowSlips.GetQueryable(asNoTracking: false)
+                .Include(s => s.BorrowDetails)
+                    .ThenInclude(d => d.BookCopy)
+                .FirstOrDefaultAsync(s => s.Id == id && s.Status != EntityStatus.Deleted, ct);
+
+            if (slip is null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BorrowSlipNotFound);
+            }
+
+            if (slip.BorrowDetails.Any(d => d.ReturnedAt != null))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BorrowSlipCannotCancelHasReturned);
+            }
+
+            var now = dateTimeProvider.UtcNow;
+            if (now - slip.BorrowedAt > TimeSpan.FromHours(24))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BorrowSlipCannotCancelExpired);
+            }
+
             foreach (var detail in slip.BorrowDetails.Where(d => d.Status != EntityStatus.Deleted))
             {
                 detail.Status = EntityStatus.Deleted;
-                detail.ReturnNote = $"Há»§y phiáº¿u: {reason.Trim()}";
+                detail.UpdatedAt = now;
+                detail.UpdatedBy = staffId;
+                detail.ReturnNote = $"Hủy phiếu: {reason.Trim()}";
 
                 if (detail.BookCopy is { } copy)
                 {
@@ -571,9 +617,11 @@ public class CirculationService(
             }
 
             slip.Status = EntityStatus.Deleted;
+            slip.UpdatedAt = now;
+            slip.UpdatedBy = staffId;
             slip.Note = string.IsNullOrWhiteSpace(slip.Note)
-                ? $"[ÄÃƒ Há»¦Y] {reason.Trim()}"
-                : $"{slip.Note} | [ÄÃƒ Há»¦Y] {reason.Trim()}";
+                ? $"[ĐÃ HỦY] {reason.Trim()}"
+                : $"{slip.Note} | [ĐÃ HỦY] {reason.Trim()}";
 
             await unitOfWork.CommitTransactionAsync(ct);
         }
@@ -582,10 +630,10 @@ public class CirculationService(
             await unitOfWork.RollbackTransactionAsync(CancellationToken.None);
             throw;
         }
-        return ServiceResult.Success("ÄÃ£ há»§y phiáº¿u mÆ°á»£n thÃ nh cÃ´ng. CÃ¡c cuá»‘n sÃ¡ch Ä‘Ã£ Ä‘Æ°á»£c hoÃ n tráº£ láº¡i kho.");
+        return ServiceResult.Success("Đã hủy phiếu mượn thành công. Các cuốn sách đã được hoàn trả lại kho.");
     }
 
-    // ===== Äáº·t trÆ°á»›c =====
+    // ===== Đặt trước =====
 
     public async Task<ReservationsPageViewModel> GetReservationsPageAsync(ReservationFilter filter, CancellationToken ct = default)
     {
@@ -623,7 +671,7 @@ public class CirculationService(
             })
             .ToPagedResultAsync(filter, ct);
 
-        // Chá»‰ Ä‘áº·t trÆ°á»›c Ä‘Æ°á»£c Ä‘áº§u sÃ¡ch háº¿t báº£n sáºµn sÃ ng nhÆ°ng cÃ²n báº£n Ä‘ang mÆ°á»£n / Ä‘ang giá»¯.
+        // Chỉ đặt trước được đầu sách hết bản sẵn sàng nhưng còn bản đang mượn / đang giữ.
         var books = await unitOfWork.Books.GetQueryable(asNoTracking: true)
             .Where(b => b.Status != EntityStatus.Deleted
                         && !b.BookCopies.Any(c => c.Status != EntityStatus.Deleted && c.CopyStatus == CopyStatus.Available)
@@ -705,7 +753,7 @@ public class CirculationService(
             }, ct);
             await unitOfWork.CommitTransactionAsync(ct);
 
-            return ServiceResult.Success($"ÄÃ£ Ä‘áº·t trÆ°á»›c \"{book.Title}\" cho {reader.FullName}.");
+            return ServiceResult.Success($"Đã đặt trước \"{book.Title}\" cho {reader.FullName}.");
         }
         catch
         {
@@ -744,7 +792,7 @@ public class CirculationService(
             }
 
             await unitOfWork.CommitTransactionAsync(ct);
-            return ServiceResult.Success("ÄÃ£ há»§y phiáº¿u Ä‘áº·t trÆ°á»›c.");
+            return ServiceResult.Success("Đã hủy phiếu đặt trước.");
         }
         catch
         {
@@ -753,11 +801,14 @@ public class CirculationService(
         }
     }
 
-    // ===== Thu pháº¡t =====
+    // ===== Thu phạt =====
 
     public async Task<FinesPageViewModel> GetFinesPageAsync(FineFilter filter, CancellationToken ct = default)
     {
-        var query = unitOfWork.Fines.GetQueryable(asNoTracking: true).Where(f => f.Status != EntityStatus.Deleted);
+        var query = unitOfWork.Fines.GetQueryable(asNoTracking: true)
+            .Where(f => f.Status != EntityStatus.Deleted
+                        && f.BorrowDetail.Status != EntityStatus.Deleted
+                        && f.BorrowDetail.BorrowSlip.Status != EntityStatus.Deleted);
         if (!string.IsNullOrWhiteSpace(filter.FineStatus))
         {
             query = query.Where(f => f.FineStatus == filter.FineStatus);
@@ -791,7 +842,10 @@ public class CirculationService(
             .ToPagedResultAsync(filter, ct);
 
         var unpaidTotal = await unitOfWork.Fines.GetQueryable(asNoTracking: true)
-            .Where(f => f.Status != EntityStatus.Deleted && f.FineStatus == FineStatus.Unpaid)
+            .Where(f => f.Status != EntityStatus.Deleted
+                        && f.FineStatus == FineStatus.Unpaid
+                        && f.BorrowDetail.Status != EntityStatus.Deleted
+                        && f.BorrowDetail.BorrowSlip.Status != EntityStatus.Deleted)
             .SumAsync(f => f.Amount, ct);
 
         return new FinesPageViewModel { Fines = paged, Filter = filter, UnpaidTotal = unpaidTotal };
@@ -804,34 +858,60 @@ public class CirculationService(
             return ServiceResult.ValidationError(ErrorCode.CommonInvalidRequest);
         }
 
-        var fine = await FindUnpaidFineAsync(id, ct);
-        if (fine.Error is { } error) return ServiceResult.Failure(error);
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
+        {
+            var fine = await FindUnpaidFineAsync(id, ct);
+            if (fine.Error is { } error)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(error);
+            }
 
-        fine.Fine!.FineStatus = FineStatus.Paid;
-        fine.Fine.PaymentMethod = paymentMethod;
-        fine.Fine.PaidAt = dateTimeProvider.UtcNow;
-        fine.Fine.HandledBy = userContext.CurrentUserId;
-        await unitOfWork.SaveChangesAsync(ct);
+            fine.Fine!.FineStatus = FineStatus.Paid;
+            fine.Fine.PaymentMethod = paymentMethod;
+            fine.Fine.PaidAt = dateTimeProvider.UtcNow;
+            fine.Fine.HandledBy = userContext.CurrentUserId;
+            await unitOfWork.CommitTransactionAsync(ct);
 
-        return ServiceResult.Success($"ÄÃ£ thu {CurrencyHelper.ToVnd(fine.Fine.Amount)}.");
+            return ServiceResult.Success($"Đã thu {CurrencyHelper.ToVnd(fine.Fine.Amount)}.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult> WaiveFineAsync(Guid id, string? note, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(note)) return ServiceResult.ValidationError(ErrorCode.FineWaiveNoteRequired);
 
-        var fine = await FindUnpaidFineAsync(id, ct);
-        if (fine.Error is { } error) return ServiceResult.Failure(error);
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
+        {
+            var fine = await FindUnpaidFineAsync(id, ct);
+            if (fine.Error is { } error)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(error);
+            }
 
-        fine.Fine!.FineStatus = FineStatus.Waived;
-        fine.Fine.Note = note.Trim();
-        fine.Fine.HandledBy = userContext.CurrentUserId;
-        await unitOfWork.SaveChangesAsync(ct);
+            fine.Fine!.FineStatus = FineStatus.Waived;
+            fine.Fine.Note = note.Trim();
+            fine.Fine.HandledBy = userContext.CurrentUserId;
+            await unitOfWork.CommitTransactionAsync(ct);
 
-        return ServiceResult.Success($"ÄÃ£ miá»…n khoáº£n pháº¡t {CurrencyHelper.ToVnd(fine.Fine.Amount)}.");
+            return ServiceResult.Success($"Đã miễn khoản phạt {CurrencyHelper.ToVnd(fine.Fine.Amount)}.");
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
-    // ===== DÃ¹ng chung =====
+    // ===== Dùng chung =====
 
     private IQueryable<Reader> Readers(bool asNoTracking) =>
         unitOfWork.Readers.GetQueryable(asNoTracking)
@@ -846,6 +926,8 @@ public class CirculationService(
     private Task<decimal> UnpaidFinesAsync(Guid readerId, CancellationToken ct) =>
         unitOfWork.Fines.GetQueryable(asNoTracking: true)
             .Where(f => f.Status != EntityStatus.Deleted && f.FineStatus == FineStatus.Unpaid
+                        && f.BorrowDetail.Status != EntityStatus.Deleted
+                        && f.BorrowDetail.BorrowSlip.Status != EntityStatus.Deleted
                         && f.BorrowDetail.BorrowSlip.ReaderId == readerId)
             .SumAsync(f => f.Amount, ct);
 
@@ -860,7 +942,7 @@ public class CirculationService(
         : null;
 
     /// <summary>
-    /// CÃ¡c lÃ½ do cháº·n mÆ°á»£n theo thá»© tá»± kiá»ƒm tra: tháº», sÃ¡ch quÃ¡ háº¡n, ná»£ pháº¡t, háº¡n má»©c.
+    /// Các lý do chặn mượn theo thứ tự kiểm tra: thẻ, sách quá hạn, nợ phạt, hạn mức.
     /// </summary>
     private async Task<(List<string> Reasons, int Borrowed, decimal Unpaid)> CheckBorrowerAsync(Reader reader, CancellationToken ct)
     {
@@ -910,7 +992,7 @@ public class CirculationService(
     }
 
     /// <summary>
-    /// Báº£n sao quay vá» kho: giá»¯ cho ngÆ°á»i Ä‘áº·t trÆ°á»›c sá»›m nháº¥t cá»§a Ä‘áº§u sÃ¡ch, khÃ´ng cÃ³ ai thÃ¬ sáºµn sÃ ng cho mÆ°á»£n.
+    /// Bản sao quay về kho: giữ cho người đặt trước sớm nhất của đầu sách, không có ai thì sẵn sàng cho mượn.
     /// </summary>
     private async Task ReleaseCopyAsync(BookCopy copy, short holdHours, CancellationToken ct)
     {
@@ -937,11 +1019,11 @@ public class CirculationService(
             copy.CopyStatus = CopyStatus.Reserved;
         }
 
-        // LÆ°u ngay Ä‘á»ƒ láº§n chuyá»ƒn káº¿ tiáº¿p cá»§a cÃ¹ng Ä‘áº§u sÃ¡ch khÃ´ng chá»n láº¡i cÃ¹ng má»™t ngÆ°á»i Ä‘áº·t.
+        // Lưu ngay để lần chuyển kế tiếp của cùng đầu sách không chọn lại cùng một người đặt.
         await unitOfWork.SaveChangesAsync(ct);
     }
 
-    // ponytail: háº¿t háº¡n giá»¯ sÃ¡ch xá»­ lÃ½ lazy khi má»Ÿ quáº§y mÆ°á»£n / mÃ n Ä‘áº·t trÆ°á»›c; cáº§n Ä‘Ãºng giá» thÃ¬ chuyá»ƒn sang IHostedService.
+    // Xử lý hết hạn giữ sách (lazy) khi mở quầy mượn hoặc màn đặt trước.
     private async Task ExpireHoldsAsync(LibrarySetting? setting, CancellationToken ct)
     {
         if (setting is null) return;

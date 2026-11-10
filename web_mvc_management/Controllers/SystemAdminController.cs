@@ -7,7 +7,7 @@ using web_mvc_management.Services;
 
 namespace web_mvc_management.Controllers;
 
-[Authorize(Roles = AppRoles.Admin)]
+[Authorize(Roles = AppRoles.Admin + "," + AppRoles.Librarian)]
 public class SystemAdminController(
     ISystemAdminService systemAdminService,
     IUserContext userContext) : BaseController
@@ -16,6 +16,7 @@ public class SystemAdminController(
     // 1. QUẢN LÝ TÀI KHOẢN CÁN BỘ & PHÂN QUYỀN (/System/Staff)
     // =========================================================================
     [HttpGet("System/Staff")]
+    [Authorize(Roles = AppRoles.Admin)]
     public async Task<IActionResult> Staff([FromQuery] StaffFilter filter, CancellationToken ct)
     {
         var paged = await systemAdminService.GetStaffPagedAsync(filter, ct);
@@ -28,6 +29,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("System/Staff/Create")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateStaff(StaffCreateViewModel model, CancellationToken ct)
     {
@@ -51,6 +53,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("System/Staff/Update")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateStaff(StaffEditViewModel model, CancellationToken ct)
     {
@@ -74,6 +77,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("System/Staff/Unlock/{id:guid}")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UnlockStaff(Guid id, CancellationToken ct)
     {
@@ -91,6 +95,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("System/Staff/Delete/{id:guid}")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteStaff(Guid id, CancellationToken ct)
     {
@@ -108,6 +113,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("System/Staff/Restore/{id:guid}")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RestoreStaff(Guid id, CancellationToken ct)
     {
@@ -125,6 +131,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("System/Staff/HardDelete/{id:guid}")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> HardDeleteStaff(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
@@ -145,6 +152,7 @@ public class SystemAdminController(
     // 2. CẤU HÌNH LOẠI ĐỘC GIẢ: SỐ SÁCH TỐI ĐA & SỐ NGÀY MƯỢN (/Admin/ReaderTypes)
     // =========================================================================
     [HttpGet("Admin/ReaderTypes")]
+    [Authorize(Roles = AppRoles.Admin)]
     public async Task<IActionResult> ReaderTypes(CancellationToken ct)
     {
         var items = await systemAdminService.GetReaderTypesAsync(ct);
@@ -155,6 +163,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("Admin/ReaderTypes/Save")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveReaderType(ReaderTypeFormViewModel model, string? returnPage, CancellationToken ct)
     {
@@ -182,6 +191,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("Admin/ReaderTypes/Delete/{id:guid}")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteReaderType(Guid id, CancellationToken ct)
     {
@@ -199,6 +209,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("Admin/ReaderTypes/Restore/{id:guid}")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RestoreReaderType(Guid id, CancellationToken ct)
     {
@@ -216,6 +227,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("Admin/ReaderTypes/HardDelete/{id:guid}")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> HardDeleteReaderType(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
     {
@@ -236,6 +248,7 @@ public class SystemAdminController(
     // 3. CẤU HÌNH QUY ĐỊNH MƯỢN TRẢ & MỨC PHẠT (/System/Settings)
     // =========================================================================
     [HttpGet("System/Settings")]
+    [Authorize(Roles = AppRoles.Admin)]
     public async Task<IActionResult> Settings(CancellationToken ct)
     {
         var settingForm = await systemAdminService.GetLibrarySettingAsync(ct);
@@ -249,6 +262,7 @@ public class SystemAdminController(
     }
 
     [HttpPost("System/Settings/Save")]
+    [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveSettings([Bind(Prefix = "SettingForm")] LibrarySettingFormViewModel model, CancellationToken ct)
     {
@@ -279,17 +293,19 @@ public class SystemAdminController(
     // 4. TỔNG QUAN THỐNG KÊ (/Admin/Dashboard)
     // =========================================================================
     [HttpGet("Admin/Dashboard")]
+    [Authorize(Roles = AppRoles.Admin + "," + AppRoles.Librarian)]
     public async Task<IActionResult> Dashboard(
-            int? year,
-            CancellationToken ct)
-        {
-            var selectedYear = year ?? DateTime.Now.Year;
+        int? year,
+        CancellationToken ct)
+    {
+        var currentYear = DateTime.Now.Year;
+        var selectedYear = year is >= 2000 and <= 2100 ? year.Value : currentYear;
 
-            var viewModel = await systemAdminService
-                .GetDashboardAsync(selectedYear, ct);
+        var viewModel = await systemAdminService
+            .GetDashboardAsync(selectedYear, ct);
 
-            return View("Dashboard", viewModel);
-        }
-                
+        return View("Dashboard", viewModel);
+    }
+
 }
 
