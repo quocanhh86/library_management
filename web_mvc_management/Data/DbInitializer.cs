@@ -93,6 +93,76 @@ public static class DbInitializer
                 IF LEN(@statusConstraintSql) > 0
                     EXEC sp_executesql @statusConstraintSql;
             END
+
+            IF EXISTS (
+                SELECT 1
+                FROM sys.indexes
+                WHERE object_id = OBJECT_ID('dbo.borrow_details')
+                  AND name = 'uq_borrow_details_open_copy'
+                  AND (filter_definition IS NULL OR filter_definition NOT LIKE '%status%')
+            )
+            BEGIN
+                DROP INDEX uq_borrow_details_open_copy ON dbo.borrow_details;
+                CREATE UNIQUE INDEX uq_borrow_details_open_copy ON dbo.borrow_details(copy_id)
+                WHERE [returned_at] IS NULL AND [status] = 'ACTIVE';
+            END
+
+            IF OBJECT_ID('dbo.trg_borrow_details_sync_copy', 'TR') IS NULL
+            BEGIN
+                EXEC(N'
+                CREATE TRIGGER dbo.trg_borrow_details_sync_copy
+                ON dbo.borrow_details
+                AFTER INSERT, UPDATE
+                AS
+                BEGIN
+                    SET NOCOUNT ON;
+                    IF EXISTS (SELECT 1 FROM deleted)
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1
+                            FROM inserted i
+                            JOIN deleted d ON d.id = i.id
+                            WHERE i.copy_id <> d.copy_id
+                        )
+                        BEGIN
+                            ;THROW 50001, N''Không được đổi bản sao của dòng mượn đã lập.'', 1;
+                        END;
+
+                        UPDATE c
+                        SET c.copy_status = CASE i.return_condition
+                                                WHEN ''GOOD''    THEN ''AVAILABLE''
+                                                WHEN ''DAMAGED'' THEN ''DAMAGED''
+                                                WHEN ''LOST''    THEN ''LOST''
+                                            END,
+                            c.updated_at  = SWITCHOFFSET(SYSDATETIMEOFFSET(), ''+07:00'')
+                        FROM dbo.book_copies c
+                        JOIN inserted i ON i.copy_id = c.id
+                        JOIN deleted  d ON d.id = i.id
+                        WHERE d.returned_at IS NULL
+                          AND i.returned_at IS NOT NULL;
+                    END
+                    ELSE
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1
+                            FROM inserted i
+                            JOIN dbo.book_copies c WITH (UPDLOCK) ON c.id = i.copy_id
+                            WHERE i.returned_at IS NULL
+                              AND (c.status <> ''ACTIVE'' OR c.copy_status NOT IN (''AVAILABLE'', ''RESERVED''))
+                        )
+                        BEGIN
+                            ;THROW 50002, N''Bản sao không sẵn sàng để mượn (đang được mượn, hỏng, mất, đã thanh lý hoặc bị vô hiệu hóa).'', 1;
+                        END;
+
+                        UPDATE c
+                        SET c.copy_status = ''BORROWED'',
+                            c.updated_at  = SWITCHOFFSET(SYSDATETIMEOFFSET(), ''+07:00'')
+                        FROM dbo.book_copies c
+                        JOIN inserted i ON i.copy_id = c.id
+                        WHERE i.returned_at IS NULL;
+                    END;
+                END');
+            END
             """;
         await context.Database.ExecuteSqlRawAsync(ensureSchemaSql);
 
@@ -103,7 +173,7 @@ public static class DbInitializer
         }
 
         // 1. Cấu hình quy định thư viện (LibrarySettings)
-        var existingSetting = await context.LibrarySettings.FirstOrDefaultAsync();
+        var existingSetting = await context.LibrarySettings.OrderBy(x => x.Id).FirstOrDefaultAsync();
         if (existingSetting == null)
         {
             await context.LibrarySettings.AddAsync(new LibrarySetting
@@ -212,9 +282,9 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        var adminStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Admin && x.Status == EntityStatus.Active)
-            ?? await context.Staff.FirstAsync();
-        var librarianStaff = await context.Staff.FirstOrDefaultAsync(x => x.Role == AppRoles.Librarian && x.Status == EntityStatus.Active)
+        var adminStaff = await context.Staff.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync(x => x.Role == AppRoles.Admin && x.Status == EntityStatus.Active)
+            ?? await context.Staff.OrderBy(x => x.CreatedAt).FirstAsync();
+        var librarianStaff = await context.Staff.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync(x => x.Role == AppRoles.Librarian && x.Status == EntityStatus.Active)
             ?? adminStaff;
 
         // 4. Kệ sách (Shelves: 8 Active + 1 Deleted)

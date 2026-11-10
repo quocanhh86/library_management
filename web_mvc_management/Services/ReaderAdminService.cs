@@ -75,8 +75,9 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
                 LockReason = r.LockReason,
                 Status = r.Status,
                 ActiveBorrowCount = r.BorrowSlips
+                    .Where(bs => bs.Status != EntityStatus.Deleted)
                     .SelectMany(bs => bs.BorrowDetails)
-                    .Count(bd => bd.ReturnedAt == null)
+                    .Count(bd => bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted)
             })
             .ToPagedResultAsync(filter, ct);
 

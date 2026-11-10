@@ -2,14 +2,8 @@
 
 @{
     Layout = "_StaffLayout";
-    ViewData["Title"] = "Quy định mượn trả & mức phạt";
-    ViewData["Screen"] = ScreenId.SystemSettings;
-}
-
-@{
-    Layout = "_StaffLayout";
-    ViewData["Title"] = "Tổng quan";
-    ViewData["Screen"] = ScreenId.SystemSettings;
+    ViewData["Title"] = "Tổng quan thống kê";
+    ViewData["Screen"] = ScreenId.AdminDashboard;
 }
 
 <style>
@@ -877,446 +871,68 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-
-            console.log("========== DASHBOARD DEBUG ==========");
-
-            // =====================================================
-            // 1. KIỂM TRA CHART.JS
-            // =====================================================
-
-            console.log("Chart.js =", typeof Chart);
+            const searchInput = document.getElementById("dashboardSearch");
+            if (searchInput) {
+                searchInput.addEventListener("input", function () {
+                    const kw = (searchInput.value || "").trim().toLowerCase();
+                    document.querySelectorAll("[data-search-row]").forEach(function (row) {
+                        const text = (row.textContent || "").toLowerCase();
+                        row.style.display = !kw || text.includes(kw) ? "" : "none";
+                    });
+                });
+            }
 
             if (typeof Chart === "undefined") {
-                console.error("❌ Chart.js KHÔNG LOAD");
-
                 return;
             }
 
-            console.log("✅ Chart.js đã LOAD");
-
-
-            // =====================================================
-            // 2. LẤY CANVAS
-            // =====================================================
-
-            const borrowCanvas =
-                document.getElementById("borrowChart");
-
-            console.log("borrowCanvas =", borrowCanvas);
-
+            const borrowCanvas = document.getElementById("borrowChart");
             if (!borrowCanvas) {
-
-                console.error(
-                    "❌ KHÔNG TÌM THẤY canvas #borrowChart"
-                );
-
                 return;
             }
 
-            console.log("✅ Tìm thấy canvas #borrowChart");
+            const monthlyData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MonthlyStatistics));
+            const monthlyLabels = monthlyData.map(x => x.Month);
+            const monthlyValues = monthlyData.map(x => x.BorrowCount);
 
-
-            // =====================================================
-            // 3. LẤY DATA
-            // =====================================================
-
-            const monthlyData = @Html.Raw(
-                System.Text.Json.JsonSerializer.Serialize(
-                    Model.MonthlyStatistics
-                )
-            );
-
-            const booksData = @Html.Raw(
-                System.Text.Json.JsonSerializer.Serialize(
-                    Model.MostBorrowedBooks
-                )
-            );
-
-            const categoriesData = @Html.Raw(
-                System.Text.Json.JsonSerializer.Serialize(
-                    Model.MostBorrowedCategories
-                )
-            );
-
-            const readersData = @Html.Raw(
-                System.Text.Json.JsonSerializer.Serialize(
-                    Model.MostActiveReaders
-                )
-            );
-
-
-            console.log("monthlyData =", monthlyData);
-            console.log("booksData =", booksData);
-            console.log("categoriesData =", categoriesData);
-            console.log("readersData =", readersData);
-
-
-            // =====================================================
-            // 4. BIỂU ĐỒ LƯỢT MƯỢN THEO THÁNG
-            // =====================================================
-
-            try {
-
-                const monthlyLabels =
-                    monthlyData.map(x => x.Month);
-
-                const monthlyValues =
-                    monthlyData.map(x => x.BorrowCount);
-
-                console.log(
-                    "monthlyLabels =",
-                    monthlyLabels
-                );
-
-                console.log(
-                    "monthlyValues =",
-                    monthlyValues
-                );
-
-                new Chart(borrowCanvas, {
-
-                    type: "line",
-
-                    data: {
-
-                        labels: monthlyLabels,
-
-                        datasets: [
-                            {
-                                label: "Lượt mượn",
-
-                                data: monthlyValues,
-
-                                borderWidth: 2,
-
-                                tension: 0.3,
-
-                                fill: true,
-
-                                pointRadius: 4,
-
-                                pointHoverRadius: 6
-                            }
-                        ]
-
+            new Chart(borrowCanvas, {
+                type: "line",
+                data: {
+                    labels: monthlyLabels,
+                    datasets: [
+                        {
+                            label: "Lượt mượn",
+                            data: monthlyValues,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: "index"
                     },
-
-                    options: {
-
-                        responsive: true,
-
-                        maintainAspectRatio: false,
-
-                        interaction: {
-                            intersect: false,
-                            mode: "index"
-                        },
-
-                        plugins: {
-
-                            legend: {
-                                display: true
-                            }
-
-                        },
-
-                        scales: {
-
-                            y: {
-
-                                beginAtZero: true,
-
-                                ticks: {
-                                    precision: 0
-                                }
-
-                            }
-
+                    plugins: {
+                        legend: {
+                            display: true
                         }
-
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
                     }
-
-                });
-
-                console.log(
-                    "✅ ĐÃ TẠO borrowChart"
-                );
-
-            }
-            catch (error) {
-
-                console.error(
-                    "❌ LỖI KHI TẠO borrowChart:",
-                    error
-                );
-
-            }
-
-
-            // =====================================================
-            // 5. TOP SÁCH
-            // =====================================================
-
-            const booksCanvas =
-                document.getElementById("topBooksChart");
-
-            if (booksCanvas && booksData.length > 0) {
-
-                try {
-
-                    new Chart(booksCanvas, {
-
-                        type: "bar",
-
-                        data: {
-
-                            labels:
-                                booksData.map(
-                                    x => x.BookTitle
-                                ),
-
-                            datasets: [
-                                {
-                                    label: "Lượt mượn",
-
-                                    data:
-                                        booksData.map(
-                                            x => x.BorrowCount
-                                        ),
-
-                                    borderWidth: 1
-                                }
-                            ]
-
-                        },
-
-                        options: {
-
-                            responsive: true,
-
-                            maintainAspectRatio: false,
-
-                            indexAxis: "y",
-
-                            plugins: {
-
-                                legend: {
-                                    display: false
-                                }
-
-                            },
-
-                            scales: {
-
-                                x: {
-
-                                    beginAtZero: true,
-
-                                    ticks: {
-                                        precision: 0
-                                    }
-
-                                }
-
-                            }
-
-                        }
-
-                    });
-
-                    console.log(
-                        "✅ ĐÃ TẠO topBooksChart"
-                    );
-
                 }
-                catch (error) {
-
-                    console.error(
-                        "❌ LỖI topBooksChart:",
-                        error
-                    );
-
-                }
-
-            }
-
-
-            // =====================================================
-            // 6. TOP THỂ LOẠI
-            // =====================================================
-
-            const categoriesCanvas =
-                document.getElementById(
-                    "topCategoriesChart"
-                );
-
-            if (
-                categoriesCanvas &&
-                categoriesData.length > 0
-            ) {
-
-                try {
-
-                    new Chart(categoriesCanvas, {
-
-                        type: "doughnut",
-
-                        data: {
-
-                            labels:
-                                categoriesData.map(
-                                    x => x.CategoryName
-                                ),
-
-                            datasets: [
-                                {
-                                    label: "Lượt mượn",
-
-                                    data:
-                                        categoriesData.map(
-                                            x => x.BorrowCount
-                                        ),
-
-                                    borderWidth: 1
-                                }
-                            ]
-
-                        },
-
-                        options: {
-
-                            responsive: true,
-
-                            maintainAspectRatio: false,
-
-                            plugins: {
-
-                                legend: {
-
-                                    display: true,
-
-                                    position: "right"
-
-                                }
-
-                            }
-
-                        }
-
-                    });
-
-                    console.log(
-                        "✅ ĐÃ TẠO topCategoriesChart"
-                    );
-
-                }
-                catch (error) {
-
-                    console.error(
-                        "❌ LỖI topCategoriesChart:",
-                        error
-                    );
-
-                }
-
-            }
-
-
-            // =====================================================
-            // 7. TOP ĐỘC GIẢ
-            // =====================================================
-
-            const readersCanvas =
-                document.getElementById(
-                    "topReadersChart"
-                );
-
-            if (
-                readersCanvas &&
-                readersData.length > 0
-            ) {
-
-                try {
-
-                    new Chart(readersCanvas, {
-
-                        type: "bar",
-
-                        data: {
-
-                            labels:
-                                readersData.map(
-                                    x => x.ReaderName
-                                ),
-
-                            datasets: [
-                                {
-                                    label: "Lượt mượn",
-
-                                    data:
-                                        readersData.map(
-                                            x => x.BorrowCount
-                                        ),
-
-                                    borderWidth: 1
-                                }
-                            ]
-
-                        },
-
-                        options: {
-
-                            responsive: true,
-
-                            maintainAspectRatio: false,
-
-                            plugins: {
-
-                                legend: {
-                                    display: false
-                                }
-
-                            },
-
-                            scales: {
-
-                                y: {
-
-                                    beginAtZero: true,
-
-                                    ticks: {
-                                        precision: 0
-                                    }
-
-                                }
-
-                            }
-
-                        }
-
-                    });
-
-                    console.log(
-                        "✅ ĐÃ TẠO topReadersChart"
-                    );
-
-                }
-                catch (error) {
-
-                    console.error(
-                        "❌ LỖI topReadersChart:",
-                        error
-                    );
-
-                }
-
-            }
-
-
-            console.log(
-                "========== DEBUG END =========="
-            );
-
+            });
         });
     </script>
 }
