@@ -75,7 +75,7 @@ public class AdminBooksPageViewModel
 /// <summary>
 /// Form thêm mới / chỉnh sửa đầu sách (hỗ trợ nhập kèm lô bản sao ban đầu, upload ảnh bìa + nhiều ảnh trang sách qua Cloudinary).
 /// </summary>
-public class BookUpsertViewModel
+public class BookUpsertViewModel : IValidatableObject
 {
     public Guid? Id { get; set; }
 
@@ -84,7 +84,8 @@ public class BookUpsertViewModel
     [Display(Name = "Tên đầu sách")]
     public string Title { get; set; } = string.Empty;
 
-    [StringLength(17, ErrorMessage = "Mã ISBN không vượt quá 17 ký tự.")]
+    [StringLength(17, MinimumLength = 10, ErrorMessage = "Mã ISBN phải từ 10 đến 17 ký tự.")]
+    [RegularExpression(@"^[0-9Xx\-]{10,17}$", ErrorMessage = "Mã ISBN chỉ được chứa chữ số (0-9), dấu gạch ngang (-) hoặc ký tự X.")]
     [Display(Name = "Mã ISBN")]
     public string? Isbn { get; set; }
 
@@ -126,6 +127,7 @@ public class BookUpsertViewModel
     public string? CoverUrl { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái đầu sách chỉ được chọn Đang hoạt động (ACTIVE) hoặc Ngừng hoạt động (INACTIVE).")]
     [Display(Name = "Trạng thái")]
     public string Status { get; set; } = EntityStatus.Active;
 
@@ -180,4 +182,29 @@ public class BookUpsertViewModel
     public IReadOnlyList<SelectOptionViewModel> Authors { get; set; } = [];
     public IReadOnlyList<SelectOptionViewModel> Publishers { get; set; } = [];
     public IReadOnlyList<SelectOptionViewModel> Shelves { get; set; } = [];
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        if (AcquiredDate.HasValue && AcquiredDate.Value > today)
+        {
+            yield return new ValidationResult(
+                "Ngày nhập kho không được lớn hơn ngày hiện tại.",
+                [nameof(AcquiredDate)]);
+        }
+
+        if (PublicationYear.HasValue && PublicationYear.Value > today.Year + 1)
+        {
+            yield return new ValidationResult(
+                $"Năm xuất bản không được vượt quá năm {today.Year + 1}.",
+                [nameof(PublicationYear)]);
+        }
+
+        if ((!Id.HasValue || Id.Value == Guid.Empty) && InitialCopyCount > 0 && (!ShelfId.HasValue || ShelfId.Value == Guid.Empty))
+        {
+            yield return new ValidationResult(
+                "Vui lòng chọn vị trí kệ khi nhập số lượng bản sao ban đầu.",
+                [nameof(ShelfId)]);
+        }
+    }
 }

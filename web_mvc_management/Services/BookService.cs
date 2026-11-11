@@ -28,7 +28,6 @@ public class BookService(
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
                 .ThenInclude(ba => ba.Author)
-            .Include(b => b.BookImages.Where(img => img.Status != EntityStatus.Deleted))
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
                 .ThenInclude(bc => bc.Shelf)
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
@@ -103,7 +102,6 @@ public class BookService(
             .Include(b => b.Publisher)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
                 .ThenInclude(ba => ba.Author)
-            .Include(b => b.BookImages.Where(img => img.Status != EntityStatus.Deleted))
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
                 .ThenInclude(bc => bc.Shelf)
             .Include(b => b.BookCopies.Where(bc => bc.Status != EntityStatus.Deleted && bc.CopyStatus != LibraryConstants.CopyStatus.Disposed))
@@ -483,6 +481,22 @@ public class BookService(
                 }
             }
 
+            var distinctAuthors = model.AuthorIds.Where(id => id != Guid.Empty).Distinct().ToList();
+            if (distinctAuthors.Count == 0)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<Guid>.ValidationError(ErrorCode.AuthorNotFound, "Vui lòng chọn ít nhất một tác giả hợp lệ.");
+            }
+
+            var validAuthorCount = await unitOfWork.Authors.CountAsync(
+                a => distinctAuthors.Contains(a.Id) && a.Status != EntityStatus.Deleted, ct);
+            if (validAuthorCount != distinctAuthors.Count)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<Guid>.Failure(ErrorCode.AuthorNotFound);
+            }
+
+            var normalizedStatus = model.Status == EntityStatus.Inactive ? EntityStatus.Inactive : EntityStatus.Active;
             var directCoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? null : model.CoverUrl.Trim();
             var primaryCoverUrl = coverUpload?.Url
                 ?? directCoverUrl
@@ -501,13 +515,12 @@ public class BookService(
                 PageCount = model.PageCount,
                 Description = model.Description?.Trim(),
                 CoverUrl = primaryCoverUrl,
-                Status = model.Status
+                Status = normalizedStatus
             };
 
             await unitOfWork.Books.AddAsync(book, ct);
 
             // Liên kết danh sách tác giả
-            var distinctAuthors = model.AuthorIds.Distinct().ToList();
             short order = 1;
             foreach (var authorId in distinctAuthors)
             {
@@ -727,6 +740,23 @@ public class BookService(
                 }
             }
 
+            var distinctAuthors = model.AuthorIds.Where(id => id != Guid.Empty).Distinct().ToList();
+            if (distinctAuthors.Count == 0)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(ErrorCode.AuthorNotFound, "Vui lòng chọn ít nhất một tác giả hợp lệ.");
+            }
+
+            var validAuthorCount = await unitOfWork.Authors.CountAsync(
+                a => distinctAuthors.Contains(a.Id) && a.Status != EntityStatus.Deleted, ct);
+            if (validAuthorCount != distinctAuthors.Count)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthorNotFound);
+            }
+
+            var normalizedStatus = model.Status == EntityStatus.Inactive ? EntityStatus.Inactive : EntityStatus.Active;
+
             book.Title = model.Title.Trim();
             book.Isbn = isbnTrim;
             book.CategoryId = model.CategoryId;
@@ -737,7 +767,7 @@ public class BookService(
             book.PageCount = model.PageCount;
             book.Description = model.Description?.Trim();
             book.CoverUrl = string.IsNullOrWhiteSpace(model.CoverUrl) ? book.CoverUrl : model.CoverUrl.Trim();
-            book.Status = model.Status;
+            book.Status = normalizedStatus;
 
             // Xử lý danh sách hình ảnh hiện có (BookImages)
             var existingImages = await unitOfWork.BookImages.FindAsync(
@@ -857,7 +887,6 @@ public class BookService(
                 asNoTracking: false,
                 ct);
 
-            var distinctAuthors = model.AuthorIds.Distinct().ToList();
             var existingByAuthorId = existingLinks.ToDictionary(ba => ba.AuthorId);
 
             foreach (var link in existingLinks)
@@ -1171,7 +1200,7 @@ public class BookService(
                     return ServiceResult<int>.ValidationError(ErrorCode.BookCopyBarcodeAlreadyExists);
                 }
 
-                await unitOfWork.BookCopies.AddAsync(new BookCopy
+                var newSingleCopy = new BookCopy
                 {
                     Id = Guid.NewGuid(),
                     BookId = book.Id,
@@ -1182,7 +1211,13 @@ public class BookService(
                     AcquiredDate = model.AcquiredDate ?? dateTimeProvider.Today,
                     Note = model.Note?.Trim(),
                     Status = EntityStatus.Active
-                }, ct);
+                };
+                await unitOfWork.BookCopies.AddAsync(newSingleCopy, ct);
+
+                if (book.Status == EntityStatus.Active)
+                {
+                    await TryAssignCopyToPendingReservationAsync(newSingleCopy, ct);
+                }
 
                 await unitOfWork.CommitTransactionAsync(ct);
                 return ServiceResult<int>.Success(1, $"Đã nhập bản sao mã vạch {customTrim} cho sách \"{book.Title}\".");
@@ -1196,7 +1231,7 @@ public class BookService(
                 var barcode = await GenerateUniqueBarcodeAsync(generatedBarcodes, ct);
                 generatedBarcodes.Add(barcode);
 
-                await unitOfWork.BookCopies.AddAsync(new BookCopy
+                var batchCopy = new BookCopy
                 {
                     Id = Guid.NewGuid(),
                     BookId = book.Id,
@@ -1207,7 +1242,13 @@ public class BookService(
                     AcquiredDate = acquiredDate,
                     Note = model.Note?.Trim(),
                     Status = EntityStatus.Active
-                }, ct);
+                };
+                await unitOfWork.BookCopies.AddAsync(batchCopy, ct);
+
+                if (book.Status == EntityStatus.Active)
+                {
+                    await TryAssignCopyToPendingReservationAsync(batchCopy, ct);
+                }
             }
 
             await unitOfWork.CommitTransactionAsync(ct);
@@ -1271,6 +1312,11 @@ public class BookService(
                 copy.CopyStatus = LibraryConstants.CopyStatus.Available;
                 copy.DisposedAt = null;
                 copy.DisposalReason = null;
+
+                if (copy.Status == EntityStatus.Active)
+                {
+                    await TryAssignCopyToPendingReservationAsync(copy, ct);
+                }
             }
 
             await unitOfWork.CommitTransactionAsync(ct);
@@ -1332,11 +1378,26 @@ public class BookService(
             }
 
             copy.CopyStatus = model.TargetStatus;
-            copy.DisposedAt = dateTimeProvider.UtcNow;
-            copy.DisposalReason = model.DisposalReason.Trim();
+            var reasonTrim = model.DisposalReason.Trim();
+            if (model.TargetStatus == LibraryConstants.CopyStatus.Disposed)
+            {
+                copy.DisposedAt = dateTimeProvider.UtcNow;
+                copy.DisposalReason = reasonTrim;
+            }
+            else
+            {
+                // Đảm bảo thỏa mãn ck_book_copies_dispose: ([copy_status]<>'DISPOSED' AND [disposed_at] IS NULL)
+                copy.DisposedAt = null;
+                copy.DisposalReason = null;
+            }
+
             if (!string.IsNullOrWhiteSpace(model.Note))
             {
                 copy.Note = model.Note.Trim();
+            }
+            else if (model.TargetStatus != LibraryConstants.CopyStatus.Disposed)
+            {
+                copy.Note = reasonTrim;
             }
 
             await unitOfWork.CommitTransactionAsync(ct);
@@ -1409,10 +1470,9 @@ public class BookService(
         await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
         try
         {
-            var copy = await unitOfWork.BookCopies.FirstOrDefaultAsync(
-                c => c.Id == id && c.Status == EntityStatus.Deleted,
-                asNoTracking: false,
-                ct);
+            var copy = await unitOfWork.BookCopies.GetQueryable(asNoTracking: false)
+                .Include(c => c.Book)
+                .FirstOrDefaultAsync(c => c.Id == id && c.Status == EntityStatus.Deleted, ct);
 
             if (copy == null)
             {
@@ -1420,7 +1480,20 @@ public class BookService(
                 return ServiceResult.Failure(ErrorCode.BookCopyNotFound);
             }
 
+            if (copy.Book.Status == EntityStatus.Deleted)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.CommonRecordInUse,
+                    $"Đầu sách \"{copy.Book.Title}\" của bản sao này đang ở trạng thái Đã xóa mềm. Vui lòng khôi phục đầu sách trước khi khôi phục bản sao.");
+            }
+
             copy.Status = EntityStatus.Active;
+            if (copy.CopyStatus == LibraryConstants.CopyStatus.Available && copy.Book.Status == EntityStatus.Active)
+            {
+                await TryAssignCopyToPendingReservationAsync(copy, ct);
+            }
+
             await unitOfWork.CommitTransactionAsync(ct);
             return ServiceResult.Success($"Đã khôi phục bản sao mã vạch {copy.Barcode} về trạng thái hoạt động.");
         }
@@ -1479,6 +1552,48 @@ public class BookService(
     // =========================================================================
     // HELPER METHODS
     // =========================================================================
+    private async Task TryAssignCopyToPendingReservationAsync(BookCopy copy, CancellationToken ct)
+    {
+        if (copy.CopyStatus != LibraryConstants.CopyStatus.Available || copy.Status != EntityStatus.Active)
+        {
+            return;
+        }
+
+        var now = dateTimeProvider.UtcNow;
+        var today = dateTimeProvider.Today;
+
+        var next = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
+            .Where(r => r.Status != EntityStatus.Deleted &&
+                        r.BookId == copy.BookId &&
+                        r.Reader.Status == EntityStatus.Active &&
+                        r.Reader.CardStatus == LibraryConstants.CardStatus.Active &&
+                        r.Reader.CardExpiryDate >= today &&
+                        r.Book.Status == EntityStatus.Active &&
+                        r.ReservationStatus == LibraryConstants.ReservationStatus.Pending &&
+                        !r.Reader.BorrowSlips.Any(s => s.Status != EntityStatus.Deleted &&
+                            s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.BookCopy.BookId == copy.BookId)))
+            .OrderBy(r => r.ReservedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (next == null)
+        {
+            return;
+        }
+
+        var setting = await unitOfWork.LibrarySettings.GetQueryable(asNoTracking: true)
+            .OrderByDescending(s => s.UpdatedAt)
+            .FirstOrDefaultAsync(ct);
+        var holdHours = setting?.ReservationHoldHours ?? (short)48;
+
+        next.ReservationStatus = LibraryConstants.ReservationStatus.Ready;
+        next.AssignedCopyId = copy.Id;
+        next.ReadyAt = now;
+        next.ExpiresAt = now.AddHours(holdHours);
+        copy.CopyStatus = LibraryConstants.CopyStatus.Reserved;
+
+        await unitOfWork.SaveChangesAsync(ct);
+    }
+
     private async Task<string> GenerateUniqueBarcodeAsync(HashSet<string> batchSet, CancellationToken ct)
     {
         for (var attempt = 0; attempt < 20; attempt++)

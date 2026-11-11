@@ -40,6 +40,7 @@ public class AuthService(
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
         var normalizedUsername = model.Username.Trim().ToLowerInvariant();
         var normalizedPhone = model.Phone.Trim();
+        var normalizedMemberCode = string.IsNullOrWhiteSpace(model.MemberCode) ? null : model.MemberCode.Trim();
 
         // SEC-22: Kiểm tra trùng lặp CSDL qua Repository
         if (await unitOfWork.Readers.ExistsAsync(x => x.Username.ToLower() == normalizedUsername, ct))
@@ -55,6 +56,12 @@ public class AuthService(
         if (await unitOfWork.Readers.ExistsAsync(x => x.Phone == normalizedPhone, ct))
         {
             return ServiceResult.ValidationError(ErrorCode.RegisterDuplicatePhone);
+        }
+
+        if (normalizedMemberCode != null &&
+            await unitOfWork.Readers.ExistsAsync(x => x.MemberCode != null && x.MemberCode.ToLower() == normalizedMemberCode.ToLower(), ct))
+        {
+            return ServiceResult.ValidationError("Mã sinh viên / Mã cán bộ này đã được đăng ký thẻ thư viện.");
         }
 
         if (!await unitOfWork.ReaderTypes.ExistsAsync(x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active, ct))
@@ -100,64 +107,103 @@ public class AuthService(
             return ServiceResult<Reader>.Failure(verifyResult.Message);
         }
 
-        // Lấy thông tin loại độc giả để tính hạn thẻ
-        var readerType = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
-            x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active,
-            asNoTracking: true,
-            cancellationToken: ct);
+        var normalizedUsername = model.Username.Trim();
+        var normalizedPhone = model.Phone.Trim();
+        var normalizedMemberCode = string.IsNullOrWhiteSpace(model.MemberCode) ? null : model.MemberCode.Trim();
 
-        if (readerType == null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult<Reader>.Failure(ErrorCode.RegisterInvalidReaderType);
+            if (await unitOfWork.Readers.ExistsAsync(x => x.Username.ToLower() == normalizedUsername.ToLower(), ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<Reader>.ValidationError(ErrorCode.RegisterDuplicateUsername);
+            }
+
+            if (await unitOfWork.Readers.ExistsAsync(x => x.Email.ToLower() == normalizedEmail, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<Reader>.ValidationError(ErrorCode.RegisterDuplicateEmail);
+            }
+
+            if (await unitOfWork.Readers.ExistsAsync(x => x.Phone == normalizedPhone, ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<Reader>.ValidationError(ErrorCode.RegisterDuplicatePhone);
+            }
+
+            if (normalizedMemberCode != null &&
+                await unitOfWork.Readers.ExistsAsync(x => x.MemberCode != null && x.MemberCode.ToLower() == normalizedMemberCode.ToLower(), ct))
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<Reader>.ValidationError("Mã sinh viên / Mã cán bộ này đã được đăng ký thẻ thư viện.");
+            }
+
+            // Lấy thông tin loại độc giả để tính hạn thẻ
+            var readerType = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
+                x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active,
+                asNoTracking: true,
+                cancellationToken: ct);
+
+            if (readerType == null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult<Reader>.Failure(ErrorCode.RegisterInvalidReaderType);
+            }
+
+            var today = dateTimeProvider.Today;
+            var validMonths = readerType.CardValidMonths > 0 ? readerType.CardValidMonths : 48;
+            var cardExpiry = today.AddMonths(validMonths);
+
+            // Sinh số thẻ thư viện duy nhất
+            var cardPrefix = readerType.Code.ToUpperInvariant() switch
+            {
+                "LECTURER" => "GV",
+                "GUEST" => "DG",
+                _ => "SV"
+            };
+            var sequence = await unitOfWork.Readers.CountAsync(cancellationToken: ct) + 1;
+            string cardNo;
+            do
+            {
+                cardNo = $"{cardPrefix}{today.Year}{sequence:D5}";
+                sequence++;
+            } while (await unitOfWork.Readers.ExistsAsync(x => x.CardNo == cardNo, ct));
+
+            var reader = new Reader
+            {
+                Id = Guid.NewGuid(),
+                ReaderTypeId = model.ReaderTypeId,
+                Username = normalizedUsername,
+                Email = normalizedEmail,
+                PasswordHash = PasswordHasher.HashPassword(model.Password),
+                FullName = model.FullName.Trim(),
+                Phone = normalizedPhone,
+                DateOfBirth = model.DateOfBirth,
+                Address = model.Address?.Trim(),
+                MemberCode = normalizedMemberCode,
+                CardNo = cardNo,
+                CardIssuedDate = today,
+                CardExpiryDate = cardExpiry,
+                CardStatus = LibraryConstants.CardStatus.Active,
+                Status = EntityStatus.Active,
+                SecurityStamp = Guid.NewGuid().ToString("N"),
+                FailedLoginAttempts = 0,
+                CreatedAt = dateTimeProvider.UtcNow,
+                UpdatedAt = dateTimeProvider.UtcNow
+            };
+
+            await unitOfWork.Readers.AddAsync(reader, ct);
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            logger.LogInformation("Độc giả mới đăng ký thành công: {Username} ({CardNo})", reader.Username, reader.CardNo);
+            return ServiceResult<Reader>.Success(reader, "Đã mở thẻ thư viện.");
         }
-
-        var today = dateTimeProvider.Today;
-        var validMonths = readerType.CardValidMonths > 0 ? readerType.CardValidMonths : 48;
-        var cardExpiry = today.AddMonths(validMonths);
-
-        // Sinh số thẻ thư viện duy nhất
-        var cardPrefix = readerType.Code.ToUpperInvariant() switch
+        catch
         {
-            "LECTURER" => "GV",
-            "GUEST" => "DG",
-            _ => "SV"
-        };
-        var sequence = await unitOfWork.Readers.CountAsync(cancellationToken: ct) + 1;
-        string cardNo;
-        do
-        {
-            cardNo = $"{cardPrefix}{today.Year}{sequence:D5}";
-            sequence++;
-        } while (await unitOfWork.Readers.ExistsAsync(x => x.CardNo == cardNo, ct));
-
-        var reader = new Reader
-        {
-            Id = Guid.NewGuid(),
-            ReaderTypeId = model.ReaderTypeId,
-            Username = model.Username.Trim(),
-            Email = normalizedEmail,
-            PasswordHash = PasswordHasher.HashPassword(model.Password),
-            FullName = model.FullName.Trim(),
-            Phone = model.Phone.Trim(),
-            DateOfBirth = model.DateOfBirth,
-            Address = model.Address?.Trim(),
-            MemberCode = model.MemberCode?.Trim(),
-            CardNo = cardNo,
-            CardIssuedDate = today,
-            CardExpiryDate = cardExpiry,
-            CardStatus = LibraryConstants.CardStatus.Active,
-            Status = EntityStatus.Active,
-            SecurityStamp = Guid.NewGuid().ToString("N"),
-            FailedLoginAttempts = 0,
-            CreatedAt = dateTimeProvider.UtcNow,
-            UpdatedAt = dateTimeProvider.UtcNow
-        };
-
-        await unitOfWork.Readers.AddAsync(reader, ct);
-        await unitOfWork.SaveChangesAsync(ct);
-
-        logger.LogInformation("Độc giả mới đăng ký thành công: {Username} ({CardNo})", reader.Username, reader.CardNo);
-        return ServiceResult<Reader>.Success(reader, "Đã mở thẻ thư viện.");
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
     }
 
     public async Task<ServiceResult<LoginStepResult>> InitiateReaderLoginAsync(ReaderLoginViewModel model, string clientIp, CancellationToken ct = default)

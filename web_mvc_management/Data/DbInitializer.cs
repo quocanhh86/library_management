@@ -16,6 +16,24 @@ public static class DbInitializer
 
     public static async Task InitializeAsync(ApplicationDbContext context, IConfiguration? configuration = null, bool forceReset = false)
     {
+        if (!forceReset)
+        {
+            try
+            {
+                var alreadySeeded = await context.BorrowSlips
+                    .AsNoTracking()
+                    .AnyAsync(s => s.Note != null && s.Note.Contains(ExamDatasetVersionMarker));
+                if (alreadySeeded)
+                {
+                    return;
+                }
+            }
+            catch
+            {
+                // Bảng chưa tồn tại trên DB mới tinh -> tiếp tục chạy Migrate và Seed đầy đủ bên dưới.
+            }
+        }
+
         // 0a. Tự động đồng bộ EF Core Migration (InitialCreate) cho cả DB mới tinh hoặc DB đã có bảng từ trước
         if (await context.Database.CanConnectAsync())
         {
@@ -96,6 +114,18 @@ public static class DbInitializer
 
             IF EXISTS (
                 SELECT 1
+                FROM sys.check_constraints
+                WHERE parent_object_id = OBJECT_ID('dbo.readers')
+                  AND name = 'ck_readers_card_status'
+                  AND definition NOT LIKE '%EXPIRED%'
+            )
+            BEGIN
+                ALTER TABLE dbo.readers DROP CONSTRAINT ck_readers_card_status;
+                ALTER TABLE dbo.readers ADD CONSTRAINT ck_readers_card_status CHECK ([card_status] IN ('ACTIVE', 'LOCKED', 'EXPIRED'));
+            END
+
+            IF EXISTS (
+                SELECT 1
                 FROM sys.indexes
                 WHERE object_id = OBJECT_ID('dbo.borrow_details')
                   AND name = 'uq_borrow_details_open_copy'
@@ -108,9 +138,10 @@ public static class DbInitializer
             END
 
             IF OBJECT_ID('dbo.trg_borrow_details_sync_copy', 'TR') IS NULL
+               OR OBJECT_DEFINITION(OBJECT_ID('dbo.trg_borrow_details_sync_copy')) NOT LIKE '%dbo.reservations%'
             BEGIN
                 EXEC(N'
-                CREATE TRIGGER dbo.trg_borrow_details_sync_copy
+                CREATE OR ALTER TRIGGER dbo.trg_borrow_details_sync_copy
                 ON dbo.borrow_details
                 AFTER INSERT, UPDATE
                 AS
@@ -130,7 +161,16 @@ public static class DbInitializer
 
                         UPDATE c
                         SET c.copy_status = CASE i.return_condition
-                                                WHEN ''GOOD''    THEN ''AVAILABLE''
+                                                WHEN ''GOOD''    THEN CASE
+                                                                          WHEN EXISTS (
+                                                                              SELECT 1
+                                                                              FROM dbo.reservations r
+                                                                              WHERE r.assigned_copy_id = c.id
+                                                                                AND r.reservation_status = ''READY''
+                                                                                AND r.status = ''ACTIVE''
+                                                                          ) THEN ''RESERVED''
+                                                                          ELSE ''AVAILABLE''
+                                                                      END
                                                 WHEN ''DAMAGED'' THEN ''DAMAGED''
                                                 WHEN ''LOST''    THEN ''LOST''
                                             END,
@@ -282,6 +322,11 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
+        if (!forceReset && hasExamDatasetV3 && await context.Books.CountAsync() >= 25 && await context.BookImages.AnyAsync())
+        {
+            return;
+        }
+
         var adminStaff = await context.Staff.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync(x => x.Role == AppRoles.Admin && x.Status == EntityStatus.Active)
             ?? await context.Staff.OrderBy(x => x.CreatedAt).FirstAsync();
         var librarianStaff = await context.Staff.OrderBy(x => x.CreatedAt).FirstOrDefaultAsync(x => x.Role == AppRoles.Librarian && x.Status == EntityStatus.Active)
@@ -377,6 +422,11 @@ public static class DbInitializer
         if (context.ChangeTracker.HasChanges())
         {
             await context.SaveChangesAsync();
+        }
+
+        if (!forceReset && hasExamDatasetV3 && await context.Books.CountAsync() >= 25 && await context.BookImages.AnyAsync())
+        {
+            return;
         }
 
         // 9. Đầu sách (26 Active + 2 Deleted = 28 cuốn), Tác giả sách (BookAuthors) và Bản sao vật lý (BookCopies)

@@ -140,11 +140,12 @@ public class SystemAdminService(
             }
 
             var targetRole = model.Role == AppRoles.Admin ? AppRoles.Admin : AppRoles.Librarian;
+            var normalizedStatus = model.Status == EntityStatus.Inactive ? EntityStatus.Inactive : EntityStatus.Active;
 
             // Bảo vệ không cho Admin tự khóa hoặc tự hạ quyền chính mình
             if (userContext.CurrentUserId.HasValue && userContext.CurrentUserId.Value == staff.Id)
             {
-                if (targetRole != staff.Role || model.Status != EntityStatus.Active)
+                if (targetRole != staff.Role || normalizedStatus != EntityStatus.Active)
                 {
                     await unitOfWork.RollbackTransactionAsync(ct);
                     return ServiceResult.Failure(ErrorCode.StaffCannotModifySelf);
@@ -152,7 +153,7 @@ public class SystemAdminService(
             }
 
             // Bảo vệ không làm mất Admin hoạt động cuối cùng của hệ thống
-            if (staff.Role == AppRoles.Admin && (targetRole != AppRoles.Admin || model.Status != EntityStatus.Active))
+            if (staff.Role == AppRoles.Admin && (targetRole != AppRoles.Admin || normalizedStatus != EntityStatus.Active))
             {
                 var hasOtherActiveAdmin = await unitOfWork.Staff.ExistsAsync(
                     s => s.Id != staff.Id && s.Role == AppRoles.Admin && s.Status == EntityStatus.Active,
@@ -167,14 +168,14 @@ public class SystemAdminService(
             }
 
             var securitySensitiveChanged = staff.Role != targetRole ||
-                                           staff.Status != model.Status ||
+                                           staff.Status != normalizedStatus ||
                                            !string.IsNullOrWhiteSpace(model.NewPassword);
 
             staff.FullName = model.FullName.Trim();
             staff.Email = emailTrim;
-            staff.Phone = model.Phone?.Trim();
+            staff.Phone = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim();
             staff.Role = targetRole;
-            staff.Status = model.Status;
+            staff.Status = normalizedStatus;
 
             if (!string.IsNullOrWhiteSpace(model.NewPassword))
             {

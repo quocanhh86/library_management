@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using web_mvc_management.Common;
 
 namespace web_mvc_management.Models.ViewModels.Auth;
 
@@ -29,10 +30,11 @@ public class RegisteredReaderViewModel
 /// <summary>
 /// ViewModel đăng ký tài khoản độc giả (SEC-18: Strict DTO Mass Assignment Defense).
 /// </summary>
-public class ReaderRegisterViewModel
+public class ReaderRegisterViewModel : IValidatableObject
 {
     [Required(ErrorMessage = "Vui lòng nhập họ và tên")]
     [StringLength(150, ErrorMessage = "Họ tên không được vượt quá 150 ký tự")]
+    [NoNumbers(ErrorMessage = "Họ và tên không được chứa chữ số hoặc ký tự đặc biệt")]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
@@ -44,6 +46,7 @@ public class ReaderRegisterViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập địa chỉ email")]
     [EmailAddress(ErrorMessage = "Địa chỉ email không đúng định dạng")]
+    [RegularExpression(@"^[^\s@]+@[^\s@]+\.[^\s@]+$", ErrorMessage = "Địa chỉ email không đúng định dạng (ví dụ: sinhvien@student.utc.edu.vn)")]
     [StringLength(255, ErrorMessage = "Email không được vượt quá 255 ký tự")]
     [Display(Name = "Email")]
     public string Email { get; set; } = string.Empty;
@@ -58,6 +61,8 @@ public class ReaderRegisterViewModel
     [Display(Name = "Loại độc giả")]
     public Guid ReaderTypeId { get; set; }
 
+    [StringLength(30, MinimumLength = 3, ErrorMessage = "Mã sinh viên / cán bộ phải từ 3 đến 30 ký tự")]
+    [RegularExpression(@"^[A-Za-z0-9._\-]{3,30}$", ErrorMessage = "Mã sinh viên / cán bộ chỉ chứa chữ cái không dấu, chữ số, dấu gạch ngang hoặc gạch dưới")]
     [Display(Name = "Mã sinh viên (nếu có)")]
     public string? MemberCode { get; set; }
 
@@ -81,4 +86,24 @@ public class ReaderRegisterViewModel
     [DataType(DataType.Password)]
     [Display(Name = "Xác nhận mật khẩu")]
     public string ConfirmPassword { get; set; } = string.Empty;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (DateOfBirth.HasValue)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            if (DateOfBirth.Value < new DateOnly(1900, 1, 1))
+            {
+                yield return new ValidationResult(
+                    "Ngày sinh không hợp lệ (phải từ năm 1900 trở đi).",
+                    [nameof(DateOfBirth)]);
+            }
+            else if (DateOfBirth.Value > today.AddYears(-6))
+            {
+                yield return new ValidationResult(
+                    "Độc giả đăng ký thẻ phải từ 6 tuổi trở lên (ngày sinh không hợp lệ).",
+                    [nameof(DateOfBirth)]);
+            }
+        }
+    }
 }

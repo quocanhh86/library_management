@@ -6,7 +6,7 @@ using web_mvc_management.Middlewares;
 
 // Bật Managed Networking cho Microsoft.Data.SqlClient trên Windows (.NET 10.0)
 // nhằm loại bỏ hoàn toàn lỗi treo/timeout bất đồng bộ của thư viện C++ native SNI.dll (Win32Exception: The wait operation timed out)
-AppContext.SetSwitch("Switch.Microsoft.Data.SqlClient.UseManagedNetworkingOnWindows", true);
+AppContext.SetSwitch("Switch.Microsoft.Data.SqlClient.UseManagedNetworkingOnWindows", false);
 
 // Nạp file .env tại thư mục gốc dự án (duyệt ngược từ CWD và fallback từ AppContext.BaseDirectory)
 Env.TraversePath().Load();
