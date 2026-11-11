@@ -474,76 +474,118 @@ public class ReaderPortalService(
     {
         var today = dateTimeProvider.Today;
 
-        var detail = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: false)
-            .Include(d => d.BookCopy).ThenInclude(c => c.Book)
-            .Include(d => d.BorrowSlip).ThenInclude(s => s.Reader).ThenInclude(r => r.ReaderType)
-            .FirstOrDefaultAsync(d => d.Id == detailId
-                                      && d.Status != EntityStatus.Deleted
-                                      && d.BorrowSlip.ReaderId == readerId
-                                      && d.BorrowSlip.Status != EntityStatus.Deleted, ct);
-
-        if (detail is null)
+        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
+        try
         {
-            return ServiceResult.Failure(ErrorCode.BorrowDetailNotFound);
-        }
+            var detail = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: false)
+                .Include(d => d.BookCopy).ThenInclude(c => c.Book)
+                .Include(d => d.BorrowSlip).ThenInclude(s => s.Reader).ThenInclude(r => r.ReaderType)
+                .FirstOrDefaultAsync(d => d.Id == detailId
+                                          && d.Status != EntityStatus.Deleted
+                                          && d.BorrowSlip.ReaderId == readerId
+                                          && d.BorrowSlip.Status != EntityStatus.Deleted, ct);
 
-        if (detail.ReturnedAt != null)
+            if (detail is null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BorrowDetailNotFound);
+            }
+
+            if (detail.ReturnedAt != null)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookAlreadyReturned);
+            }
+
+            if (detail.BookCopy.Status != EntityStatus.Active || detail.BookCopy.Book.Status != EntityStatus.Active)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.BookCopyNotAvailable);
+            }
+
+            var reader = detail.BorrowSlip.Reader;
+            if (reader.Status != EntityStatus.Active)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.AuthAccountInactive);
+            }
+
+            if (reader.CardStatus == CardStatus.Locked)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderCardLocked);
+            }
+
+            if (reader.CardStatus == CardStatus.Expired || reader.CardExpiryDate < today)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderCardExpired);
+            }
+
+            if (detail.DueDate < today)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.RenewOverdueNotAllowed);
+            }
+
+            var hasOtherOverdue = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
+                .AnyAsync(d => d.Status != EntityStatus.Deleted
+                               && d.ReturnedAt == null
+                               && d.BorrowSlip.ReaderId == readerId
+                               && d.BorrowSlip.Status != EntityStatus.Deleted
+                               && d.DueDate < today, ct);
+
+            if (hasOtherOverdue)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderHasOverdueBooks);
+            }
+
+            var setting = await GetSettingAsync(ct);
+            var maxUnpaidFine = setting?.MaxUnpaidFine ?? 50000m;
+            var unpaid = await GetTotalUnpaidFineAsync(readerId, ct);
+            if (unpaid >= maxUnpaidFine)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.ReaderHasUnpaidFines,
+                    ErrorMessages.Format(ErrorCode.ReaderHasUnpaidFines, CurrencyHelper.ToVnd(unpaid)));
+            }
+
+            var readerType = reader.ReaderType;
+            if (detail.RenewCount >= readerType.MaxRenewals)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.RenewalLimitReached,
+                    ErrorMessages.Format(ErrorCode.RenewalLimitReached, readerType.MaxRenewals));
+            }
+
+            var someoneWaiting = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
+                .AnyAsync(r => r.Status != EntityStatus.Deleted
+                               && r.BookId == detail.BookCopy.BookId
+                               && r.ReaderId != readerId
+                               && r.ReservationStatus == ReservationStatus.Pending, ct);
+
+            if (someoneWaiting)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.RenewBlockedByReservation);
+            }
+
+            detail.DueDate = detail.DueDate.AddDays(readerType.RenewDays);
+            detail.RenewCount++;
+            await unitOfWork.CommitTransactionAsync(ct);
+
+            var remaining = readerType.MaxRenewals - detail.RenewCount;
+            return ServiceResult.Success(
+                $"Đã gia hạn tài liệu \"{detail.BookCopy.Book.Title}\" đến ngày {detail.DueDate.ToString(AppConstants.DefaultDateFormat)} (còn {remaining} lần gia hạn).");
+        }
+        catch
         {
-            return ServiceResult.Failure(ErrorCode.BookAlreadyReturned);
+            await unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
-
-        var reader = detail.BorrowSlip.Reader;
-        if (reader.CardStatus == CardStatus.Locked)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderCardLocked);
-        }
-
-        if (reader.CardStatus == CardStatus.Expired || reader.CardExpiryDate < today)
-        {
-            return ServiceResult.Failure(ErrorCode.ReaderCardExpired);
-        }
-
-        var setting = await GetSettingAsync(ct);
-        var maxUnpaidFine = setting?.MaxUnpaidFine ?? 50000m;
-        var unpaid = await GetTotalUnpaidFineAsync(readerId, ct);
-        if (unpaid >= maxUnpaidFine)
-        {
-            return ServiceResult.Failure(
-                ErrorCode.ReaderHasUnpaidFines,
-                ErrorMessages.Format(ErrorCode.ReaderHasUnpaidFines, CurrencyHelper.ToVnd(unpaid)));
-        }
-
-        if (detail.DueDate < today)
-        {
-            return ServiceResult.Failure(ErrorCode.RenewOverdueNotAllowed);
-        }
-
-        var readerType = reader.ReaderType;
-        if (detail.RenewCount >= readerType.MaxRenewals)
-        {
-            return ServiceResult.Failure(
-                ErrorCode.RenewalLimitReached,
-                ErrorMessages.Format(ErrorCode.RenewalLimitReached, readerType.MaxRenewals));
-        }
-
-        var someoneWaiting = await unitOfWork.Reservations.GetQueryable(asNoTracking: true)
-            .AnyAsync(r => r.Status != EntityStatus.Deleted
-                           && r.BookId == detail.BookCopy.BookId
-                           && r.ReaderId != readerId
-                           && r.ReservationStatus == ReservationStatus.Pending, ct);
-
-        if (someoneWaiting)
-        {
-            return ServiceResult.Failure(ErrorCode.RenewBlockedByReservation);
-        }
-
-        detail.DueDate = detail.DueDate.AddDays(readerType.RenewDays);
-        detail.RenewCount++;
-        await unitOfWork.SaveChangesAsync(ct);
-
-        var remaining = readerType.MaxRenewals - detail.RenewCount;
-        return ServiceResult.Success(
-            $"Đã gia hạn tài liệu \"{detail.BookCopy.Book.Title}\" đến ngày {detail.DueDate.ToString(AppConstants.DefaultDateFormat)} (còn {remaining} lần gia hạn).");
     }
 
     public async Task<ServiceResult> CreateReservationAsync(Guid readerId, Guid bookId, CancellationToken ct = default)
@@ -573,6 +615,30 @@ public class ReaderPortalService(
             {
                 await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(ErrorCode.ReaderCardExpired);
+            }
+
+            var hasOverdue = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
+                .AnyAsync(d => d.Status != EntityStatus.Deleted
+                               && d.ReturnedAt == null
+                               && d.BorrowSlip.ReaderId == readerId
+                               && d.BorrowSlip.Status != EntityStatus.Deleted
+                               && d.DueDate < today, ct);
+
+            if (hasOverdue)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(ErrorCode.ReaderHasOverdueBooks);
+            }
+
+            var setting = await GetSettingAsync(ct);
+            var maxUnpaidFine = setting?.MaxUnpaidFine ?? 50000m;
+            var unpaid = await GetTotalUnpaidFineAsync(readerId, ct);
+            if (unpaid >= maxUnpaidFine)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.Failure(
+                    ErrorCode.ReaderHasUnpaidFines,
+                    ErrorMessages.Format(ErrorCode.ReaderHasUnpaidFines, CurrencyHelper.ToVnd(unpaid)));
             }
 
             var book = await unitOfWork.Books.GetQueryable(asNoTracking: true)
@@ -681,13 +747,18 @@ public class ReaderPortalService(
             var setting = await GetSettingAsync(ct);
             if (wasReady && setting is not null && reservation.AssignedCopy is { CopyStatus: CopyStatus.Reserved } copy)
             {
+                var today = dateTimeProvider.Today;
                 var next = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
                     .Where(r => r.Status != EntityStatus.Deleted
                                 && r.BookId == copy.BookId
                                 && r.Id != reservation.Id
                                 && r.Reader.Status == EntityStatus.Active
+                                && r.Reader.CardStatus == CardStatus.Active
+                                && r.Reader.CardExpiryDate >= today
                                 && r.Book.Status == EntityStatus.Active
-                                && r.ReservationStatus == ReservationStatus.Pending)
+                                && r.ReservationStatus == ReservationStatus.Pending
+                                && !r.Reader.BorrowSlips.Any(s => s.Status != EntityStatus.Deleted &&
+                                    s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.BookCopy.BookId == copy.BookId)))
                     .OrderBy(r => r.ReservedAt)
                     .FirstOrDefaultAsync(ct);
 

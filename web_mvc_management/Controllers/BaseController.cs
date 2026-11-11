@@ -24,10 +24,26 @@ public abstract class BaseController : Controller
         TempData[AppConstants.TempDataKeys.SuccessMessage] = message;
 
     /// <summary>
-    /// Đặt thông báo lỗi vào TempData.
+    /// Đặt thông báo lỗi vào TempData (tự động đính kèm lỗi chi tiết đầu tiên từ ModelState nếu là lỗi validate chung).
     /// </summary>
-    protected void SetErrorMessage(string message) =>
+    protected void SetErrorMessage(string message)
+    {
+        if (!ModelState.IsValid &&
+            string.Equals(message, ErrorMessages.Get(ErrorCode.CommonValidationError), StringComparison.Ordinal))
+        {
+            var firstError = ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .FirstOrDefault(msg => !string.IsNullOrWhiteSpace(msg));
+            if (!string.IsNullOrWhiteSpace(firstError))
+            {
+                TempData[AppConstants.TempDataKeys.ErrorMessage] = $"{message} ({firstError})";
+                return;
+            }
+        }
+
         TempData[AppConstants.TempDataKeys.ErrorMessage] = message;
+    }
 
     /// <summary>
     /// Đặt thông báo cảnh báo vào TempData.

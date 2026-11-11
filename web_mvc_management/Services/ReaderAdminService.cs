@@ -48,9 +48,24 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
             query = query.Where(r => r.ReaderTypeId == filter.ReaderTypeId.Value);
         }
 
+        var today = DateOnly.FromDateTime(DateTime.Now);
+
         if (!string.IsNullOrWhiteSpace(filter.CardStatus))
         {
-            query = query.Where(r => r.CardStatus == filter.CardStatus);
+            if (filter.CardStatus == LibraryConstants.CardStatus.Expired)
+            {
+                query = query.Where(r =>
+                    r.CardStatus == LibraryConstants.CardStatus.Expired ||
+                    (r.CardStatus == LibraryConstants.CardStatus.Active && r.CardExpiryDate < today));
+            }
+            else if (filter.CardStatus == LibraryConstants.CardStatus.Active)
+            {
+                query = query.Where(r => r.CardStatus == LibraryConstants.CardStatus.Active && r.CardExpiryDate >= today);
+            }
+            else
+            {
+                query = query.Where(r => r.CardStatus == filter.CardStatus);
+            }
         }
 
         var paged = await query
@@ -71,7 +86,9 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
                 LoanDays = r.ReaderType.LoanDays,
                 CardIssuedDate = r.CardIssuedDate,
                 CardExpiryDate = r.CardExpiryDate,
-                CardStatus = r.CardStatus,
+                CardStatus = r.CardStatus == LibraryConstants.CardStatus.Locked
+                    ? LibraryConstants.CardStatus.Locked
+                    : (r.CardExpiryDate < today ? LibraryConstants.CardStatus.Expired : r.CardStatus),
                 LockReason = r.LockReason,
                 Status = r.Status,
                 ActiveBorrowCount = r.BorrowSlips
@@ -144,6 +161,26 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
                 return ServiceResult.Failure(ErrorCode.ReaderNotFound);
             }
 
+            if (model.CardExpiryDate <= reader.CardIssuedDate)
+            {
+                await unitOfWork.RollbackTransactionAsync(ct);
+                return ServiceResult.ValidationError(
+                    $"Ngày hết hạn thẻ phải sau ngày cấp thẻ ({reader.CardIssuedDate:dd/MM/yyyy}).");
+            }
+
+            var phoneTrim = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim();
+            if (phoneTrim != null)
+            {
+                var duplicatePhone = await unitOfWork.Readers.ExistsAsync(
+                    r => r.Id != reader.Id && r.Phone == phoneTrim,
+                    ct);
+                if (duplicatePhone)
+                {
+                    await unitOfWork.RollbackTransactionAsync(ct);
+                    return ServiceResult.ValidationError(ErrorCode.RegisterDuplicatePhone);
+                }
+            }
+
             var readerTypeOk = await unitOfWork.ReaderTypes.ExistsAsync(
                 rt => rt.Id == model.ReaderTypeId && rt.Status != EntityStatus.Deleted,
                 ct);
@@ -159,7 +196,7 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
                 reader.CardStatus != model.CardStatus;
 
             reader.FullName = model.FullName.Trim();
-            reader.Phone = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim();
+            reader.Phone = phoneTrim;
             reader.ReaderTypeId = model.ReaderTypeId;
             reader.CardExpiryDate = model.CardExpiryDate;
             reader.Status = model.Status;
@@ -176,6 +213,14 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
             }
 
             reader.CardStatus = model.CardStatus;
+
+            // Nếu thẻ bị khóa / hết hạn hoặc tài khoản bị vô hiệu hóa, tự động giải phóng các phiếu đặt trước đang mở để tránh kẹt sách (Copy Trap)
+            if (model.CardStatus != LibraryConstants.CardStatus.Active ||
+                model.CardExpiryDate < today ||
+                model.Status != EntityStatus.Active)
+            {
+                await CancelOpenReservationsAndReleaseCopiesAsync(reader.Id, today, ct);
+            }
 
             if (securitySensitiveChanged)
             {
@@ -238,57 +283,13 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
                     "Không thể xóa mềm độc giả đang còn nợ tiền phạt chưa thanh toán. Vui lòng thu hoặc miễn phạt trước.");
             }
 
-            // Tự động đóng các phiếu đặt trước đang mở (PENDING / READY) và giải phóng bản sao đang giữ (nếu có)
-            var activeReservations = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
-                .Include(r => r.AssignedCopy)
-                .Where(r => r.ReaderId == id &&
-                            r.Status != EntityStatus.Deleted &&
-                            (r.ReservationStatus == LibraryConstants.ReservationStatus.Pending ||
-                             r.ReservationStatus == LibraryConstants.ReservationStatus.Ready))
-                .ToListAsync(ct);
-
-            if (activeReservations.Count > 0)
-            {
-                var now = DateTimeOffset.UtcNow;
-                var setting = await unitOfWork.LibrarySettings.GetQueryable(asNoTracking: true)
-                    .OrderByDescending(s => s.UpdatedAt)
-                    .FirstOrDefaultAsync(ct);
-                var holdHours = setting?.ReservationHoldHours ?? (short)48;
-
-                foreach (var res in activeReservations)
-                {
-                    var wasReady = res.ReservationStatus == LibraryConstants.ReservationStatus.Ready;
-                    res.ReservationStatus = LibraryConstants.ReservationStatus.Cancelled;
-                    res.ClosedAt = now;
-
-                    if (wasReady && res.AssignedCopy is { CopyStatus: LibraryConstants.CopyStatus.Reserved } heldCopy)
-                    {
-                        var nextPending = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
-                            .Where(r => r.Status != EntityStatus.Deleted &&
-                                        r.BookId == heldCopy.BookId &&
-                                        r.ReaderId != id &&
-                                        r.Reader.Status == EntityStatus.Active &&
-                                        r.ReservationStatus == LibraryConstants.ReservationStatus.Pending)
-                            .OrderBy(r => r.ReservedAt)
-                            .FirstOrDefaultAsync(ct);
-
-                        if (nextPending == null)
-                        {
-                            heldCopy.CopyStatus = LibraryConstants.CopyStatus.Available;
-                        }
-                        else
-                        {
-                            nextPending.ReservationStatus = LibraryConstants.ReservationStatus.Ready;
-                            nextPending.AssignedCopyId = heldCopy.Id;
-                            nextPending.ReadyAt = now;
-                            nextPending.ExpiresAt = now.AddHours(holdHours);
-                            heldCopy.CopyStatus = LibraryConstants.CopyStatus.Reserved;
-                        }
-                    }
-                }
-            }
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            await CancelOpenReservationsAndReleaseCopiesAsync(id, today, ct);
 
             reader.Status = EntityStatus.Deleted;
+            reader.CardStatus = LibraryConstants.CardStatus.Locked;
+            reader.LockedAt ??= DateTimeOffset.UtcNow;
+            reader.LockReason ??= "Đã xóa mềm hồ sơ độc giả";
             reader.SecurityStamp = Guid.NewGuid().ToString("N");
             await unitOfWork.CommitTransactionAsync(ct);
             return ServiceResult.Success($"Đã xóa mềm độc giả \"{reader.CardNo} - {reader.FullName}\" (chuyển sang DELETED).");
@@ -317,6 +318,13 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
             }
 
             reader.Status = EntityStatus.Active;
+            if (reader.CardStatus == LibraryConstants.CardStatus.Locked &&
+                string.Equals(reader.LockReason, "Đã xóa mềm hồ sơ độc giả", StringComparison.Ordinal))
+            {
+                reader.CardStatus = LibraryConstants.CardStatus.Active;
+                reader.LockedAt = null;
+                reader.LockReason = null;
+            }
             reader.FailedLoginAttempts = 0;
             reader.LockedUntil = null;
             reader.SecurityStamp = Guid.NewGuid().ToString("N");
@@ -327,6 +335,67 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
         {
             await unitOfWork.RollbackTransactionAsync(ct);
             throw;
+        }
+    }
+
+    private async Task CancelOpenReservationsAndReleaseCopiesAsync(Guid readerId, DateOnly today, CancellationToken ct)
+    {
+        var activeReservations = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
+            .Include(r => r.AssignedCopy)
+            .Where(r => r.ReaderId == readerId &&
+                        r.Status != EntityStatus.Deleted &&
+                        (r.ReservationStatus == LibraryConstants.ReservationStatus.Pending ||
+                         r.ReservationStatus == LibraryConstants.ReservationStatus.Ready))
+            .ToListAsync(ct);
+
+        if (activeReservations.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var setting = await unitOfWork.LibrarySettings.GetQueryable(asNoTracking: true)
+            .OrderByDescending(s => s.UpdatedAt)
+            .FirstOrDefaultAsync(ct);
+        var holdHours = setting?.ReservationHoldHours ?? (short)48;
+
+        foreach (var res in activeReservations)
+        {
+            var wasReady = res.ReservationStatus == LibraryConstants.ReservationStatus.Ready;
+            res.ReservationStatus = LibraryConstants.ReservationStatus.Cancelled;
+            res.ClosedAt = now;
+
+            if (wasReady && res.AssignedCopy is { CopyStatus: LibraryConstants.CopyStatus.Reserved } heldCopy)
+            {
+                var nextPending = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
+                    .Where(r => r.Status != EntityStatus.Deleted &&
+                                r.BookId == heldCopy.BookId &&
+                                r.ReaderId != readerId &&
+                                r.Reader.Status == EntityStatus.Active &&
+                                r.Reader.CardStatus == LibraryConstants.CardStatus.Active &&
+                                r.Reader.CardExpiryDate >= today &&
+                                r.Book.Status == EntityStatus.Active &&
+                                r.ReservationStatus == LibraryConstants.ReservationStatus.Pending &&
+                                !r.Reader.BorrowSlips.Any(s => s.Status != EntityStatus.Deleted &&
+                                    s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.BookCopy.BookId == heldCopy.BookId)))
+                    .OrderBy(r => r.ReservedAt)
+                    .FirstOrDefaultAsync(ct);
+
+                if (nextPending == null)
+                {
+                    heldCopy.CopyStatus = LibraryConstants.CopyStatus.Available;
+                }
+                else
+                {
+                    nextPending.ReservationStatus = LibraryConstants.ReservationStatus.Ready;
+                    nextPending.AssignedCopyId = heldCopy.Id;
+                    nextPending.ReadyAt = now;
+                    nextPending.ExpiresAt = now.AddHours(holdHours);
+                    heldCopy.CopyStatus = LibraryConstants.CopyStatus.Reserved;
+                }
+
+                await unitOfWork.SaveChangesAsync(ct);
+            }
         }
     }
 

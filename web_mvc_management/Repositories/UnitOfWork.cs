@@ -47,17 +47,17 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
     public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) =>
         await BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
-    public async Task<IDbContextTransaction> BeginTransactionAsync(
+    public Task<IDbContextTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel,
         CancellationToken cancellationToken = default)
     {
         if (_currentTransaction != null)
         {
-            return _currentTransaction;
+            return Task.FromResult(_currentTransaction);
         }
 
-        _currentTransaction = await _context.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
-        return _currentTransaction;
+        _currentTransaction = _context.Database.BeginTransaction(isolationLevel);
+        return Task.FromResult(_currentTransaction);
     }
 
     public async Task<IDbContextTransaction> BeginTransactionWithLockAsync(
@@ -134,7 +134,7 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
 
             if (_currentTransaction != null)
             {
-                await _currentTransaction.CommitAsync(cancellationToken);
+                _currentTransaction.Commit();
             }
         }
         catch
@@ -146,29 +146,30 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.DisposeAsync();
+                _currentTransaction.Dispose();
                 _currentTransaction = null;
             }
         }
     }
 
-    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
+    public Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.RollbackAsync(cancellationToken);
+                _currentTransaction.Rollback();
             }
         }
         finally
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.DisposeAsync();
+                _currentTransaction.Dispose();
                 _currentTransaction = null;
             }
         }
+        return Task.CompletedTask;
     }
 
     public void Dispose()
@@ -178,13 +179,11 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         GC.SuppressFinalize(this);
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_currentTransaction != null)
-        {
-            await _currentTransaction.DisposeAsync();
-        }
-        await _context.DisposeAsync();
+        _currentTransaction?.Dispose();
+        _context.Dispose();
         GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
 }

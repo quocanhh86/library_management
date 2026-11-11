@@ -305,18 +305,23 @@ public class CatalogMasterService(IUnitOfWork unitOfWork) : ICatalogMasterServic
     public async Task<ServiceResult> SaveAuthorAsync(AuthorFormViewModel model, CancellationToken ct = default)
     {
         var nameTrim = model.FullName.Trim();
+        var normalizedStatus = model.Status == EntityStatus.Inactive ? EntityStatus.Inactive : EntityStatus.Active;
 
         await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
         try
         {
-            var duplicate = await unitOfWork.Authors.ExistsAsync(
-                x => x.Status != EntityStatus.Deleted && x.FullName.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
+            var existingAuthor = await unitOfWork.Authors.FirstOrDefaultAsync(
+                x => x.FullName.ToLower() == nameTrim.ToLower() && x.Id != model.Id,
+                asNoTracking: true,
                 ct);
 
-            if (duplicate)
+            if (existingAuthor != null)
             {
                 await unitOfWork.RollbackTransactionAsync(ct);
-                return ServiceResult.ValidationError(ErrorCode.AuthorNameAlreadyExists);
+                var msg = existingAuthor.Status == EntityStatus.Deleted
+                    ? $"Tác giả \"{nameTrim}\" đang nằm trong mục Đã xóa mềm. Vui lòng khôi phục hoặc xóa vĩnh viễn trước."
+                    : null;
+                return ServiceResult.ValidationError(ErrorCode.AuthorNameAlreadyExists, msg);
             }
 
             if (model.Id.HasValue && model.Id.Value != Guid.Empty)
@@ -330,7 +335,7 @@ public class CatalogMasterService(IUnitOfWork unitOfWork) : ICatalogMasterServic
 
                 entity.FullName = nameTrim;
                 entity.Biography = model.Biography?.Trim();
-                entity.Status = model.Status;
+                entity.Status = normalizedStatus;
                 await unitOfWork.CommitTransactionAsync(ct);
                 return ServiceResult.Success($"Đã cập nhật tác giả \"{entity.FullName}\".");
             }
@@ -341,7 +346,7 @@ public class CatalogMasterService(IUnitOfWork unitOfWork) : ICatalogMasterServic
                     Id = Guid.NewGuid(),
                     FullName = nameTrim,
                     Biography = model.Biography?.Trim(),
-                    Status = model.Status
+                    Status = normalizedStatus
                 };
                 await unitOfWork.Authors.AddAsync(entity, ct);
                 await unitOfWork.CommitTransactionAsync(ct);
