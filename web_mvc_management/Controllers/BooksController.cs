@@ -3,7 +3,7 @@ using web_mvc_management.Services;
 
 namespace web_mvc_management.Controllers;
 
-public class BooksController(IBookService bookService) : BaseController
+public class BooksController(IPublicCatalogService publicCatalogService) : BaseController
 {
     [HttpGet]
     public async Task<IActionResult> Index(
@@ -17,7 +17,7 @@ public class BooksController(IBookService bookService) : BaseController
         string? scope = null,
         CancellationToken ct = default)
     {
-        var model = await bookService.GetPublicCatalogAsync(
+        var model = await publicCatalogService.GetPublicCatalogAsync(
             keyword,
             category,
             authorId,
@@ -34,7 +34,7 @@ public class BooksController(IBookService bookService) : BaseController
     [HttpGet]
     public async Task<IActionResult> Detail(Guid id, CancellationToken ct)
     {
-        var book = await bookService.GetPublicBookDetailAsync(id, ct);
+        var book = await publicCatalogService.GetPublicBookDetailAsync(id, ct);
         if (book is null)
         {
             return NotFound();
@@ -47,7 +47,7 @@ public class BooksController(IBookService bookService) : BaseController
     [HttpGet]
     public async Task<IActionResult> Suggest(string? keyword, string? scope = null, CancellationToken ct = default)
     {
-        var items = await bookService.SuggestAsync(keyword ?? string.Empty, 6, scope, ct);
+        var items = await publicCatalogService.SuggestAsync(keyword ?? string.Empty, 6, scope, ct);
         return PartialView("_SearchSuggestions", items);
     }
 }

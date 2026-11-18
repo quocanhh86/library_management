@@ -1,18 +1,13 @@
 using web_mvc_management.Common;
 using web_mvc_management.Models.ViewModels.AdminCatalog;
-using web_mvc_management.Models.ViewModels.Catalog;
 
 namespace web_mvc_management.Services;
 
+/// <summary>
+/// Dịch vụ quản trị dữ liệu danh mục gốc (Thể loại, Tác giả, Nhà xuất bản, Kệ sách).
+/// </summary>
 public interface ICatalogMasterService
 {
-    // Select Options cho Dropdown
-    Task<IReadOnlyList<SelectOptionViewModel>> GetActiveCategoriesAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<SelectOptionViewModel>> GetActiveAuthorsAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<SelectOptionViewModel>> GetActivePublishersAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<SelectOptionViewModel>> GetActiveShelvesAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<SelectOptionViewModel>> GetActiveBooksSelectAsync(CancellationToken ct = default);
-
     // 1. Thể loại sách (Categories)
     Task<PagedResult<CategoryItemViewModel>> GetCategoriesPagedAsync(BaseFilter filter, CancellationToken ct = default);
     Task<ServiceResult> SaveCategoryAsync(CategoryFormViewModel model, CancellationToken ct = default);

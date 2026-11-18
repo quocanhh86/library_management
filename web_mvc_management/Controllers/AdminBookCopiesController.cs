@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.AdminCatalog;
@@ -10,16 +11,16 @@ namespace web_mvc_management.Controllers;
 [Authorize(Roles = AppRoles.Admin + "," + AppRoles.Librarian)]
 [Route("Admin/BookCopies")]
 public class AdminBookCopiesController(
-    IBookService bookService,
-    ICatalogMasterService masterService,
+    IBookCopyService bookCopyService,
+    ICatalogLookupService catalogLookupService,
     IDateTimeProvider dateTimeProvider) : BaseController
 {
     [HttpGet("")]
     public async Task<IActionResult> Index([FromQuery] AdminBookCopyFilter filter, CancellationToken ct)
     {
-        var pagedCopies = await bookService.GetBookCopiesPagedAsync(filter, ct);
-        var books = await masterService.GetActiveBooksSelectAsync(ct);
-        var shelves = await masterService.GetActiveShelvesAsync(ct);
+        var pagedCopies = await bookCopyService.GetBookCopiesPagedAsync(filter, ct);
+        var books = await catalogLookupService.GetActiveBooksSelectAsync(ct);
+        var shelves = await catalogLookupService.GetActiveShelvesAsync(ct);
 
         var model = new AdminBookCopiesPageViewModel
         {
@@ -46,21 +47,16 @@ public class AdminBookCopiesController(
     {
         if (!ModelState.IsValid)
         {
-            SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
-            return RedirectToAction(nameof(Index), new { bookId = filterBookId });
+            return RedirectWithFlash(
+                ServiceResult.ValidationError(ErrorCode.CommonValidationError),
+                nameof(Index),
+                routeValues: new { bookId = filterBookId });
         }
 
-        var result = await bookService.CreateBookCopiesBatchAsync(model, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Index), new { bookId = filterBookId ?? model.BookId });
+        return RedirectWithFlash(
+            await bookCopyService.CreateBookCopiesBatchAsync(model, ct),
+            nameof(Index),
+            routeValues: new { bookId = filterBookId ?? model.BookId });
     }
 
     [HttpPost("Update")]
@@ -69,21 +65,16 @@ public class AdminBookCopiesController(
     {
         if (!ModelState.IsValid)
         {
-            SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
-            return RedirectToAction(nameof(Index), new { bookId = filterBookId, copyStatus = filterStatus });
+            return RedirectWithFlash(
+                ServiceResult.ValidationError(ErrorCode.CommonValidationError),
+                nameof(Index),
+                routeValues: new { bookId = filterBookId, copyStatus = filterStatus });
         }
 
-        var result = await bookService.UpdateBookCopyAsync(model, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Index), new { bookId = filterBookId, copyStatus = filterStatus });
+        return RedirectWithFlash(
+            await bookCopyService.UpdateBookCopyAsync(model, ct),
+            nameof(Index),
+            routeValues: new { bookId = filterBookId, copyStatus = filterStatus });
     }
 
     [HttpPost("Dispose")]
@@ -92,72 +83,39 @@ public class AdminBookCopiesController(
     {
         if (!ModelState.IsValid)
         {
-            SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
-            return RedirectToAction(nameof(Index), new { bookId = filterBookId, copyStatus = filterStatus });
+            return RedirectWithFlash(
+                ServiceResult.ValidationError(ErrorCode.CommonValidationError),
+                nameof(Index),
+                routeValues: new { bookId = filterBookId, copyStatus = filterStatus });
         }
 
-        var result = await bookService.DisposeOrMarkCopyAsync(model, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Index), new { bookId = filterBookId, copyStatus = filterStatus });
+        return RedirectWithFlash(
+            await bookCopyService.DisposeOrMarkCopyAsync(model, ct),
+            nameof(Index),
+            routeValues: new { bookId = filterBookId, copyStatus = filterStatus });
     }
 
     [HttpPost("Delete/{id:guid}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(Guid id, Guid? filterBookId, CancellationToken ct)
-    {
-        var result = await bookService.SoftDeleteBookCopyAsync(id, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Index), new { bookId = filterBookId });
-    }
+    public async Task<IActionResult> Delete(Guid id, Guid? filterBookId, CancellationToken ct) =>
+        RedirectWithFlash(
+            await bookCopyService.SoftDeleteBookCopyAsync(id, ct),
+            nameof(Index),
+            routeValues: new { bookId = filterBookId });
 
     [HttpPost("Restore/{id:guid}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Restore(Guid id, Guid? filterBookId, CancellationToken ct)
-    {
-        var result = await bookService.RestoreBookCopyAsync(id, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Index), new { bookId = filterBookId, status = EntityStatus.Deleted });
-    }
+    public async Task<IActionResult> Restore(Guid id, Guid? filterBookId, CancellationToken ct) =>
+        RedirectWithFlash(
+            await bookCopyService.RestoreBookCopyAsync(id, ct),
+            nameof(Index),
+            routeValues: new { bookId = filterBookId, status = EntityStatus.Deleted });
 
     [HttpPost("HardDelete/{id:guid}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> HardDelete(Guid id, [FromForm] string? confirmCode, Guid? filterBookId, CancellationToken ct)
-    {
-        var result = await bookService.HardDeleteBookCopyAsync(id, confirmCode, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Index), new { bookId = filterBookId, status = EntityStatus.Deleted });
-    }
+    public async Task<IActionResult> HardDelete(Guid id, [FromForm] string? confirmCode, Guid? filterBookId, CancellationToken ct) =>
+        RedirectWithFlash(
+            await bookCopyService.HardDeleteBookCopyAsync(id, confirmCode, ct),
+            nameof(Index),
+            routeValues: new { bookId = filterBookId, status = EntityStatus.Deleted });
 }
-

@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
+using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Catalog;
 
 namespace web_mvc_management.Models.ViewModels.AdminCatalog;
@@ -138,7 +140,7 @@ public class BookUpsertViewModel : IValidatableObject
     public IFormFile? CoverImageFile { get; set; }
 
     [Display(Name = "Tải lên thêm nhiều ảnh (Mục lục, Trang đọc thử, Bìa sau...)")]
-    public List<IFormFile> GalleryFiles { get; set; } = [];
+    public List<IFormFile>? GalleryFiles { get; set; }
 
     [Display(Name = "Phân loại nhóm ảnh tải thêm")]
     public string GalleryImageType { get; set; } = LibraryConstants.BookImageType.PreviewPage;
@@ -148,12 +150,13 @@ public class BookUpsertViewModel : IValidatableObject
     public string? GalleryCaptionPrefix { get; set; }
 
     /// <summary>Danh sách ID ảnh hiện có được đánh dấu xóa khi lưu cập nhật.</summary>
-    public List<Guid> DeleteImageIds { get; set; } = [];
+    public List<Guid>? DeleteImageIds { get; set; }
 
     /// <summary>ID ảnh hiện có được chọn làm ảnh bìa chính mới.</summary>
     public Guid? PrimaryImageId { get; set; }
 
     /// <summary>Danh sách ảnh đang gắn với đầu sách (hiển thị khi chỉnh sửa).</summary>
+    [ValidateNever]
     public IReadOnlyList<BookImageItemViewModel> ExistingImages { get; set; } = [];
 
     // -------------------------------------------------------------------------
@@ -178,14 +181,19 @@ public class BookUpsertViewModel : IValidatableObject
     public string? CopyNote { get; set; }
 
     // Danh sách chọn (Select options)
+    [ValidateNever]
     public IReadOnlyList<SelectOptionViewModel> Categories { get; set; } = [];
+    [ValidateNever]
     public IReadOnlyList<SelectOptionViewModel> Authors { get; set; } = [];
+    [ValidateNever]
     public IReadOnlyList<SelectOptionViewModel> Publishers { get; set; } = [];
+    [ValidateNever]
     public IReadOnlyList<SelectOptionViewModel> Shelves { get; set; } = [];
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var dateTimeProvider = validationContext.GetService(typeof(IDateTimeProvider)) as IDateTimeProvider;
+        var today = dateTimeProvider?.Today ?? DateOnly.FromDateTime(DateTime.Now);
         if (AcquiredDate.HasValue && AcquiredDate.Value > today)
         {
             yield return new ValidationResult(

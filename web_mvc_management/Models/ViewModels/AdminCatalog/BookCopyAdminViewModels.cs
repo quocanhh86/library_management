@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
+using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Catalog;
 
 namespace web_mvc_management.Models.ViewModels.AdminCatalog;
@@ -71,7 +72,8 @@ public class BookCopyBatchCreateViewModel : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var dateTimeProvider = validationContext.GetService(typeof(IDateTimeProvider)) as IDateTimeProvider;
+        var today = dateTimeProvider?.Today ?? DateOnly.FromDateTime(DateTime.Now);
         if (AcquiredDate.HasValue && AcquiredDate.Value > today)
         {
             yield return new ValidationResult(
