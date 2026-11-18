@@ -8,7 +8,7 @@ using web_mvc_management.Services;
 namespace web_mvc_management.Controllers;
 
 /// <summary>
-/// Quản lý tài khoản & thẻ độc giả (/Admin/Readers).
+/// Quản lý tài khoản &amp; thẻ độc giả (/Admin/Readers).
 /// View tương ứng: Views/AdminReaders/Index.cshtml
 /// </summary>
 [Authorize(Roles = AppRoles.Admin + "," + AppRoles.Librarian)]
@@ -16,11 +16,8 @@ namespace web_mvc_management.Controllers;
 public class AdminReadersController(IReaderAdminService readerService) : BaseController
 {
     [HttpGet("")]
-    public async Task<IActionResult> Index([FromQuery] ReaderFilter filter, CancellationToken ct)
-    {
-        var page = await readerService.GetPageAsync(filter, ct);
-        return View("Index", page);
-    }
+    public async Task<IActionResult> Index([FromQuery] ReaderFilter filter, CancellationToken ct) =>
+        View("Index", await readerService.GetPageAsync(filter, ct));
 
     [HttpPost("Update")]
     [ValidateAntiForgeryToken]
@@ -28,51 +25,25 @@ public class AdminReadersController(IReaderAdminService readerService) : BaseCon
     {
         if (!ModelState.IsValid)
         {
-            SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
-            return RedirectToAction(nameof(Index));
+            return RedirectWithFlash(ServiceResult.ValidationError(ErrorCode.CommonValidationError), nameof(Index));
         }
 
-        var result = await readerService.UpdateAsync(model, ct);
-        return Done(result);
+        return RedirectWithFlash(await readerService.UpdateAsync(model, ct), nameof(Index));
     }
 
     [HttpPost("Delete/{id:guid}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
-    {
-        var result = await readerService.SoftDeleteAsync(id, ct);
-        return Done(result);
-    }
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
+        RedirectWithFlash(await readerService.SoftDeleteAsync(id, ct), nameof(Index));
 
     [HttpPost("Restore/{id:guid}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
-    {
-        var result = await readerService.RestoreAsync(id, ct);
-        return Done(result, new { status = EntityStatus.Deleted });
-    }
+    public async Task<IActionResult> Restore(Guid id, CancellationToken ct) =>
+        RedirectWithFlash(await readerService.RestoreAsync(id, ct), nameof(Index), routeValues: new { status = EntityStatus.Deleted });
 
-    // Xóa vĩnh viễn: chỉ Admin (Thủ thư không được xóa dữ liệu vĩnh viễn)
     [HttpPost("HardDelete/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> HardDelete(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
-    {
-        var result = await readerService.HardDeleteAsync(id, confirmCode, ct);
-        return Done(result, new { status = EntityStatus.Deleted });
-    }
-
-    private IActionResult Done(ServiceResult result, object? routeValues = null)
-    {
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Index), routeValues);
-    }
+    public async Task<IActionResult> HardDelete(Guid id, [FromForm] string? confirmCode, CancellationToken ct) =>
+        RedirectWithFlash(await readerService.HardDeleteAsync(id, confirmCode, ct), nameof(Index), routeValues: new { status = EntityStatus.Deleted });
 }

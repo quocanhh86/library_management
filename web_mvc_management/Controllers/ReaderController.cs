@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Reader;
@@ -9,12 +8,7 @@ using web_mvc_management.Services;
 namespace web_mvc_management.Controllers;
 
 /// <summary>
-/// Cổng Bạn Đọc Tự Phục Vụ (Client Reader Portal):
-/// - Sách đang mượn & Thẻ thư viện (/Reader/Profile)
-/// - Gia hạn sách trực tuyến (/Reader/Renew)
-/// - Lịch sử mượn trả (/Reader/BorrowHistory)
-/// - Tiền phạt cá nhân (/Reader/Fines)
-/// - Sách đặt trước (/Reader/Reservations)
+/// Cổng Bạn Đọc Tự Phục Vụ (Client Reader Portal).
 /// </summary>
 [Authorize(Roles = AppRoles.Reader)]
 [Route("Reader")]
@@ -26,21 +20,8 @@ public class ReaderController(
     public IActionResult Index() => RedirectToAction(nameof(Profile));
 
     [HttpGet("Profile")]
-    public async Task<IActionResult> Profile(CancellationToken ct)
-    {
-        if (userContext.CurrentUserId is not { } readerId)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        var model = await readerPortalService.GetProfilePageAsync(readerId, ct);
-        if (model is null)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        return View(model);
-    }
+    public async Task<IActionResult> Profile(CancellationToken ct) =>
+        await LoadPortalViewAsync(readerId => readerPortalService.GetProfilePageAsync(readerId, ct));
 
     [HttpPost("Renew")]
     [ValidateAntiForgeryToken]
@@ -51,71 +32,24 @@ public class ReaderController(
             return RedirectToAction("Login", "Account");
         }
 
-        var result = await readerPortalService.RenewLoanAsync(readerId, detailId, ct);
-        Flash(result);
-        return RedirectToAction(nameof(Profile));
+        return RedirectWithFlash(await readerPortalService.RenewLoanAsync(readerId, detailId, ct), nameof(Profile));
     }
 
     [HttpGet("BorrowHistory")]
-    public async Task<IActionResult> BorrowHistory([FromQuery] ReaderBorrowHistoryFilter filter, CancellationToken ct)
-    {
-        if (userContext.CurrentUserId is not { } readerId)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        var model = await readerPortalService.GetBorrowHistoryPageAsync(readerId, filter, ct);
-        if (model is null)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        if (IsAjaxRequest)
-        {
-            return PartialView("_BorrowHistoryTable", model);
-        }
-
-        return View(model);
-    }
+    public async Task<IActionResult> BorrowHistory([FromQuery] ReaderBorrowHistoryFilter filter, CancellationToken ct) =>
+        await LoadPortalViewAsync(
+            readerId => readerPortalService.GetBorrowHistoryPageAsync(readerId, filter, ct),
+            partialViewOnAjax: "_BorrowHistoryTable");
 
     [HttpGet("Fines")]
-    public async Task<IActionResult> Fines([FromQuery] ReaderFineFilter filter, CancellationToken ct)
-    {
-        if (userContext.CurrentUserId is not { } readerId)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        var model = await readerPortalService.GetFinesPageAsync(readerId, filter, ct);
-        if (model is null)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        if (IsAjaxRequest)
-        {
-            return PartialView("_FinesTable", model);
-        }
-
-        return View(model);
-    }
+    public async Task<IActionResult> Fines([FromQuery] ReaderFineFilter filter, CancellationToken ct) =>
+        await LoadPortalViewAsync(
+            readerId => readerPortalService.GetFinesPageAsync(readerId, filter, ct),
+            partialViewOnAjax: "_FinesTable");
 
     [HttpGet("Reservations")]
-    public async Task<IActionResult> Reservations(CancellationToken ct)
-    {
-        if (userContext.CurrentUserId is not { } readerId)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        var model = await readerPortalService.GetReservationsPageAsync(readerId, ct);
-        if (model is null)
-        {
-            return RedirectToAction("Login", "Account");
-        }
-
-        return View(model);
-    }
+    public async Task<IActionResult> Reservations(CancellationToken ct) =>
+        await LoadPortalViewAsync(readerId => readerPortalService.GetReservationsPageAsync(readerId, ct));
 
     [HttpPost("Reservations/Create")]
     [ValidateAntiForgeryToken]
@@ -126,8 +60,7 @@ public class ReaderController(
             return RedirectToAction("Login", "Account");
         }
 
-        var result = await readerPortalService.CreateReservationAsync(readerId, bookId, ct);
-        Flash(result);
+        FlashResult(await readerPortalService.CreateReservationAsync(readerId, bookId, ct));
 
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
         {
@@ -139,27 +72,37 @@ public class ReaderController(
 
     [HttpPost("Reservations/Cancel")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CancelReservation(Guid id, CancellationToken ct)
+    public async Task<IActionResult> CancelReservation(Guid reservationId, Guid id, CancellationToken ct)
     {
         if (userContext.CurrentUserId is not { } readerId)
         {
             return RedirectToAction("Login", "Account");
         }
 
-        var result = await readerPortalService.CancelReservationAsync(readerId, id, ct);
-        Flash(result);
-        return RedirectToAction(nameof(Reservations));
+        var targetId = reservationId != Guid.Empty ? reservationId : id;
+        return RedirectWithFlash(await readerPortalService.CancelReservationAsync(readerId, targetId, ct), nameof(Reservations));
     }
 
-    private void Flash(ServiceResult result)
+    private async Task<IActionResult> LoadPortalViewAsync(
+        Func<Guid, Task<ReaderPortalPageViewModel?>> loader,
+        string? partialViewOnAjax = null)
     {
-        if (result.Succeeded)
+        if (userContext.CurrentUserId is not { } readerId)
         {
-            SetSuccessMessage(result.Message);
+            return RedirectToAction("Login", "Account");
         }
-        else
+
+        var model = await loader(readerId);
+        if (model is null)
         {
-            SetErrorMessage(result.Message);
+            return RedirectToAction("Login", "Account");
         }
+
+        if (partialViewOnAjax != null && IsAjaxRequest)
+        {
+            return PartialView(partialViewOnAjax, model);
+        }
+
+        return View(model);
     }
 }

@@ -2,22 +2,22 @@ using Microsoft.EntityFrameworkCore;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Extensions;
+using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Catalog;
 using web_mvc_management.Models.ViewModels.SystemAdmin;
 using web_mvc_management.Repositories;
 
 namespace web_mvc_management.Services;
 
-public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
+public class ReaderAdminService(
+    IUnitOfWork unitOfWork,
+    IDateTimeProvider dateTimeProvider,
+    IReservationQueueEngine reservationQueueEngine) : IReaderAdminService
 {
-    // =========================================================================
-    // DANH SÁCH + LỌC + PHÂN TRANG
-    // =========================================================================
     public async Task<AdminReadersPageViewModel> GetPageAsync(ReaderFilter filter, CancellationToken ct = default)
     {
         var query = unitOfWork.Readers.GetQueryable(asNoTracking: true);
 
-        // Mặc định ẩn bản ghi đã xóa mềm; chỉ hiện khi chọn Status = DELETED
         if (filter.Status == EntityStatus.Deleted)
         {
             query = query.Where(r => r.Status == EntityStatus.Deleted);
@@ -48,7 +48,7 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
             query = query.Where(r => r.ReaderTypeId == filter.ReaderTypeId.Value);
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = dateTimeProvider.Today;
 
         if (!string.IsNullOrWhiteSpace(filter.CardStatus))
         {
@@ -112,43 +112,31 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
         };
     }
 
-    // =========================================================================
-    // CẬP NHẬT THẺ / TÀI KHOẢN
-    // =========================================================================
-    public async Task<ServiceResult> UpdateAsync(ReaderManageViewModel model, CancellationToken ct = default)
+    public Task<ServiceResult> UpdateAsync(ReaderManageViewModel model, CancellationToken ct = default)
     {
-        string[] validCardStatuses =
-        [
-            LibraryConstants.CardStatus.Active,
-            LibraryConstants.CardStatus.Locked,
-            LibraryConstants.CardStatus.Expired
-        ];
-
-        if (!validCardStatuses.Contains(model.CardStatus))
+        if (model.CardStatus is not (LibraryConstants.CardStatus.Active or LibraryConstants.CardStatus.Locked or LibraryConstants.CardStatus.Expired))
         {
-            return ServiceResult.ValidationError("Trạng thái thẻ không hợp lệ.");
+            return Task.FromResult(ServiceResult.ValidationError("Trạng thái thẻ không hợp lệ."));
         }
 
-        // Form chỉ cho chọn ACTIVE / INACTIVE; DELETED đi qua nút "Xóa mềm"
         if (model.Status != EntityStatus.Active && model.Status != EntityStatus.Inactive)
         {
-            return ServiceResult.ValidationError("Trạng thái tài khoản không hợp lệ.");
+            return Task.FromResult(ServiceResult.ValidationError("Trạng thái tài khoản không hợp lệ."));
         }
 
-        if (model.CardStatus == LibraryConstants.CardStatus.Locked &&
-            string.IsNullOrWhiteSpace(model.LockReason))
+        if (model.CardStatus == LibraryConstants.CardStatus.Locked && string.IsNullOrWhiteSpace(model.LockReason))
         {
-            return ServiceResult.ValidationError("Vui lòng nhập lý do khi khóa thẻ.");
+            return Task.FromResult(ServiceResult.ValidationError("Vui lòng nhập lý do khi khóa thẻ."));
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = dateTimeProvider.Today;
         if (model.CardStatus == LibraryConstants.CardStatus.Active && model.CardExpiryDate < today)
         {
-            return ServiceResult.ValidationError("Thẻ ACTIVE phải có ngày hết hạn từ hôm nay trở đi. Hãy gia hạn ngày hết hạn hoặc chọn EXPIRED.");
+            return Task.FromResult(ServiceResult.ValidationError(
+                "Thẻ ACTIVE phải có ngày hết hạn từ hôm nay trở đi. Hãy gia hạn ngày hết hạn hoặc chọn EXPIRED."));
         }
 
-        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
-        try
+        return unitOfWork.ExecuteInLockedTransactionAsync(async () =>
         {
             var reader = await unitOfWork.Readers.FirstOrDefaultAsync(
                 r => r.Id == model.Id && r.Status != EntityStatus.Deleted,
@@ -157,43 +145,28 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
 
             if (reader == null)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(ErrorCode.ReaderNotFound);
             }
 
             if (model.CardExpiryDate <= reader.CardIssuedDate)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.ValidationError(
                     $"Ngày hết hạn thẻ phải sau ngày cấp thẻ ({reader.CardIssuedDate:dd/MM/yyyy}).");
             }
 
             var phoneTrim = string.IsNullOrWhiteSpace(model.Phone) ? null : model.Phone.Trim();
-            if (phoneTrim != null)
+            if (phoneTrim != null &&
+                await unitOfWork.Readers.ExistsAsync(r => r.Id != reader.Id && r.Phone == phoneTrim, ct))
             {
-                var duplicatePhone = await unitOfWork.Readers.ExistsAsync(
-                    r => r.Id != reader.Id && r.Phone == phoneTrim,
-                    ct);
-                if (duplicatePhone)
-                {
-                    await unitOfWork.RollbackTransactionAsync(ct);
-                    return ServiceResult.ValidationError(ErrorCode.RegisterDuplicatePhone);
-                }
+                return ServiceResult.ValidationError(ErrorCode.RegisterDuplicatePhone);
             }
 
-            var readerTypeOk = await unitOfWork.ReaderTypes.ExistsAsync(
-                rt => rt.Id == model.ReaderTypeId && rt.Status != EntityStatus.Deleted,
-                ct);
-
-            if (!readerTypeOk)
+            if (!await unitOfWork.ReaderTypes.ExistsAsync(rt => rt.Id == model.ReaderTypeId && rt.Status != EntityStatus.Deleted, ct))
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(ErrorCode.ReaderTypeNotFound);
             }
 
-            var securitySensitiveChanged =
-                reader.Status != model.Status ||
-                reader.CardStatus != model.CardStatus;
+            var securitySensitiveChanged = reader.Status != model.Status || reader.CardStatus != model.CardStatus;
 
             reader.FullName = model.FullName.Trim();
             reader.Phone = phoneTrim;
@@ -203,7 +176,7 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
 
             if (model.CardStatus == LibraryConstants.CardStatus.Locked)
             {
-                reader.LockedAt ??= DateTimeOffset.UtcNow;
+                reader.LockedAt ??= dateTimeProvider.UtcNow;
                 reader.LockReason = model.LockReason!.Trim();
             }
             else
@@ -214,56 +187,40 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
 
             reader.CardStatus = model.CardStatus;
 
-            // Nếu thẻ bị khóa / hết hạn hoặc tài khoản bị vô hiệu hóa, tự động giải phóng các phiếu đặt trước đang mở để tránh kẹt sách (Copy Trap)
+            // Nếu thẻ bị khóa/hết hạn hoặc tài khoản bị vô hiệu hóa, giải phóng các phiếu đặt trước đang mở tránh kẹt sách (Copy Trap)
             if (model.CardStatus != LibraryConstants.CardStatus.Active ||
                 model.CardExpiryDate < today ||
                 model.Status != EntityStatus.Active)
             {
-                await CancelOpenReservationsAndReleaseCopiesAsync(reader.Id, today, ct);
+                await reservationQueueEngine.CancelReaderOpenReservationsAsync(reader.Id, ct);
             }
 
             if (securitySensitiveChanged)
             {
-                // Đổi stamp để thu hồi phiên đăng nhập đang mở
                 reader.SecurityStamp = Guid.NewGuid().ToString("N");
             }
 
-            await unitOfWork.CommitTransactionAsync(ct);
             return ServiceResult.Success($"Đã cập nhật thẻ độc giả \"{reader.CardNo} - {reader.FullName}\".");
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(ct);
-            throw;
-        }
+        }, cancellationToken: ct);
     }
 
-    // =========================================================================
-    // XÓA MỀM -> KHÔI PHỤC -> XÓA VĨNH VIỄN (3 bước như các màn hình khác)
-    // =========================================================================
-    public async Task<ServiceResult> SoftDeleteAsync(Guid id, CancellationToken ct = default)
-    {
-        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
-        try
+    public Task<ServiceResult> SoftDeleteAsync(Guid id, CancellationToken ct = default) =>
+        unitOfWork.ExecuteInLockedTransactionAsync(async () =>
         {
             var reader = await unitOfWork.Readers.FirstOrDefaultAsync(
                 r => r.Id == id && r.Status != EntityStatus.Deleted,
                 asNoTracking: false,
                 ct);
-
             if (reader == null)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(ErrorCode.ReaderNotFound);
             }
 
             var stillHoldingBooks = await unitOfWork.BorrowDetails.ExistsAsync(
                 bd => bd.BorrowSlip.ReaderId == id && bd.ReturnedAt == null && bd.Status != EntityStatus.Deleted,
                 ct);
-
             if (stillHoldingBooks)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(
                     ErrorCode.CommonRecordInUse,
                     "Không thể xóa mềm độc giả đang giữ sách chưa trả. Nhận trả sách trước.");
@@ -274,46 +231,33 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
                      f.FineStatus == LibraryConstants.FineStatus.Unpaid &&
                      f.Status != EntityStatus.Deleted,
                 ct);
-
             if (hasUnpaidFines)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(
                     ErrorCode.CommonRecordInUse,
                     "Không thể xóa mềm độc giả đang còn nợ tiền phạt chưa thanh toán. Vui lòng thu hoặc miễn phạt trước.");
             }
 
-            var today = DateOnly.FromDateTime(DateTime.Now);
-            await CancelOpenReservationsAndReleaseCopiesAsync(id, today, ct);
+            await reservationQueueEngine.CancelReaderOpenReservationsAsync(id, ct);
 
             reader.Status = EntityStatus.Deleted;
             reader.CardStatus = LibraryConstants.CardStatus.Locked;
-            reader.LockedAt ??= DateTimeOffset.UtcNow;
+            reader.LockedAt ??= dateTimeProvider.UtcNow;
             reader.LockReason ??= "Đã xóa mềm hồ sơ độc giả";
             reader.SecurityStamp = Guid.NewGuid().ToString("N");
-            await unitOfWork.CommitTransactionAsync(ct);
-            return ServiceResult.Success($"Đã xóa mềm độc giả \"{reader.CardNo} - {reader.FullName}\" (chuyển sang DELETED).");
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(ct);
-            throw;
-        }
-    }
 
-    public async Task<ServiceResult> RestoreAsync(Guid id, CancellationToken ct = default)
-    {
-        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
-        try
+            return ServiceResult.Success($"Đã xóa mềm độc giả \"{reader.CardNo} - {reader.FullName}\" (chuyển sang DELETED).");
+        }, cancellationToken: ct);
+
+    public Task<ServiceResult> RestoreAsync(Guid id, CancellationToken ct = default) =>
+        unitOfWork.ExecuteInLockedTransactionAsync(async () =>
         {
             var reader = await unitOfWork.Readers.FirstOrDefaultAsync(
                 r => r.Id == id && r.Status == EntityStatus.Deleted,
                 asNoTracking: false,
                 ct);
-
             if (reader == null)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(ErrorCode.ReaderNotFound);
             }
 
@@ -328,107 +272,34 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
             reader.FailedLoginAttempts = 0;
             reader.LockedUntil = null;
             reader.SecurityStamp = Guid.NewGuid().ToString("N");
-            await unitOfWork.CommitTransactionAsync(ct);
+
             return ServiceResult.Success($"Đã khôi phục độc giả \"{reader.CardNo} - {reader.FullName}\".");
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(ct);
-            throw;
-        }
-    }
+        }, cancellationToken: ct);
 
-    private async Task CancelOpenReservationsAndReleaseCopiesAsync(Guid readerId, DateOnly today, CancellationToken ct)
+    public Task<ServiceResult> HardDeleteAsync(Guid id, string? confirmCode, CancellationToken ct = default)
     {
-        var activeReservations = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
-            .Include(r => r.AssignedCopy)
-            .Where(r => r.ReaderId == readerId &&
-                        r.Status != EntityStatus.Deleted &&
-                        (r.ReservationStatus == LibraryConstants.ReservationStatus.Pending ||
-                         r.ReservationStatus == LibraryConstants.ReservationStatus.Ready))
-            .ToListAsync(ct);
-
-        if (activeReservations.Count == 0)
+        if (!LibraryConstants.IsValidHardDeleteConfirm(confirmCode))
         {
-            return;
+            return Task.FromResult(ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid));
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var setting = await unitOfWork.LibrarySettings.GetQueryable(asNoTracking: true)
-            .OrderByDescending(s => s.UpdatedAt)
-            .FirstOrDefaultAsync(ct);
-        var holdHours = setting?.ReservationHoldHours ?? (short)48;
-
-        foreach (var res in activeReservations)
-        {
-            var wasReady = res.ReservationStatus == LibraryConstants.ReservationStatus.Ready;
-            res.ReservationStatus = LibraryConstants.ReservationStatus.Cancelled;
-            res.ClosedAt = now;
-
-            if (wasReady && res.AssignedCopy is { CopyStatus: LibraryConstants.CopyStatus.Reserved } heldCopy)
-            {
-                var nextPending = await unitOfWork.Reservations.GetQueryable(asNoTracking: false)
-                    .Where(r => r.Status != EntityStatus.Deleted &&
-                                r.BookId == heldCopy.BookId &&
-                                r.ReaderId != readerId &&
-                                r.Reader.Status == EntityStatus.Active &&
-                                r.Reader.CardStatus == LibraryConstants.CardStatus.Active &&
-                                r.Reader.CardExpiryDate >= today &&
-                                r.Book.Status == EntityStatus.Active &&
-                                r.ReservationStatus == LibraryConstants.ReservationStatus.Pending &&
-                                !r.Reader.BorrowSlips.Any(s => s.Status != EntityStatus.Deleted &&
-                                    s.BorrowDetails.Any(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.BookCopy.BookId == heldCopy.BookId)))
-                    .OrderBy(r => r.ReservedAt)
-                    .FirstOrDefaultAsync(ct);
-
-                if (nextPending == null)
-                {
-                    heldCopy.CopyStatus = LibraryConstants.CopyStatus.Available;
-                }
-                else
-                {
-                    nextPending.ReservationStatus = LibraryConstants.ReservationStatus.Ready;
-                    nextPending.AssignedCopyId = heldCopy.Id;
-                    nextPending.ReadyAt = now;
-                    nextPending.ExpiresAt = now.AddHours(holdHours);
-                    heldCopy.CopyStatus = LibraryConstants.CopyStatus.Reserved;
-                }
-
-                await unitOfWork.SaveChangesAsync(ct);
-            }
-        }
-    }
-
-    public async Task<ServiceResult> HardDeleteAsync(Guid id, string? confirmCode, CancellationToken ct = default)
-    {
-        if (!string.Equals(confirmCode?.Trim(), "XOA", StringComparison.OrdinalIgnoreCase))
-        {
-            return ServiceResult.Failure(ErrorCode.HardDeleteConfirmInvalid);
-        }
-
-        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
-        try
+        return unitOfWork.ExecuteInLockedTransactionAsync(async () =>
         {
             var reader = await unitOfWork.Readers.FirstOrDefaultAsync(r => r.Id == id, asNoTracking: false, ct);
             if (reader == null)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(ErrorCode.ReaderNotFound);
             }
 
             if (reader.Status != EntityStatus.Deleted)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(ErrorCode.HardDeleteRequiresSoftDeleteFirst);
             }
 
-            var hasHistory =
-                await unitOfWork.BorrowSlips.ExistsAsync(bs => bs.ReaderId == id, ct) ||
-                await unitOfWork.Reservations.ExistsAsync(rv => rv.ReaderId == id, ct);
-
+            var hasHistory = await unitOfWork.BorrowSlips.ExistsAsync(bs => bs.ReaderId == id, ct) ||
+                             await unitOfWork.Reservations.ExistsAsync(rv => rv.ReaderId == id, ct);
             if (hasHistory)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
                 return ServiceResult.Failure(
                     ErrorCode.CommonRecordInUse,
                     "Không thể xóa vĩnh viễn độc giả đã phát sinh phiếu mượn hoặc đặt trước sách.");
@@ -436,13 +307,7 @@ public class ReaderAdminService(IUnitOfWork unitOfWork) : IReaderAdminService
 
             var label = $"{reader.CardNo} - {reader.FullName}";
             unitOfWork.Readers.Delete(reader);
-            await unitOfWork.CommitTransactionAsync(ct);
             return ServiceResult.Success($"Đã xóa vĩnh viễn độc giả \"{label}\" khỏi cơ sở dữ liệu.");
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(ct);
-            throw;
-        }
+        }, cancellationToken: ct);
     }
 }
