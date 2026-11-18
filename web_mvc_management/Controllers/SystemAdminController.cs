@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using web_mvc_management.Common;
 using web_mvc_management.Constant;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.SystemAdmin;
@@ -9,24 +10,25 @@ namespace web_mvc_management.Controllers;
 
 [Authorize(Roles = AppRoles.Admin + "," + AppRoles.Librarian)]
 public class SystemAdminController(
-    ISystemAdminService systemAdminService,
-    IUserContext userContext) : BaseController
+    IStaffAdminService staffAdminService,
+    IReaderTypeService readerTypeService,
+    ILibrarySettingService librarySettingService,
+    IDashboardService dashboardService,
+    IUserContext userContext,
+    IDateTimeProvider dateTimeProvider) : BaseController
 {
     // =========================================================================
     // 1. QUẢN LÝ TÀI KHOẢN CÁN BỘ & PHÂN QUYỀN (/System/Staff)
     // =========================================================================
     [HttpGet("System/Staff")]
     [Authorize(Roles = AppRoles.Admin)]
-    public async Task<IActionResult> Staff([FromQuery] StaffFilter filter, CancellationToken ct)
-    {
-        var paged = await systemAdminService.GetStaffPagedAsync(filter, ct);
-        return View("Staff", new StaffPageViewModel
+    public async Task<IActionResult> Staff([FromQuery] StaffFilter filter, CancellationToken ct) =>
+        View("Staff", new StaffPageViewModel
         {
-            PagedStaff = paged,
+            PagedStaff = await staffAdminService.GetStaffPagedAsync(filter, ct),
             Filter = filter,
             CurrentUserId = userContext.CurrentUserId
         });
-    }
 
     [HttpPost("System/Staff/Create")]
     [Authorize(Roles = AppRoles.Admin)]
@@ -35,21 +37,10 @@ public class SystemAdminController(
     {
         if (!ModelState.IsValid)
         {
-            SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
-            return RedirectToAction(nameof(Staff));
+            return RedirectWithFlash(ServiceResult.ValidationError(ErrorCode.CommonValidationError), nameof(Staff));
         }
 
-        var result = await systemAdminService.CreateStaffAsync(model, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Staff));
+        return RedirectWithFlash(await staffAdminService.CreateStaffAsync(model, ct), nameof(Staff));
     }
 
     [HttpPost("System/Staff/Update")]
@@ -59,190 +50,81 @@ public class SystemAdminController(
     {
         if (!ModelState.IsValid)
         {
-            SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
-            return RedirectToAction(nameof(Staff));
+            return RedirectWithFlash(ServiceResult.ValidationError(ErrorCode.CommonValidationError), nameof(Staff));
         }
 
-        var result = await systemAdminService.UpdateStaffAsync(model, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Staff));
+        return RedirectWithFlash(await staffAdminService.UpdateStaffAsync(model, ct), nameof(Staff));
     }
 
     [HttpPost("System/Staff/Unlock/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UnlockStaff(Guid id, CancellationToken ct)
-    {
-        var result = await systemAdminService.UnlockStaffAccountAsync(id, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Staff));
-    }
+    public async Task<IActionResult> UnlockStaff(Guid id, CancellationToken ct) =>
+        RedirectWithFlash(await staffAdminService.UnlockStaffAccountAsync(id, ct), nameof(Staff));
 
     [HttpPost("System/Staff/Delete/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteStaff(Guid id, CancellationToken ct)
-    {
-        var result = await systemAdminService.SoftDeleteStaffAsync(id, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Staff));
-    }
+    public async Task<IActionResult> DeleteStaff(Guid id, CancellationToken ct) =>
+        RedirectWithFlash(await staffAdminService.SoftDeleteStaffAsync(id, ct), nameof(Staff));
 
     [HttpPost("System/Staff/Restore/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RestoreStaff(Guid id, CancellationToken ct)
-    {
-        var result = await systemAdminService.RestoreStaffAsync(id, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Staff), new { status = EntityStatus.Deleted });
-    }
+    public async Task<IActionResult> RestoreStaff(Guid id, CancellationToken ct) =>
+        RedirectWithFlash(await staffAdminService.RestoreStaffAsync(id, ct), nameof(Staff), routeValues: new { status = EntityStatus.Deleted });
 
     [HttpPost("System/Staff/HardDelete/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> HardDeleteStaff(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
-    {
-        var result = await systemAdminService.HardDeleteStaffAsync(id, confirmCode, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Staff), new { status = EntityStatus.Deleted });
-    }
+    public async Task<IActionResult> HardDeleteStaff(Guid id, [FromForm] string? confirmCode, CancellationToken ct) =>
+        RedirectWithFlash(await staffAdminService.HardDeleteStaffAsync(id, confirmCode, ct), nameof(Staff), routeValues: new { status = EntityStatus.Deleted });
 
     // =========================================================================
-    // 2. CẤU HÌNH LOẠI ĐỘC GIẢ: SỐ SÁCH TỐI ĐA & SỐ NGÀY MƯỢN (/Admin/ReaderTypes)
+    // 2. CẤU HÌNH LOẠI ĐỘC GIẢ (/Admin/ReaderTypes)
     // =========================================================================
     [HttpGet("Admin/ReaderTypes")]
     [Authorize(Roles = AppRoles.Admin)]
-    public async Task<IActionResult> ReaderTypes(CancellationToken ct)
-    {
-        var items = await systemAdminService.GetReaderTypesAsync(ct);
-        return View("ReaderTypes", new ReaderTypesPageViewModel
+    public async Task<IActionResult> ReaderTypes(CancellationToken ct) =>
+        View("ReaderTypes", new ReaderTypesPageViewModel
         {
-            Items = items
+            Items = await readerTypeService.GetReaderTypesAsync(ct)
         });
-    }
 
     [HttpPost("Admin/ReaderTypes/Save")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveReaderType(ReaderTypeFormViewModel model, string? returnPage, CancellationToken ct)
     {
+        var targetAction = string.Equals(returnPage, "Settings", StringComparison.OrdinalIgnoreCase)
+            ? nameof(Settings)
+            : nameof(ReaderTypes);
+
         if (!ModelState.IsValid)
         {
-            SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
-            return string.Equals(returnPage, "Settings", StringComparison.OrdinalIgnoreCase)
-                ? RedirectToAction(nameof(Settings))
-                : RedirectToAction(nameof(ReaderTypes));
+            return RedirectWithFlash(ServiceResult.ValidationError(ErrorCode.CommonValidationError), targetAction);
         }
 
-        var result = await systemAdminService.SaveReaderTypeAsync(model, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return string.Equals(returnPage, "Settings", StringComparison.OrdinalIgnoreCase)
-            ? RedirectToAction(nameof(Settings))
-            : RedirectToAction(nameof(ReaderTypes));
+        return RedirectWithFlash(await readerTypeService.SaveReaderTypeAsync(model, ct), targetAction);
     }
 
     [HttpPost("Admin/ReaderTypes/Delete/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteReaderType(Guid id, CancellationToken ct)
-    {
-        var result = await systemAdminService.DeleteReaderTypeAsync(id, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(ReaderTypes));
-    }
+    public async Task<IActionResult> DeleteReaderType(Guid id, CancellationToken ct) =>
+        RedirectWithFlash(await readerTypeService.DeleteReaderTypeAsync(id, ct), nameof(ReaderTypes));
 
     [HttpPost("Admin/ReaderTypes/Restore/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RestoreReaderType(Guid id, CancellationToken ct)
-    {
-        var result = await systemAdminService.RestoreReaderTypeAsync(id, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(ReaderTypes));
-    }
+    public async Task<IActionResult> RestoreReaderType(Guid id, CancellationToken ct) =>
+        RedirectWithFlash(await readerTypeService.RestoreReaderTypeAsync(id, ct), nameof(ReaderTypes));
 
     [HttpPost("Admin/ReaderTypes/HardDelete/{id:guid}")]
     [Authorize(Roles = AppRoles.Admin)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> HardDeleteReaderType(Guid id, [FromForm] string? confirmCode, CancellationToken ct)
-    {
-        var result = await systemAdminService.HardDeleteReaderTypeAsync(id, confirmCode, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(ReaderTypes));
-    }
+    public async Task<IActionResult> HardDeleteReaderType(Guid id, [FromForm] string? confirmCode, CancellationToken ct) =>
+        RedirectWithFlash(await readerTypeService.HardDeleteReaderTypeAsync(id, confirmCode, ct), nameof(ReaderTypes));
 
     // =========================================================================
     // 3. CẤU HÌNH QUY ĐỊNH MƯỢN TRẢ & MỨC PHẠT (/System/Settings)
@@ -251,13 +133,11 @@ public class SystemAdminController(
     [Authorize(Roles = AppRoles.Admin)]
     public async Task<IActionResult> Settings(CancellationToken ct)
     {
-        var settingForm = await systemAdminService.GetLibrarySettingAsync(ct);
-        var readerTypes = await systemAdminService.GetReaderTypesAsync(ct);
-
+        var allTypes = await readerTypeService.GetReaderTypesAsync(ct);
         return View("Settings", new SystemSettingsPageViewModel
         {
-            SettingForm = settingForm,
-            ReaderTypes = readerTypes
+            SettingForm = await librarySettingService.GetLibrarySettingAsync(ct),
+            ReaderTypes = allTypes.Where(rt => rt.Status != EntityStatus.Deleted).ToList()
         });
     }
 
@@ -268,44 +148,27 @@ public class SystemAdminController(
     {
         if (!ModelState.IsValid)
         {
-            var readerTypes = await systemAdminService.GetReaderTypesAsync(ct);
             SetErrorMessage(ErrorMessages.Get(ErrorCode.CommonValidationError));
+            var allTypes = await readerTypeService.GetReaderTypesAsync(ct);
             return View("Settings", new SystemSettingsPageViewModel
             {
                 SettingForm = model,
-                ReaderTypes = readerTypes
+                ReaderTypes = allTypes.Where(rt => rt.Status != EntityStatus.Deleted).ToList()
             });
         }
 
-        var result = await systemAdminService.SaveLibrarySettingAsync(model, ct);
-        if (result.Succeeded)
-        {
-            SetSuccessMessage(result.Message);
-        }
-        else
-        {
-            SetErrorMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(Settings));
+        return RedirectWithFlash(await librarySettingService.SaveLibrarySettingAsync(model, ct), nameof(Settings));
     }
+
     // =========================================================================
     // 4. TỔNG QUAN THỐNG KÊ (/Admin/Dashboard)
     // =========================================================================
     [HttpGet("Admin/Dashboard")]
     [Authorize(Roles = AppRoles.Admin + "," + AppRoles.Librarian)]
-    public async Task<IActionResult> Dashboard(
-        int? year,
-        CancellationToken ct)
+    public async Task<IActionResult> Dashboard(int? year, CancellationToken ct)
     {
-        var currentYear = DateTime.Now.Year;
+        var currentYear = dateTimeProvider.Today.Year;
         var selectedYear = year is >= 2000 and <= 2100 ? year.Value : currentYear;
-
-        var viewModel = await systemAdminService
-            .GetDashboardAsync(selectedYear, ct);
-
-        return View("Dashboard", viewModel);
+        return View("Dashboard", await dashboardService.GetDashboardAsync(selectedYear, ct));
     }
-
 }
-

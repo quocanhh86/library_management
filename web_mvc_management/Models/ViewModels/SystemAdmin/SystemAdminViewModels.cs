@@ -31,21 +31,25 @@ public class StaffCreateViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập.")]
     [StringLength(50, MinimumLength = 3, ErrorMessage = "Tên đăng nhập từ 3 đến 50 ký tự.")]
+    [RegularExpression(@"^[A-Za-z0-9._\-]{3,50}$", ErrorMessage = "Tên đăng nhập chỉ gồm chữ cái không dấu, chữ số, dấu chấm (.), gạch dưới (_) hoặc gạch ngang (-).")]
     [Display(Name = "Tên đăng nhập")]
     public string Username { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập địa chỉ email công vụ / Gmail.")]
     [EmailAddress(ErrorMessage = "Địa chỉ email không hợp lệ.")]
+    [RegularExpression(@"^[^\s@]+@[^\s@]+\.[^\s@]+$", ErrorMessage = "Địa chỉ email không đúng định dạng (ví dụ: canbo@library.utc.edu.vn).")]
     [StringLength(255)]
     [Display(Name = "Email (nhận mã OTP)")]
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập họ và tên cán bộ.")]
     [StringLength(150)]
+    [NoNumbers(ErrorMessage = "Họ và tên cán bộ không được chứa chữ số hoặc ký tự đặc biệt.")]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
-    [StringLength(20)]
+    [StringLength(20, MinimumLength = 8, ErrorMessage = "Số điện thoại phải từ 8 đến 20 ký tự.")]
+    [RegularExpression(@"^[0-9+().\-\s]{8,20}$", ErrorMessage = "Số điện thoại chỉ được chứa chữ số (0-9) hoặc các dấu +, -, (, ).")]
     [Display(Name = "Số điện thoại")]
     public string? Phone { get; set; }
 
@@ -66,16 +70,19 @@ public class StaffEditViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập họ và tên cán bộ.")]
     [StringLength(150)]
+    [NoNumbers(ErrorMessage = "Họ và tên cán bộ không được chứa chữ số hoặc ký tự đặc biệt.")]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập email.")]
     [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+    [RegularExpression(@"^[^\s@]+@[^\s@]+\.[^\s@]+$", ErrorMessage = "Địa chỉ email không đúng định dạng (ví dụ: canbo@library.utc.edu.vn).")]
     [StringLength(255)]
     [Display(Name = "Email")]
     public string Email { get; set; } = string.Empty;
 
-    [StringLength(20)]
+    [StringLength(20, MinimumLength = 8, ErrorMessage = "Số điện thoại phải từ 8 đến 20 ký tự.")]
+    [RegularExpression(@"^[0-9+().\-\s]{8,20}$", ErrorMessage = "Số điện thoại chỉ được chứa chữ số (0-9) hoặc các dấu +, -, (, ).")]
     [Display(Name = "Số điện thoại")]
     public string? Phone { get; set; }
 
@@ -84,10 +91,11 @@ public class StaffEditViewModel
     public string Role { get; set; } = AppRoles.Librarian;
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái tài khoản chỉ được chọn ACTIVE hoặc INACTIVE.")]
     [Display(Name = "Trạng thái tài khoản")]
     public string Status { get; set; } = EntityStatus.Active;
 
-    [StringLength(100)]
+    [StringLength(100, MinimumLength = 6, ErrorMessage = "Mật khẩu mới phải từ 6 đến 100 ký tự.")]
     [Display(Name = "Đặt lại mật khẩu mới (để trống nếu giữ nguyên)")]
     public string? NewPassword { get; set; }
 }
@@ -137,10 +145,12 @@ public class ReaderManageViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập họ tên độc giả.")]
     [StringLength(150)]
+    [NoNumbers(ErrorMessage = "Họ và tên độc giả không được chứa chữ số hoặc ký tự đặc biệt.")]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
-    [StringLength(20)]
+    [StringLength(20, MinimumLength = 8, ErrorMessage = "Số điện thoại phải từ 8 đến 20 ký tự.")]
+    [RegularExpression(@"^[0-9+().\-\s]{8,20}$", ErrorMessage = "Số điện thoại chỉ được chứa chữ số (0-9) hoặc các dấu +, -, (, ).")]
     [Display(Name = "Số điện thoại")]
     public string? Phone { get; set; }
 
@@ -153,6 +163,7 @@ public class ReaderManageViewModel
     public DateOnly CardExpiryDate { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|LOCKED|EXPIRED)$", ErrorMessage = "Trạng thái thẻ không hợp lệ.")]
     [Display(Name = "Trạng thái thẻ")]
     public string CardStatus { get; set; } = LibraryConstants.CardStatus.Active;
 
@@ -161,6 +172,7 @@ public class ReaderManageViewModel
     public string? LockReason { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái tài khoản chỉ được chọn ACTIVE hoặc INACTIVE.")]
     [Display(Name = "Trạng thái tài khoản")]
     public string Status { get; set; } = EntityStatus.Active;
 }
@@ -196,7 +208,8 @@ public class ReaderTypeFormViewModel
     public Guid? Id { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập mã loại độc giả (ví dụ: STUDENT, LECTURER).")]
-    [StringLength(20, ErrorMessage = "Mã loại không vượt quá 20 ký tự.")]
+    [StringLength(20, MinimumLength = 2, ErrorMessage = "Mã loại phải từ 2 đến 20 ký tự.")]
+    [RegularExpression(@"^[A-Za-z0-9._\-]{2,20}$", ErrorMessage = "Mã loại độc giả chỉ gồm chữ cái không dấu, chữ số, dấu gạch ngang hoặc gạch dưới.")]
     [Display(Name = "Mã loại độc giả")]
     public string Code { get; set; } = string.Empty;
 
@@ -217,7 +230,7 @@ public class ReaderTypeFormViewModel
     [Display(Name = "Số lần gia hạn tối đa")]
     public short MaxRenewals { get; set; } = 1;
 
-    [Range(0, 60, ErrorMessage = "Số ngày mỗi lần gia hạn phải từ 0 đến 60 ngày.")]
+    [Range(1, 60, ErrorMessage = "Số ngày mỗi lần gia hạn phải từ 1 đến 60 ngày.")]
     [Display(Name = "Số ngày mỗi lần gia hạn")]
     public short RenewDays { get; set; } = 7;
 
@@ -230,6 +243,7 @@ public class ReaderTypeFormViewModel
     public string? Description { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái chỉ được chọn Đang hoạt động (ACTIVE) hoặc Ngừng hoạt động (INACTIVE).")]
     [Display(Name = "Trạng thái")]
     public string Status { get; set; } = EntityStatus.Active;
 }

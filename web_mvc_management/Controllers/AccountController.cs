@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Constant;
 using web_mvc_management.Extensions;
+using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Auth;
 using web_mvc_management.Services;
 using web_mvc_management.Util;
@@ -12,11 +13,11 @@ namespace web_mvc_management.Controllers;
 
 /// <summary>
 /// Controller điều hướng xác thực và phân quyền chuẩn Stateful ASP.NET Core MVC (.NET 10.0).
-/// Sử dụng HttpContext.Session và CookieAuthenticationDefaults.
 /// </summary>
 public class AccountController(
     IAuthService authService,
-    IIpRateLimiterService rateLimiter) : BaseController
+    IIpRateLimiterService rateLimiter,
+    IDateTimeProvider dateTimeProvider) : BaseController
 {
     private const string SessionPendingRegistration = "PendingRegistration";
     private const string SessionPendingLoginEmail = "PendingLoginEmail";
@@ -61,7 +62,6 @@ public class AccountController(
             return View(model);
         }
 
-        // Lưu trạng thái đăng ký tạm thời vào Stateful Session (Server-Side)
         HttpContext.Session.SetObject(SessionPendingRegistration, model);
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeRegister);
 
@@ -69,6 +69,7 @@ public class AccountController(
         {
             SetWarningMessage(result.Message);
         }
+
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeRegister });
     }
 
@@ -104,7 +105,6 @@ public class AccountController(
             return View(model);
         }
 
-        // Lưu trạng thái đăng nhập vào Stateful Session chờ xác thực 2FA OTP
         HttpContext.Session.SetString(SessionPendingLoginEmail, result.Data!.Email);
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeReaderLogin);
         HttpContext.Session.SetString(SessionPendingReturnUrl, model.ReturnUrl ?? string.Empty);
@@ -114,6 +114,7 @@ public class AccountController(
         {
             SetWarningMessage(result.Message);
         }
+
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeReaderLogin });
     }
 
@@ -149,7 +150,6 @@ public class AccountController(
             return View(model);
         }
 
-        // Lưu trạng thái đăng nhập cán bộ vào Stateful Session
         HttpContext.Session.SetString(SessionPendingLoginEmail, model.Email.Trim().ToLowerInvariant());
         HttpContext.Session.SetString(SessionPendingOtpPurpose, AuthService.PurposeStaffLogin);
         HttpContext.Session.SetString(SessionPendingReturnUrl, model.ReturnUrl ?? string.Empty);
@@ -158,11 +158,12 @@ public class AccountController(
         {
             SetWarningMessage(result.Message);
         }
+
         return RedirectToAction(nameof(VerifyOtp), new { purpose = AuthService.PurposeStaffLogin });
     }
 
     // =========================================================================
-    // 4. XÁC THỰC MÃ OTP (VERIFY OTP CHO CẢ REGISTER, READER 2FA & STAFF GMAIL)
+    // 4. XÁC THỰC MÃ OTP (VERIFY OTP)
     // =========================================================================
     [HttpGet]
     [AllowAnonymous]
@@ -173,7 +174,6 @@ public class AccountController(
             ? sessionPurpose
             : (purpose ?? AuthService.PurposeReaderLogin);
 
-        // Chống giả mạo query string purpose lệch với phiên thực tế trong Session
         if (!string.IsNullOrWhiteSpace(sessionPurpose) &&
             !string.IsNullOrWhiteSpace(purpose) &&
             !string.Equals(sessionPurpose, purpose, StringComparison.Ordinal))
@@ -203,15 +203,13 @@ public class AccountController(
             targetEmail = email;
         }
 
-        var viewModel = new VerifyOtpViewModel
+        return View(new VerifyOtpViewModel
         {
             Email = targetEmail,
             MaskedEmail = StringUtil.MaskEmail(targetEmail),
             Purpose = effectivePurpose,
             ReturnUrl = HttpContext.Session.GetString(SessionPendingReturnUrl)
-        };
-
-        return View(viewModel);
+        });
     }
 
     [HttpPost]
@@ -227,7 +225,6 @@ public class AccountController(
             return RedirectToAction(nameof(Login));
         }
 
-        // Luôn trích xuất Email từ Server-Side Session, không tin tưởng hidden input từ client
         var pendingReg = sessionPurpose == AuthService.PurposeRegister
             ? HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration)
             : null;
@@ -258,7 +255,6 @@ public class AccountController(
             return View(model);
         }
 
-        // 4.1. Xác thực hoàn tất Đăng ký mở thẻ
         if (sessionPurpose == AuthService.PurposeRegister)
         {
             var result = await authService.CompleteRegistrationAsync(pendingReg!, model.OtpCode, ClientIp);
@@ -268,7 +264,6 @@ public class AccountController(
                 return View(model);
             }
 
-            // Dọn dẹp trạng thái Session
             HttpContext.Session.Remove(SessionPendingRegistration);
             HttpContext.Session.Remove(SessionPendingOtpPurpose);
 
@@ -276,7 +271,6 @@ public class AccountController(
             return RedirectToAction(nameof(Login));
         }
 
-        // 4.2. Xác thực 2FA Đăng nhập Độc giả
         if (sessionPurpose == AuthService.PurposeReaderLogin)
         {
             var result = await authService.CompleteReaderLoginOtpAsync(sessionEmail, model.OtpCode, ClientIp);
@@ -287,30 +281,22 @@ public class AccountController(
             }
 
             var isPersistent = bool.TryParse(HttpContext.Session.GetString(SessionPendingRememberMe), out var rem) && rem;
-            var authProperties = new AuthenticationProperties
-            {
-                IsPersistent = isPersistent,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
-            };
-
             await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 result.Data,
-                authProperties);
+                new AuthenticationProperties
+                {
+                    IsPersistent = isPersistent,
+                    ExpiresUtc = dateTimeProvider.UtcNow.AddHours(8)
+                });
 
             var returnUrl = HttpContext.Session.GetString(SessionPendingReturnUrl);
-
-            // Dọn dẹp Session
-            HttpContext.Session.Remove(SessionPendingLoginEmail);
-            HttpContext.Session.Remove(SessionPendingOtpPurpose);
-            HttpContext.Session.Remove(SessionPendingReturnUrl);
-            HttpContext.Session.Remove(SessionPendingRememberMe);
+            ClearPendingLoginSession();
 
             SetSuccessMessage("Đã đăng nhập.");
             return RedirectToLocal(returnUrl);
         }
 
-        // 4.3. Xác thực Passwordless Đăng nhập Cán bộ / Thủ thư
         if (sessionPurpose == AuthService.PurposeStaffLogin)
         {
             var result = await authService.CompleteStaffLoginOtpAsync(sessionEmail, model.OtpCode, ClientIp);
@@ -320,23 +306,17 @@ public class AccountController(
                 return View(model);
             }
 
-            var authProperties = new AuthenticationProperties
-            {
-                IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
-            };
-
             await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 result.Data,
-                authProperties);
+                new AuthenticationProperties
+                {
+                    IsPersistent = true,
+                    ExpiresUtc = dateTimeProvider.UtcNow.AddHours(8)
+                });
 
             var returnUrl = HttpContext.Session.GetString(SessionPendingReturnUrl);
-
-            // Dọn dẹp Session
-            HttpContext.Session.Remove(SessionPendingLoginEmail);
-            HttpContext.Session.Remove(SessionPendingOtpPurpose);
-            HttpContext.Session.Remove(SessionPendingReturnUrl);
+            ClearPendingLoginSession();
 
             SetSuccessMessage("Đã đăng nhập.");
             if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
@@ -366,16 +346,9 @@ public class AccountController(
             return RedirectToAction(nameof(Login));
         }
 
-        string? email = null;
-        if (sessionPurpose == AuthService.PurposeRegister)
-        {
-            var pendingReg = HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration);
-            email = pendingReg?.Email;
-        }
-        else
-        {
-            email = HttpContext.Session.GetString(SessionPendingLoginEmail);
-        }
+        var email = sessionPurpose == AuthService.PurposeRegister
+            ? HttpContext.Session.GetObject<ReaderRegisterViewModel>(SessionPendingRegistration)?.Email
+            : HttpContext.Session.GetString(SessionPendingLoginEmail);
 
         if (string.IsNullOrWhiteSpace(email))
         {
@@ -383,21 +356,14 @@ public class AccountController(
             return RedirectToAction(sessionPurpose == AuthService.PurposeStaffLogin ? nameof(StaffLogin) : nameof(Login));
         }
 
-        var result = await authService.ResendOtpAsync(email, sessionPurpose, ClientIp);
-        if (!result.Succeeded)
-        {
-            SetErrorMessage(result.Message);
-        }
-        else
-        {
-            SetSuccessMessage(result.Message);
-        }
-
-        return RedirectToAction(nameof(VerifyOtp), new { purpose = sessionPurpose });
+        return RedirectWithFlash(
+            await authService.ResendOtpAsync(email, sessionPurpose, ClientIp),
+            nameof(VerifyOtp),
+            routeValues: new { purpose = sessionPurpose });
     }
 
     // =========================================================================
-    // 6. ĐĂNG XUẤT (LOGOUT)
+    // 6. ĐĂNG XUẤT (LOGOUT) & ACCESS DENIED
     // =========================================================================
     [HttpPost]
     [Authorize]
@@ -410,21 +376,22 @@ public class AccountController(
         return RedirectToAction("Index", "Home");
     }
 
-    // =========================================================================
-    // 7. TRANG TỪ CHỐI TRUY CẬP (ACCESS DENIED)
-    // =========================================================================
     [HttpGet]
     [AllowAnonymous]
     public IActionResult AccessDenied() => View();
 
+    private void ClearPendingLoginSession()
+    {
+        HttpContext.Session.Remove(SessionPendingLoginEmail);
+        HttpContext.Session.Remove(SessionPendingOtpPurpose);
+        HttpContext.Session.Remove(SessionPendingReturnUrl);
+        HttpContext.Session.Remove(SessionPendingRememberMe);
+    }
+
     private async Task LoadReaderTypesAsync() => ViewBag.ReaderTypes = await authService.GetActiveReaderTypesAsync();
 
-    private IActionResult RedirectToLocal(string? returnUrl)
-    {
-        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
-        {
-            return Redirect(returnUrl);
-        }
-        return RedirectToAction("Index", "Home");
-    }
+    private IActionResult RedirectToLocal(string? returnUrl) =>
+        !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
+            ? Redirect(returnUrl)
+            : RedirectToAction("Index", "Home");
 }

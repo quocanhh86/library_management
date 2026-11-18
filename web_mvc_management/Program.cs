@@ -4,12 +4,11 @@ using web_mvc_management.Data;
 using web_mvc_management.Extensions;
 using web_mvc_management.Middlewares;
 
-// Bật Managed Networking cho Microsoft.Data.SqlClient trên Windows (.NET 10.0)
-// nhằm loại bỏ hoàn toàn lỗi treo/timeout bất đồng bộ của thư viện C++ native SNI.dll (Win32Exception: The wait operation timed out)
-AppContext.SetSwitch("Switch.Microsoft.Data.SqlClient.UseManagedNetworkingOnWindows", true);
+// Tắt Managed Networking để dùng SNI loopback với bộ Interceptor đồng bộ cục bộ (FastLocalSqlInterceptors) trên .NET 10.0
+AppContext.SetSwitch("Switch.Microsoft.Data.SqlClient.UseManagedNetworkingOnWindows", false);
 
-// Nạp file .env tại thư mục gốc dự án (duyệt ngược từ CWD và fallback từ AppContext.BaseDirectory)
-Env.TraversePath().Load();
+// Nạp file .env tại thư mục gốc dự án (NoClobber để không ghi đè biến môi trường truyền trực tiếp từ CLI/CI/Docker)
+Env.NoClobber().TraversePath().Load();
 if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")) &&
     string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DatabaseSettings__Host")))
 {
@@ -19,7 +18,7 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStri
         var candidateEnv = Path.Combine(baseDir.FullName, ".env");
         if (File.Exists(candidateEnv))
         {
-            Env.Load(candidateEnv);
+            Env.NoClobber().Load(candidateEnv);
             break;
         }
         baseDir = baseDir.Parent;
@@ -27,9 +26,6 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStri
 }
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Đảm bảo các biến môi trường phân cấp (__) từ .env được nạp đầy đủ vào IConfiguration
-builder.Configuration.AddEnvironmentVariables();
 
 // Add services to the container:
 // 1. Tự động bảo vệ chống CSRF (AutoValidateAntiforgeryTokenAttribute)

@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
+using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Catalog;
 
 namespace web_mvc_management.Models.ViewModels.AdminCatalog;
@@ -39,7 +40,7 @@ public class AdminBookCopyListItemViewModel
 /// <summary>
 /// Form nhập bổ sung lô bản sao cho một đầu sách hiện có.
 /// </summary>
-public class BookCopyBatchCreateViewModel
+public class BookCopyBatchCreateViewModel : IValidatableObject
 {
     [Required(ErrorMessage = "Vui lòng chọn đầu sách cần nhập bản sao.")]
     [Display(Name = "Đầu sách")]
@@ -53,7 +54,8 @@ public class BookCopyBatchCreateViewModel
     [Display(Name = "Số lượng cuốn")]
     public int Quantity { get; set; } = 1;
 
-    [StringLength(50, ErrorMessage = "Mã vạch không vượt quá 50 ký tự.")]
+    [StringLength(50, MinimumLength = 3, ErrorMessage = "Mã vạch phải từ 3 đến 50 ký tự.")]
+    [RegularExpression(@"^[A-Za-z0-9._\-]{3,50}$", ErrorMessage = "Mã vạch chỉ gồm chữ cái không dấu, chữ số, dấu chấm, gạch dưới hoặc gạch ngang.")]
     [Display(Name = "Mã vạch tùy chỉnh (để trống sẽ tự sinh)")]
     public string? CustomBarcode { get; set; }
 
@@ -67,6 +69,25 @@ public class BookCopyBatchCreateViewModel
     [StringLength(500)]
     [Display(Name = "Ghi chú")]
     public string? Note { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        var dateTimeProvider = validationContext.GetService(typeof(IDateTimeProvider)) as IDateTimeProvider;
+        var today = dateTimeProvider?.Today ?? DateOnly.FromDateTime(DateTime.Now);
+        if (AcquiredDate.HasValue && AcquiredDate.Value > today)
+        {
+            yield return new ValidationResult(
+                "Ngày nhập bản sao không được lớn hơn ngày hiện tại.",
+                [nameof(AcquiredDate)]);
+        }
+
+        if (Quantity > 1 && !string.IsNullOrWhiteSpace(CustomBarcode))
+        {
+            yield return new ValidationResult(
+                "Mã vạch tùy chỉnh chỉ áp dụng khi nhập từng cuốn (Số lượng = 1). Để trống để hệ thống tự sinh mã vạch theo lô.",
+                [nameof(CustomBarcode)]);
+        }
+    }
 }
 
 /// <summary>
@@ -101,6 +122,7 @@ public class BookCopyDisposeViewModel
     public Guid CopyId { get; set; }
 
     [Required(ErrorMessage = "Vui lòng chọn hình thức xử lý bản sao.")]
+    [RegularExpression(@"^(DISPOSED|DAMAGED|LOST)$", ErrorMessage = "Trạng thái xử lý bản sao không hợp lệ.")]
     [Display(Name = "Trạng thái xử lý")]
     public string TargetStatus { get; set; } = LibraryConstants.CopyStatus.Disposed;
 

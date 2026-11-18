@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using web_mvc_management.Common;
 using web_mvc_management.Data;
 using web_mvc_management.Entity;
 
@@ -47,17 +48,17 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
     public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) =>
         await BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
-    public async Task<IDbContextTransaction> BeginTransactionAsync(
+    public Task<IDbContextTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel,
         CancellationToken cancellationToken = default)
     {
         if (_currentTransaction != null)
         {
-            return _currentTransaction;
+            return Task.FromResult(_currentTransaction);
         }
 
-        _currentTransaction = await _context.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
-        return _currentTransaction;
+        _currentTransaction = _context.Database.BeginTransaction(isolationLevel);
+        return Task.FromResult(_currentTransaction);
     }
 
     public async Task<IDbContextTransaction> BeginTransactionWithLockAsync(
@@ -68,29 +69,33 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         var tx = await BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
         try
         {
-            var safeResource = string.IsNullOrWhiteSpace(lockResource) ? "LIB_MUTATION_LOCK" : lockResource.Trim();
-            var rcParam = new Microsoft.Data.SqlClient.SqlParameter("@rc", SqlDbType.Int)
+            // Khóa ứng dụng sp_getapplock chỉ áp dụng trên SQL Server; provider nhẹ (SQLite In-Memory test) dùng transaction nguyên bản
+            if (_context.Database.IsSqlServer())
             {
-                Direction = ParameterDirection.Output
-            };
-            var resourceParam = new Microsoft.Data.SqlClient.SqlParameter("@Resource", SqlDbType.NVarChar, 255)
-            {
-                Value = safeResource
-            };
-            var timeoutParam = new Microsoft.Data.SqlClient.SqlParameter("@LockTimeout", SqlDbType.Int)
-            {
-                Value = lockTimeoutMs
-            };
+                var safeResource = string.IsNullOrWhiteSpace(lockResource) ? "LIB_MUTATION_LOCK" : lockResource.Trim();
+                var rcParam = new Microsoft.Data.SqlClient.SqlParameter("@rc", SqlDbType.Int)
+                {
+                    Direction = ParameterDirection.Output
+                };
+                var resourceParam = new Microsoft.Data.SqlClient.SqlParameter("@Resource", SqlDbType.NVarChar, 255)
+                {
+                    Value = safeResource
+                };
+                var timeoutParam = new Microsoft.Data.SqlClient.SqlParameter("@LockTimeout", SqlDbType.Int)
+                {
+                    Value = lockTimeoutMs
+                };
 
-            await _context.Database.ExecuteSqlRawAsync(
-                "EXEC @rc = sys.sp_getapplock @Resource = @Resource, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = @LockTimeout;",
-                [rcParam, resourceParam, timeoutParam],
-                cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync(
+                    "EXEC @rc = sys.sp_getapplock @Resource = @Resource, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = @LockTimeout;",
+                    [rcParam, resourceParam, timeoutParam],
+                    cancellationToken);
 
-            var lockResult = rcParam.Value is int rc ? rc : -999;
-            if (lockResult < 0)
-            {
-                throw new TimeoutException($"Không thể lấy khóa giao dịch đồng thời cho tài nguyên '{safeResource}' (mã: {lockResult}).");
+                var lockResult = rcParam.Value is int rc ? rc : -999;
+                if (lockResult < 0)
+                {
+                    throw new TimeoutException($"Không thể lấy khóa giao dịch đồng thời cho tài nguyên '{safeResource}' (mã: {lockResult}).");
+                }
             }
 
             return tx;
@@ -102,26 +107,62 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         }
     }
 
+    public Task<ServiceResult<T>> ExecuteInLockedTransactionAsync<T>(
+        Func<Task<ServiceResult<T>>> action,
+        string lockResource = "LIB_MUTATION_LOCK",
+        int lockTimeoutMs = 10000,
+        CancellationToken cancellationToken = default) =>
+        ExecuteInLockedTransactionCoreAsync(action, r => r.IsSuccess, lockResource, lockTimeoutMs, cancellationToken);
+
+    public Task<ServiceResult> ExecuteInLockedTransactionAsync(
+        Func<Task<ServiceResult>> action,
+        string lockResource = "LIB_MUTATION_LOCK",
+        int lockTimeoutMs = 10000,
+        CancellationToken cancellationToken = default) =>
+        ExecuteInLockedTransactionCoreAsync(action, r => r.IsSuccess, lockResource, lockTimeoutMs, cancellationToken);
+
+    private async Task<TResult> ExecuteInLockedTransactionCoreAsync<TResult>(
+        Func<Task<TResult>> action,
+        Func<TResult, bool> isSuccess,
+        string lockResource,
+        int lockTimeoutMs,
+        CancellationToken cancellationToken)
+    {
+        await BeginTransactionWithLockAsync(lockResource, lockTimeoutMs, cancellationToken);
+        try
+        {
+            var result = await action();
+            if (isSuccess(result))
+            {
+                await CommitTransactionAsync(cancellationToken);
+            }
+            else
+            {
+                await RollbackTransactionAsync(CancellationToken.None);
+            }
+            return result;
+        }
+        catch
+        {
+            await RollbackTransactionAsync(CancellationToken.None);
+            throw;
+        }
+    }
+
     public async Task ClearStaffAuditReferencesAsync(Guid staffId, CancellationToken cancellationToken = default)
     {
-        const string sql = """
-            UPDATE dbo.staff            SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.reader_types     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.readers          SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.categories       SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.publishers       SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.authors          SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.shelves          SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.books            SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.book_authors     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.book_copies      SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.book_images      SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.borrow_slips     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.borrow_details   SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.fines            SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.reservations     SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            UPDATE dbo.library_settings SET created_by = CASE WHEN created_by = {0} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {0} THEN NULL ELSE updated_by END WHERE created_by = {0} OR updated_by = {0};
-            """;
+        var schemaPrefix = _context.Database.IsSqlServer() ? "dbo." : string.Empty;
+        string[] tables =
+        [
+            "staff", "reader_types", "readers", "categories", "publishers", "authors", "shelves",
+            "books", "book_authors", "book_copies", "book_images", "borrow_slips",
+            "borrow_details", "fines", "reservations", "library_settings"
+        ];
+
+        var sql = string.Join(
+            Environment.NewLine,
+            tables.Select(t =>
+                $"UPDATE {schemaPrefix}{t} SET created_by = CASE WHEN created_by = {{0}} THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = {{0}} THEN NULL ELSE updated_by END WHERE created_by = {{0}} OR updated_by = {{0}};"));
 
         await _context.Database.ExecuteSqlRawAsync(sql, [staffId], cancellationToken);
     }
@@ -134,7 +175,7 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
 
             if (_currentTransaction != null)
             {
-                await _currentTransaction.CommitAsync(cancellationToken);
+                _currentTransaction.Commit();
             }
         }
         catch
@@ -146,29 +187,30 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.DisposeAsync();
+                _currentTransaction.Dispose();
                 _currentTransaction = null;
             }
         }
     }
 
-    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
+    public Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.RollbackAsync(cancellationToken);
+                _currentTransaction.Rollback();
             }
         }
         finally
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.DisposeAsync();
+                _currentTransaction.Dispose();
                 _currentTransaction = null;
             }
         }
+        return Task.CompletedTask;
     }
 
     public void Dispose()
@@ -178,13 +220,11 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
         GC.SuppressFinalize(this);
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_currentTransaction != null)
-        {
-            await _currentTransaction.DisposeAsync();
-        }
-        await _context.DisposeAsync();
+        _currentTransaction?.Dispose();
+        _context.Dispose();
         GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
 }

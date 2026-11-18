@@ -260,11 +260,17 @@
                         }
                     });
 
-                    if (mainImg) mainImg.src = url;
+                    if (mainImg) {
+                        mainImg.src = url;
+                        mainImg.alt = caption || typeLabel || '';
+                    }
                     if (mainType) mainType.textContent = typeLabel;
                     if (mainCaption) mainCaption.textContent = caption;
 
-                    if (modalImg) modalImg.src = url;
+                    if (modalImg) {
+                        modalImg.src = url;
+                        modalImg.alt = caption || typeLabel || '';
+                    }
                     if (modalCaption) modalCaption.textContent = caption + ' (' + typeLabel + ')';
                     if (modalCounter) modalCounter.textContent = (currentIndex + 1) + ' / ' + thumbs.length;
                 }

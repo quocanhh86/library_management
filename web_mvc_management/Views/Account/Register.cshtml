@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Đăng ký thẻ thư viện";
     ViewData["IsAuthPage"] = true;
-    var readerTypes = ViewBag.ReaderTypes as IEnumerable<web_mvc_management.Entity.ReaderType> ?? [];
+    var readerTypes = ViewBag.ReaderTypes as IEnumerable<web_mvc_management.Models.ViewModels.Auth.ReaderTypeOptionViewModel> ?? [];
 }
 
 <div class="auth-wrap auth-wrap--wide">

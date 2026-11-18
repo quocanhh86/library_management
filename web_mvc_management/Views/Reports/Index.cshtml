@@ -46,7 +46,7 @@
             <input type="date" class="form-control" id="toDate" name="ToDate" value="@(filter.ToDate?.ToString("yyyy-MM-dd") ?? Model.RangeEnd.ToString("yyyy-MM-dd"))" onchange="markCustom()" />
         </div>
         <div class="col-lg-1">
-            <button type="submit" class="btn btn-primary w-100">
+            <button type="submit" class="btn btn-primary w-100" aria-label="Áp dụng bộ lọc thời gian" title="Áp dụng bộ lọc thời gian">
                 <i class="bi bi-funnel" aria-hidden="true"></i>
             </button>
         </div>

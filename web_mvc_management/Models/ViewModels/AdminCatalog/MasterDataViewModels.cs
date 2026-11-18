@@ -23,6 +23,7 @@ public class CategoryFormViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập tên thể loại sách.")]
     [StringLength(100, ErrorMessage = "Tên thể loại không vượt quá 100 ký tự.")]
+    [NoNumbers(AllowAmpersandAndSlash = true, ErrorMessage = "Tên thể loại chỉ được chứa chữ cái, khoảng trắng và dấu câu cơ bản (không được chứa chữ số).")]
     [Display(Name = "Tên thể loại")]
     public string Name { get; set; } = string.Empty;
 
@@ -31,6 +32,7 @@ public class CategoryFormViewModel
     public string? Description { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái chỉ được chọn Đang hoạt động (ACTIVE) hoặc Ngừng hoạt động (INACTIVE).")]
     [Display(Name = "Trạng thái")]
     public string Status { get; set; } = EntityStatus.Active;
 }
@@ -61,6 +63,7 @@ public class AuthorFormViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập họ tên tác giả.")]
     [StringLength(150, ErrorMessage = "Họ tên tác giả không vượt quá 150 ký tự.")]
+    [NoNumbers(ErrorMessage = "Họ tên tác giả không được chứa chữ số hoặc ký tự đặc biệt.")]
     [Display(Name = "Họ tên tác giả")]
     public string FullName { get; set; } = string.Empty;
 
@@ -69,6 +72,7 @@ public class AuthorFormViewModel
     public string? Biography { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái chỉ được chọn Đang hoạt động (ACTIVE) hoặc Ngừng hoạt động (INACTIVE).")]
     [Display(Name = "Trạng thái")]
     public string Status { get; set; } = EntityStatus.Active;
 }
@@ -109,11 +113,13 @@ public class PublisherFormViewModel
     [Display(Name = "Địa chỉ")]
     public string? Address { get; set; }
 
-    [StringLength(20, ErrorMessage = "Số điện thoại không vượt quá 20 ký tự.")]
+    [StringLength(20, MinimumLength = 8, ErrorMessage = "Số điện thoại phải từ 8 đến 20 ký tự.")]
+    [RegularExpression(@"^[0-9+().\-\s]{8,20}$", ErrorMessage = "Số điện thoại chỉ được chứa chữ số (0-9) hoặc các dấu +, -, (, ).")]
     [Display(Name = "Điện thoại")]
     public string? Phone { get; set; }
 
     [EmailAddress(ErrorMessage = "Địa chỉ email không hợp lệ.")]
+    [RegularExpression(@"^[^\s@]+@[^\s@]+\.[^\s@]+$", ErrorMessage = "Địa chỉ email không đúng định dạng (ví dụ: nxb@tenmien.vn).")]
     [StringLength(255)]
     [Display(Name = "Email")]
     public string? Email { get; set; }
@@ -123,6 +129,7 @@ public class PublisherFormViewModel
     public string? Website { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái chỉ được chọn Đang hoạt động (ACTIVE) hoặc Ngừng hoạt động (INACTIVE).")]
     [Display(Name = "Trạng thái")]
     public string Status { get; set; } = EntityStatus.Active;
 }
@@ -153,7 +160,8 @@ public class ShelfFormViewModel
     public Guid? Id { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập mã kệ sách (ví dụ: KE-IT-01).")]
-    [StringLength(30, ErrorMessage = "Mã kệ không vượt quá 30 ký tự.")]
+    [StringLength(30, MinimumLength = 2, ErrorMessage = "Mã kệ phải từ 2 đến 30 ký tự.")]
+    [RegularExpression(@"^[A-Za-z0-9._\-]{2,30}$", ErrorMessage = "Mã kệ chỉ được chứa chữ cái không dấu, chữ số, dấu chấm, gạch ngang hoặc gạch dưới.")]
     [Display(Name = "Mã vị trí kệ")]
     public string Code { get; set; } = string.Empty;
 
@@ -162,6 +170,7 @@ public class ShelfFormViewModel
     public string? Description { get; set; }
 
     [Required]
+    [RegularExpression(@"^(ACTIVE|INACTIVE)$", ErrorMessage = "Trạng thái chỉ được chọn Đang hoạt động (ACTIVE) hoặc Ngừng hoạt động (INACTIVE).")]
     [Display(Name = "Trạng thái")]
     public string Status { get; set; } = EntityStatus.Active;
 }
