@@ -16,17 +16,14 @@ public static class DbInitializer
 
     public static async Task InitializeAsync(ApplicationDbContext context, IConfiguration? configuration = null, bool forceReset = false)
     {
+        var alreadySeeded = false;
         if (!forceReset)
         {
             try
             {
-                var alreadySeeded = await context.BorrowSlips
+                alreadySeeded = await context.BorrowSlips
                     .AsNoTracking()
                     .AnyAsync(s => s.Note != null && s.Note.Contains(ExamDatasetVersionMarker));
-                if (alreadySeeded)
-                {
-                    return;
-                }
             }
             catch
             {
@@ -35,7 +32,7 @@ public static class DbInitializer
         }
 
         // 0a. Tự động đồng bộ EF Core Migration (InitialCreate) cho cả DB mới tinh hoặc DB đã có bảng từ trước
-        if (await context.Database.CanConnectAsync())
+        if (!alreadySeeded && await context.Database.CanConnectAsync())
         {
             const string syncMigrationHistoryIfTablesExistSql = """
                 IF OBJECT_ID(N'dbo.authors', N'U') IS NOT NULL
@@ -59,7 +56,10 @@ public static class DbInitializer
             await context.Database.ExecuteSqlRawAsync(syncMigrationHistoryIfTablesExistSql);
         }
 
-        await context.Database.MigrateAsync();
+        if (!alreadySeeded)
+        {
+            await context.Database.MigrateAsync();
+        }
 
         // 0b. Đảm bảo bảng dbo.book_images và các constraint chuẩn tồn tại trên SQL Server
         const string ensureSchemaSql = """
@@ -133,9 +133,108 @@ public static class DbInitializer
             )
             BEGIN
                 DROP INDEX uq_borrow_details_open_copy ON dbo.borrow_details;
-                CREATE UNIQUE INDEX uq_borrow_details_open_copy ON dbo.borrow_details(copy_id)
-                WHERE [returned_at] IS NULL AND [status] = 'ACTIVE';
             END
+
+            -- Bổ sung idempotent hệ thống Filtered Unique Indexes bảo vệ toàn vẹn mức Engine CSDL
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.borrow_details') AND name = 'uq_borrow_details_open_copy')
+                CREATE UNIQUE INDEX uq_borrow_details_open_copy ON dbo.borrow_details(copy_id) WHERE [returned_at] IS NULL AND [status] = 'ACTIVE';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.reservations') AND name = 'uq_reservations_active_reader_book')
+                CREATE UNIQUE INDEX uq_reservations_active_reader_book ON dbo.reservations(reader_id, book_id) WHERE [reservation_status] IN ('PENDING', 'READY') AND [status] = 'ACTIVE';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.reservations') AND name = 'uq_reservations_ready_copy')
+                CREATE UNIQUE INDEX uq_reservations_ready_copy ON dbo.reservations(assigned_copy_id) WHERE [assigned_copy_id] IS NOT NULL AND [reservation_status] = 'READY' AND [status] = 'ACTIVE';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.books') AND name = 'uq_books_isbn_active')
+                CREATE UNIQUE INDEX uq_books_isbn_active ON dbo.books(isbn) WHERE [isbn] IS NOT NULL AND [status] <> 'DELETED';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.staff') AND name = 'uq_staff_username_active')
+                CREATE UNIQUE INDEX uq_staff_username_active ON dbo.staff(username) WHERE [status] <> 'DELETED';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.staff') AND name = 'uq_staff_email_active')
+                CREATE UNIQUE INDEX uq_staff_email_active ON dbo.staff(email) WHERE [status] <> 'DELETED';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.readers') AND name = 'uq_readers_username_active')
+                CREATE UNIQUE INDEX uq_readers_username_active ON dbo.readers(username) WHERE [status] <> 'DELETED';
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.readers') AND name = 'uq_readers_email_active')
+                CREATE UNIQUE INDEX uq_readers_email_active ON dbo.readers(email) WHERE [status] <> 'DELETED';
+
+            -- Bổ sung idempotent hệ thống CHECK Constraints miền giá trị (35+ ràng buộc chuẩn đặc tả)
+            DECLARE @missingStatusChecksSql NVARCHAR(MAX) = N'';
+            SELECT @missingStatusChecksSql += N'ALTER TABLE dbo.' + QUOTENAME(t.name)
+                + N' ADD CONSTRAINT ' + QUOTENAME('ck_' + t.name + '_status')
+                + N' CHECK ([status] IN (''ACTIVE'', ''INACTIVE'', ''DELETED''));' + CHAR(13)
+            FROM sys.tables t
+            JOIN sys.columns c ON c.object_id = t.object_id AND c.name = 'status'
+            WHERE t.schema_id = SCHEMA_ID('dbo')
+              AND NOT EXISTS (
+                  SELECT 1 FROM sys.check_constraints cc
+                  WHERE cc.parent_object_id = t.object_id
+                    AND COL_NAME(cc.parent_object_id, cc.parent_column_id) = 'status'
+              );
+            IF LEN(@missingStatusChecksSql) > 0
+                EXEC sp_executesql @missingStatusChecksSql;
+
+            IF OBJECT_ID('dbo.ck_staff_role', 'C') IS NULL
+                ALTER TABLE dbo.staff ADD CONSTRAINT ck_staff_role CHECK ([role] IN ('Admin', 'Librarian'));
+
+            IF OBJECT_ID('dbo.ck_readers_card_status', 'C') IS NULL
+                ALTER TABLE dbo.readers ADD CONSTRAINT ck_readers_card_status CHECK ([card_status] IN ('ACTIVE', 'LOCKED', 'EXPIRED'));
+
+            IF OBJECT_ID('dbo.ck_readers_expiry', 'C') IS NULL
+                ALTER TABLE dbo.readers ADD CONSTRAINT ck_readers_expiry CHECK ([card_expiry_date] > [card_issued_date]);
+
+            IF OBJECT_ID('dbo.ck_readers_lock', 'C') IS NULL
+                ALTER TABLE dbo.readers ADD CONSTRAINT ck_readers_lock CHECK (([card_status] = 'LOCKED' AND [locked_at] IS NOT NULL) OR ([card_status] <> 'LOCKED' AND [locked_at] IS NULL));
+
+            IF OBJECT_ID('dbo.ck_book_copies_copy_status', 'C') IS NULL
+                ALTER TABLE dbo.book_copies ADD CONSTRAINT ck_book_copies_copy_status CHECK ([copy_status] IN ('AVAILABLE', 'BORROWED', 'RESERVED', 'DAMAGED', 'LOST', 'DISPOSED'));
+
+            IF OBJECT_ID('dbo.ck_book_copies_dispose', 'C') IS NULL
+                ALTER TABLE dbo.book_copies ADD CONSTRAINT ck_book_copies_dispose CHECK (([copy_status] = 'DISPOSED' AND [disposed_at] IS NOT NULL) OR ([copy_status] <> 'DISPOSED' AND [disposed_at] IS NULL));
+
+            IF OBJECT_ID('dbo.ck_book_copies_price', 'C') IS NULL
+                ALTER TABLE dbo.book_copies ADD CONSTRAINT ck_book_copies_price CHECK ([price] IS NULL OR [price] >= 0);
+
+            IF OBJECT_ID('dbo.ck_borrow_details_return', 'C') IS NULL
+                ALTER TABLE dbo.borrow_details ADD CONSTRAINT ck_borrow_details_return CHECK (([returned_at] IS NULL AND [return_condition] IS NULL AND [received_by] IS NULL) OR ([returned_at] IS NOT NULL AND [return_condition] IS NOT NULL AND [received_by] IS NOT NULL));
+
+            IF OBJECT_ID('dbo.ck_borrow_details_cond', 'C') IS NULL
+                ALTER TABLE dbo.borrow_details ADD CONSTRAINT ck_borrow_details_cond CHECK ([return_condition] IS NULL OR [return_condition] IN ('GOOD', 'DAMAGED', 'LOST'));
+
+            IF OBJECT_ID('dbo.ck_borrow_details_renew', 'C') IS NULL
+                ALTER TABLE dbo.borrow_details ADD CONSTRAINT ck_borrow_details_renew CHECK ([renew_count] >= 0);
+
+            IF OBJECT_ID('dbo.ck_fines_amount', 'C') IS NULL
+                ALTER TABLE dbo.fines ADD CONSTRAINT ck_fines_amount CHECK ([amount] > 0);
+
+            IF OBJECT_ID('dbo.ck_fines_fine_status', 'C') IS NULL
+                ALTER TABLE dbo.fines ADD CONSTRAINT ck_fines_fine_status CHECK ([fine_status] IN ('UNPAID', 'PAID', 'WAIVED'));
+
+            IF OBJECT_ID('dbo.ck_fines_type', 'C') IS NULL
+                ALTER TABLE dbo.fines ADD CONSTRAINT ck_fines_type CHECK ([fine_type] IN ('OVERDUE', 'DAMAGED', 'LOST'));
+
+            IF OBJECT_ID('dbo.ck_fines_overdue_days', 'C') IS NULL
+                ALTER TABLE dbo.fines ADD CONSTRAINT ck_fines_overdue_days CHECK (([fine_type] = 'OVERDUE' AND [overdue_days] IS NOT NULL AND [overdue_days] > 0) OR ([fine_type] <> 'OVERDUE' AND [overdue_days] IS NULL));
+
+            IF OBJECT_ID('dbo.ck_fines_paid', 'C') IS NULL
+                ALTER TABLE dbo.fines ADD CONSTRAINT ck_fines_paid CHECK (([fine_status] = 'PAID' AND [paid_at] IS NOT NULL AND [payment_method] IS NOT NULL) OR ([fine_status] <> 'PAID' AND [paid_at] IS NULL AND [payment_method] IS NULL));
+
+            IF OBJECT_ID('dbo.ck_fines_handler', 'C') IS NULL
+                ALTER TABLE dbo.fines ADD CONSTRAINT ck_fines_handler CHECK (([fine_status] = 'UNPAID' AND [handled_by] IS NULL) OR ([fine_status] <> 'UNPAID' AND [handled_by] IS NOT NULL));
+
+            IF OBJECT_ID('dbo.ck_fines_waive_note', 'C') IS NULL
+                ALTER TABLE dbo.fines ADD CONSTRAINT ck_fines_waive_note CHECK (([fine_status] <> 'WAIVED') OR ([note] IS NOT NULL AND LEN(LTRIM(RTRIM([note]))) > 0));
+
+            IF OBJECT_ID('dbo.ck_reservations_res_status', 'C') IS NULL
+                ALTER TABLE dbo.reservations ADD CONSTRAINT ck_reservations_res_status CHECK ([reservation_status] IN ('PENDING', 'READY', 'FULFILLED', 'CANCELLED', 'EXPIRED'));
+
+            IF OBJECT_ID('dbo.ck_reservations_ready', 'C') IS NULL
+                ALTER TABLE dbo.reservations ADD CONSTRAINT ck_reservations_ready CHECK (([reservation_status] <> 'READY') OR ([assigned_copy_id] IS NOT NULL AND [ready_at] IS NOT NULL AND [expires_at] IS NOT NULL));
+
+            IF OBJECT_ID('dbo.ck_reservations_closed', 'C') IS NULL
+                ALTER TABLE dbo.reservations ADD CONSTRAINT ck_reservations_closed CHECK (([reservation_status] IN ('FULFILLED', 'CANCELLED', 'EXPIRED') AND [closed_at] IS NOT NULL) OR ([reservation_status] NOT IN ('FULFILLED', 'CANCELLED', 'EXPIRED') AND [closed_at] IS NULL));
 
             IF OBJECT_ID('dbo.trg_borrow_details_sync_copy', 'TR') IS NULL
                OR OBJECT_DEFINITION(OBJECT_ID('dbo.trg_borrow_details_sync_copy')) NOT LIKE '%dbo.reservations%'
@@ -205,6 +304,10 @@ public static class DbInitializer
             END
             """;
         await context.Database.ExecuteSqlRawAsync(ensureSchemaSql);
+        if (alreadySeeded && !forceReset)
+        {
+            return;
+        }
 
         var hasExamDatasetV3 = await context.BorrowSlips.AnyAsync(s => s.Note != null && s.Note.Contains(ExamDatasetVersionMarker));
         if (forceReset || !hasExamDatasetV3)
@@ -1525,9 +1628,27 @@ public static class DbInitializer
             CreatedBy = librarianStaffId
         };
 
+        var resS3Pending = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            ReaderId = student3.Id,
+            BookId = bookByIsbn["978-1484289105"].Id, // Đầu sách Hot #1 (ASP.NET Core MVC 10 - phục vụ Kịch bản 3 trả BC-202610-0024 kích hoạt Copy Trap!)
+            AssignedCopyId = null,
+            ReservationStatus = LibraryConstants.ReservationStatus.Pending,
+            ReservedAt = now.AddHours(-10),
+            ReadyAt = null,
+            ExpiresAt = null,
+            ClosedAt = null,
+            Status = EntityStatus.Active,
+            CreatedAt = now.AddHours(-10),
+            UpdatedAt = now.AddHours(-10),
+            CreatedBy = adminStaffId
+        };
+
         await context.BorrowSlips.AddAsync(slipS3Returned);
         await context.BorrowDetails.AddRangeAsync([detailS3Late, detailS3Damaged]);
         await context.Fines.AddRangeAsync([fineS3OverdueUnpaid, fineS3DamagedUnpaid]);
+        await context.Reservations.AddAsync(resS3Pending);
         await context.SaveChangesAsync();
 
         // =====================================================================
@@ -1675,6 +1796,7 @@ public static class DbInitializer
         };
 
         var envReaders = await context.Readers
+            .Include(r => r.ReaderType)
             .Where(r => r.Status == EntityStatus.Active && !coreUsernames.Contains(r.Username))
             .OrderBy(r => r.CardNo)
             .ToListAsync();
@@ -1768,13 +1890,14 @@ public static class DbInitializer
                 UpdatedAt = now.AddDays(-4),
                 CreatedBy = adminStaffId
             };
+            var maxRenewals = envReader.ReaderType.MaxRenewals;
             var dActiveDueSoon = new BorrowDetail
             {
                 Id = Guid.NewGuid(),
                 SlipId = slipActive.Id,
                 CopyId = cActive2.Id,
-                DueDate = today.AddDays(2), // Sắp đến hạn (còn 2 ngày), đã gia hạn 1/2 -> Bấm gia hạn thêm được
-                RenewCount = 1,
+                DueDate = today.AddDays(2), // Sắp đến hạn (còn 2 ngày), còn đúng 1 lượt gia hạn cuối -> Bấm gia hạn thêm được
+                RenewCount = (short)Math.Max(1, maxRenewals - 1),
                 Status = EntityStatus.Active,
                 CreatedAt = now.AddDays(-12),
                 UpdatedAt = now.AddDays(-5),
@@ -1785,8 +1908,8 @@ public static class DbInitializer
                 Id = Guid.NewGuid(),
                 SlipId = slipActive.Id,
                 CopyId = cActive3.Id,
-                DueDate = today.AddDays(6), // Đã hết lượt gia hạn (2/2) -> Demo nút khóa gia hạn
-                RenewCount = 2,
+                DueDate = today.AddDays(6), // Đã hết lượt gia hạn tối đa -> Demo nút khóa gia hạn
+                RenewCount = maxRenewals,
                 Status = EntityStatus.Active,
                 CreatedAt = now.AddDays(-16),
                 UpdatedAt = now.AddDays(-2),
@@ -2037,12 +2160,36 @@ public static class DbInitializer
         }
     }
 
+    private static string ResolveWebRootDirectory()
+    {
+        foreach (var startPath in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        {
+            var dir = new DirectoryInfo(startPath);
+            while (dir != null)
+            {
+                var directWwwRoot = Path.Combine(dir.FullName, "wwwroot");
+                if (Directory.Exists(directWwwRoot))
+                {
+                    return directWwwRoot;
+                }
+
+                var subProjectDir = Path.Combine(dir.FullName, "web_mvc_management");
+                var nestedWwwRoot = Path.Combine(subProjectDir, "wwwroot");
+                if (Directory.Exists(subProjectDir) && Directory.Exists(nestedWwwRoot))
+                {
+                    return nestedWwwRoot;
+                }
+
+                dir = dir.Parent;
+            }
+        }
+
+        return Path.Combine(AppContext.BaseDirectory, "wwwroot");
+    }
+
     private static async Task SeedSampleBookImagesAsync(ApplicationDbContext context, Guid adminStaffId)
     {
-        var cwd = Directory.GetCurrentDirectory();
-        var webRoot = Directory.Exists(Path.Combine(cwd, "wwwroot"))
-            ? Path.Combine(cwd, "wwwroot")
-            : Path.Combine(cwd, "web_mvc_management", "wwwroot");
+        var webRoot = ResolveWebRootDirectory();
 
         var seedDir = Path.Combine(webRoot, "uploads", "books", "seed");
         Directory.CreateDirectory(seedDir);

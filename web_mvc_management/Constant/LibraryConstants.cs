@@ -102,4 +102,54 @@ public static class LibraryConstants
         public const string Damaged = "DAMAGED";     // Bị hư hỏng
         public const string Lost = "LOST";           // Báo mất sách
     }
+
+    /// <summary>
+    /// Mục đích mã xác thực OTP (otps.purpose).
+    /// </summary>
+    public static class OtpPurpose
+    {
+        public const string Register = "REGISTER";
+        public const string ReaderLogin = "READER_LOGIN";
+        public const string StaffLogin = "STAFF_LOGIN";
+    }
+
+    /// <summary>
+    /// Tiền tố mã thẻ thư viện theo loại độc giả.
+    /// </summary>
+    public static class CardPrefix
+    {
+        public const string Staff = "GV";
+        public const string Guest = "KH";
+        public const string Student = "SV";
+        public const string Fallback = "DG";
+    }
+
+    /// <summary>
+    /// Giá trị cấu hình mặc định khi bảng library_settings chưa có bản ghi hoạt động.
+    /// </summary>
+    public static class Defaults
+    {
+        public const decimal OverdueFinePerDay = 2000m;
+        public const short DamagedFinePercent = 50;
+        public const short LostFinePercent = 100;
+        public const decimal MaxUnpaidFine = 50000m;
+        public const short ReservationHoldHours = 48;
+        public const int BorrowCancelWindowHours = 24;
+    }
+
+    public const string HardDeleteConfirmToken = "XOA";
+
+    /// <summary>
+    /// Kiểm tra chuỗi xác nhận xóa cứng ('XOA', không phân biệt hoa/thường và khoảng trắng).
+    /// </summary>
+    public static bool IsValidHardDeleteConfirm(string? confirmCode) =>
+        string.Equals(confirmCode?.Trim(), HardDeleteConfirmToken, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Chuẩn hóa trạng thái đầu vào biểu mẫu chỉ nhận ACTIVE hoặc INACTIVE (chống giả mạo DELETED qua form).
+    /// </summary>
+    public static string NormalizeActiveOrInactive(string? rawStatus) =>
+        string.Equals(rawStatus?.Trim(), EntityStatus.Inactive, StringComparison.OrdinalIgnoreCase)
+            ? EntityStatus.Inactive
+            : EntityStatus.Active;
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore.Storage;
+using web_mvc_management.Common;
 using web_mvc_management.Entity;
 
 namespace web_mvc_management.Repositories;
@@ -61,6 +62,26 @@ public interface IUnitOfWork : IDisposable, IAsyncDisposable
     /// Gỡ tham chiếu audit (created_by, updated_by) của một Staff trước khi xóa vĩnh viễn.
     /// </summary>
     Task ClearStaffAuditReferencesAsync(Guid staffId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Thực thi khối nghiệp vụ trả về ServiceResult&lt;T&gt; trong một transaction có khóa Pessimistic,
+    /// tự động commit khi thành công và rollback khi thất bại hoặc có ngoại lệ.
+    /// </summary>
+    Task<ServiceResult<T>> ExecuteInLockedTransactionAsync<T>(
+        Func<Task<ServiceResult<T>>> action,
+        string lockResource = "LIB_MUTATION_LOCK",
+        int lockTimeoutMs = 10000,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Thực thi khối nghiệp vụ trả về ServiceResult trong một transaction có khóa Pessimistic,
+    /// tự động commit khi thành công và rollback khi thất bại hoặc có ngoại lệ.
+    /// </summary>
+    Task<ServiceResult> ExecuteInLockedTransactionAsync(
+        Func<Task<ServiceResult>> action,
+        string lockResource = "LIB_MUTATION_LOCK",
+        int lockTimeoutMs = 10000,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Xác nhận (commit) transaction hiện tại.

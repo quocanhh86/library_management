@@ -15,9 +15,14 @@ public static partial class BarcodeHelper
     /// Sinh mã vạch tự động theo format: BC-YYYYMMDD-XXXX
     /// Ví dụ: BC-20261030-A8F2
     /// </summary>
-    public static string GenerateBarcode()
+    public static string GenerateBarcode() => GenerateBarcode(DateTimeOffset.UtcNow);
+
+    /// <summary>
+    /// Sinh mã vạch tự động theo mốc thời gian UTC cung cấp (hỗ trợ kiểm thử tất định).
+    /// </summary>
+    public static string GenerateBarcode(DateTimeOffset utcNow)
     {
-        var datePart = DateTime.UtcNow.ToString("yyyyMMdd");
+        var datePart = utcNow.ToString("yyyyMMdd");
         var randomBytes = RandomNumberGenerator.GetBytes(2);
         var randomHex = Convert.ToHexString(randomBytes);
         return $"BC-{datePart}-{randomHex}";
