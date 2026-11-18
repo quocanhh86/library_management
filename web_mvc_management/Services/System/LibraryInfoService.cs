@@ -7,7 +7,6 @@ namespace web_mvc_management.Services;
 
 /// <summary>
 /// Lấy thông tin quy định mượn trả trực tiếp từ cơ sở dữ liệu (ReaderTypes và LibrarySettings).
-/// Khi quản trị viên cập nhật quy định trong /System/Settings hoặc /Admin/ReaderTypes, trang chủ tự động hiển thị số mới.
 /// </summary>
 public class LibraryInfoService(IUnitOfWork unitOfWork) : ILibraryInfoService
 {
@@ -21,6 +20,7 @@ public class LibraryInfoService(IUnitOfWork unitOfWork) : ILibraryInfoService
 
         var setting = await unitOfWork.LibrarySettings.GetQueryable(asNoTracking: true)
             .Where(s => s.Status == EntityStatus.Active)
+            .OrderByDescending(s => s.UpdatedAt)
             .FirstOrDefaultAsync(ct);
 
         if (readerTypes.Count == 0)
@@ -36,8 +36,7 @@ public class LibraryInfoService(IUnitOfWork unitOfWork) : ILibraryInfoService
         return new LibraryInfoViewModel
         {
             LoanRules = readerTypes,
-            OverdueFinePerDay = setting?.OverdueFinePerDay ?? 2000m
+            OverdueFinePerDay = setting?.OverdueFinePerDay ?? LibraryConstants.Defaults.OverdueFinePerDay
         };
     }
 }
-

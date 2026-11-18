@@ -1,11 +1,9 @@
-using System.Text;
 using System.Globalization;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
-using web_mvc_management.Common;
 using web_mvc_management.Constant;
-using web_mvc_management.Entity;
-using web_mvc_management.Infrastructure;
 using web_mvc_management.Helper;
+using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Reports;
 using web_mvc_management.Repositories;
 using static web_mvc_management.Constant.LibraryConstants;
@@ -14,6 +12,7 @@ namespace web_mvc_management.Services;
 
 public class ReportService(
     IUnitOfWork unitOfWork,
+    ICirculationPolicy circulationPolicy,
     IDateTimeProvider dateTimeProvider) : IReportService
 {
     public async Task<ReportDashboardViewModel> GetReportDashboardAsync(ReportFilter filter, CancellationToken ct = default)
@@ -25,71 +24,49 @@ public class ReportService(
         var fromOffset = DateTimeHelper.UtcDayBoundary(rangeStart, localOffset);
         var toOffset = DateTimeHelper.UtcDayBoundary(rangeEnd, localOffset, endOfDay: true);
 
-        var setting = await unitOfWork.LibrarySettings.GetQueryable(asNoTracking: true)
-            .OrderByDescending(s => s.UpdatedAt)
-            .FirstOrDefaultAsync(ct);
-        var finePerDay = setting?.OverdueFinePerDay ?? 5000m;
+        var setting = await circulationPolicy.GetEffectiveSettingAsync(ct);
+        var finePerDay = setting.OverdueFinePerDay;
 
-        // 1. Slips & Details in range
-        var slipQuery = unitOfWork.BorrowSlips.GetQueryable(asNoTracking: true)
-            .Where(s => s.Status != EntityStatus.Deleted && s.BorrowedAt >= fromOffset && s.BorrowedAt <= toOffset);
-        var totalSlips = await slipQuery.CountAsync(ct);
+        var totalSlips = await unitOfWork.BorrowSlips.GetQueryable(asNoTracking: true)
+            .CountAsync(s => s.Status != EntityStatus.Deleted && s.BorrowedAt >= fromOffset && s.BorrowedAt <= toOffset, ct);
 
         var detailsQuery = unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
-            .Where(d => d.Status != EntityStatus.Deleted && d.BorrowSlip.Status != EntityStatus.Deleted
-                        && d.BorrowSlip.BorrowedAt >= fromOffset && d.BorrowSlip.BorrowedAt <= toOffset);
+            .Where(d => d.Status != EntityStatus.Deleted
+                        && d.BorrowSlip.Status != EntityStatus.Deleted
+                        && d.BorrowSlip.BorrowedAt >= fromOffset
+                        && d.BorrowSlip.BorrowedAt <= toOffset);
 
         var totalBooksBorrowed = await detailsQuery.CountAsync(ct);
         var totalBooksReturned = await detailsQuery.CountAsync(d => d.ReturnedAt != null, ct);
         var totalBooksCurrentlyBorrowing = await detailsQuery.CountAsync(d => d.ReturnedAt == null, ct);
         var totalBooksOverdue = await detailsQuery.CountAsync(d => d.ReturnedAt == null && d.DueDate < today, ct);
 
-        // 2. On-time return rate (client evaluation to safely handle DateOnly conversions)
         var returnedDetails = await detailsQuery
             .Where(d => d.ReturnedAt != null)
             .Select(d => new { d.DueDate, d.ReturnedAt })
             .ToListAsync(ct);
 
-        var onTimeCount = returnedDetails.Count(d => DateOnly.FromDateTime(d.ReturnedAt!.Value.ToOffset(localOffset).DateTime) <= d.DueDate);
+        var onTimeCount = returnedDetails.Count(d =>
+            DateOnly.FromDateTime(d.ReturnedAt!.Value.ToOffset(localOffset).DateTime) <= d.DueDate);
         var onTimeRate = returnedDetails.Count > 0
             ? Math.Round((double)onTimeCount * 100 / returnedDetails.Count, 1)
             : 100.0;
 
-        // 3. Condition breakdown (fetch conditions as plain strings, group client-side)
         var returnConditions = await detailsQuery
             .Where(d => d.ReturnedAt != null && d.ReturnCondition != null)
             .Select(d => d.ReturnCondition!)
             .ToListAsync(ct);
 
-        var conditionGood = returnConditions.Count(c => c == ReturnCondition.Good);
-        var conditionDamaged = returnConditions.Count(c => c == ReturnCondition.Damaged);
-        var conditionLost = returnConditions.Count(c => c == ReturnCondition.Lost);
-
-        // 4. Fines in range
         var finesInRange = await unitOfWork.Fines.GetQueryable(asNoTracking: true)
-            .Where(f => f.Status != EntityStatus.Deleted && f.FineStatus != FineStatus.Cancelled
-                        && f.CreatedAt >= fromOffset && f.CreatedAt <= toOffset)
-            .Select(f => new
-            {
-                f.FineType,
-                f.FineStatus,
-                f.Amount
-            })
+            .Where(f => f.Status != EntityStatus.Deleted
+                        && f.FineStatus != FineStatus.Cancelled
+                        && f.CreatedAt >= fromOffset
+                        && f.CreatedAt <= toOffset)
+            .Select(f => new { f.FineType, f.FineStatus, f.Amount })
             .ToListAsync(ct);
 
-        var totalFineIncurred = finesInRange.Sum(f => f.Amount);
-        var totalFineCollected = finesInRange.Where(f => f.FineStatus == FineStatus.Paid).Sum(f => f.Amount);
-        var totalFineWaived = finesInRange.Where(f => f.FineStatus == FineStatus.Waived).Sum(f => f.Amount);
-        var totalFineUnpaid = finesInRange.Where(f => f.FineStatus == FineStatus.Unpaid).Sum(f => f.Amount);
-
-        // 5. Daily trends (fetch raw DateTimeOffset and project DateOnly in memory)
         var rawTrendsDb = await detailsQuery
-            .Select(d => new
-            {
-                d.BorrowSlip.BorrowedAt,
-                d.DueDate,
-                d.ReturnedAt
-            })
+            .Select(d => new { d.BorrowSlip.BorrowedAt, d.DueDate, d.ReturnedAt })
             .ToListAsync(ct);
 
         var rawTrends = rawTrendsDb.Select(d => new
@@ -99,8 +76,11 @@ public class ReportService(
         }).ToList();
 
         var rawReturnsDb = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
-            .Where(d => d.Status != EntityStatus.Deleted && d.BorrowSlip.Status != EntityStatus.Deleted && d.ReturnedAt != null
-                        && d.ReturnedAt >= fromOffset && d.ReturnedAt <= toOffset)
+            .Where(d => d.Status != EntityStatus.Deleted
+                        && d.BorrowSlip.Status != EntityStatus.Deleted
+                        && d.ReturnedAt != null
+                        && d.ReturnedAt >= fromOffset
+                        && d.ReturnedAt <= toOffset)
             .Select(d => d.ReturnedAt)
             .ToListAsync(ct);
 
@@ -111,44 +91,21 @@ public class ReportService(
 
         var daysCount = Math.Min(31, rangeEnd.DayNumber - rangeStart.DayNumber + 1);
         var startTrendDate = rangeEnd.AddDays(-(daysCount - 1));
-        var dailyList = new List<DailyCirculationItem>();
-        for (var day = 0; day < daysCount; day++)
-        {
-            var date = startTrendDate.AddDays(day);
-            var bCount = rawTrends.Count(t => t.Date == date);
-            var rCount = rawReturns.Count(r => r == date);
-            var oCount = rawTrends.Count(t => t.Date == date && t.Overdue);
-            dailyList.Add(new DailyCirculationItem
+        var dailyList = Enumerable.Range(0, daysCount)
+            .Select(day =>
             {
-                Date = date,
-                BorrowCount = bCount,
-                ReturnCount = rCount,
-                OverdueCount = oCount
-            });
-        }
-
-        // 6. Overdue loans
-        var overdueRaw = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
-            .Where(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.DueDate < today
-                        && d.BorrowSlip.Status != EntityStatus.Deleted)
-            .OrderBy(d => d.DueDate)
-            .Take(100)
-            .Select(d => new
-            {
-                DetailId = d.Id,
-                d.SlipId,
-                d.BorrowSlip.BorrowedAt,
-                d.DueDate,
-                ReaderName = d.BorrowSlip.Reader.FullName,
-                d.BorrowSlip.Reader.CardNo,
-                ReaderTypeName = d.BorrowSlip.Reader.ReaderType.Name,
-                d.BorrowSlip.Reader.Phone,
-                BookTitle = d.BookCopy.Book.Title,
-                d.BookCopy.Barcode,
-                ShelfCode = d.BookCopy.Shelf!.Code
+                var date = startTrendDate.AddDays(day);
+                return new DailyCirculationItem
+                {
+                    Date = date,
+                    BorrowCount = rawTrends.Count(t => t.Date == date),
+                    ReturnCount = rawReturns.Count(r => r == date),
+                    OverdueCount = rawTrends.Count(t => t.Date == date && t.Overdue)
+                };
             })
-            .ToListAsync(ct);
+            .ToList();
 
+        var overdueRaw = await OverdueQuery(today).Take(100).ToListAsync(ct);
         var overdueList = overdueRaw.Select(d =>
         {
             var days = Math.Max(0, today.DayNumber - d.DueDate.DayNumber);
@@ -156,14 +113,14 @@ public class ReportService(
             {
                 DetailId = d.DetailId,
                 SlipId = d.SlipId,
-                SlipCode = $"PM-{d.BorrowedAt:yyyyMMdd}-{d.SlipId.ToString()[..4].ToUpper()}",
+                SlipCode = SlipCodeHelper.Format(d.SlipId, d.BorrowedAt),
                 ReaderName = d.ReaderName,
                 CardNo = d.CardNo,
                 ReaderTypeName = d.ReaderTypeName,
                 ReaderPhone = d.Phone,
                 BookTitle = d.BookTitle,
                 Barcode = d.Barcode,
-                ShelfLocation = d.ShelfCode,
+                ShelfLocation = d.ShelfCode ?? "—",
                 BorrowedAt = d.BorrowedAt,
                 DueDate = d.DueDate,
                 OverdueDays = days,
@@ -171,12 +128,7 @@ public class ReportService(
             };
         }).ToList();
 
-        // 7. Top 10 borrowed books (group client-side to prevent complex GROUP BY SQL translation errors)
-        var borrowedBookIds = await detailsQuery
-            .Select(d => d.BookCopy.BookId)
-            .ToListAsync(ct);
-
-        var topBookIds = borrowedBookIds
+        var topBookIds = (await detailsQuery.Select(d => d.BookCopy.BookId).ToListAsync(ct))
             .GroupBy(id => id)
             .Select(g => new { BookId = g.Key, BorrowCount = g.Count() })
             .OrderByDescending(x => x.BorrowCount)
@@ -189,6 +141,7 @@ public class ReportService(
             .Include(b => b.BookCopies)
             .Include(b => b.BookAuthors.Where(ba => ba.Status != EntityStatus.Deleted))
                 .ThenInclude(ba => ba.Author)
+            .AsSplitQuery()
             .Where(b => bookIds.Contains(b.Id))
             .ToListAsync(ct);
 
@@ -213,22 +166,20 @@ public class ReportService(
             };
         }).ToList();
 
-        // 8. Fine summary by type
-        var fineTypes = new[] { FineType.Overdue, FineType.Damaged, FineType.Lost };
+        string[] fineTypes = [FineType.Overdue, FineType.Damaged, FineType.Lost];
         var fineSummary = fineTypes.Select(type =>
         {
             var matched = finesInRange.Where(f => f.FineType == type).ToList();
-            var label = type switch
-            {
-                FineType.Overdue => "Quá hạn",
-                FineType.Damaged => "Hỏng sách",
-                FineType.Lost => "Mất sách",
-                _ => type
-            };
             return new FineTypeSummaryItem
             {
                 FineType = type,
-                TypeLabel = label,
+                TypeLabel = type switch
+                {
+                    FineType.Overdue => "Quá hạn",
+                    FineType.Damaged => "Hỏng sách",
+                    FineType.Lost => "Mất sách",
+                    _ => type
+                },
                 Count = matched.Count,
                 TotalAmount = matched.Sum(x => x.Amount),
                 PaidAmount = matched.Where(x => x.FineStatus == FineStatus.Paid).Sum(x => x.Amount),
@@ -250,56 +201,36 @@ public class ReportService(
                 TotalBooksCurrentlyBorrowing = totalBooksCurrentlyBorrowing,
                 TotalBooksOverdue = totalBooksOverdue,
                 OnTimeReturnRate = onTimeRate,
-                TotalFineIncurred = totalFineIncurred,
-                TotalFineCollected = totalFineCollected,
-                TotalFineWaived = totalFineWaived,
-                TotalFineUnpaid = totalFineUnpaid
+                TotalFineIncurred = finesInRange.Sum(f => f.Amount),
+                TotalFineCollected = finesInRange.Where(f => f.FineStatus == FineStatus.Paid).Sum(f => f.Amount),
+                TotalFineWaived = finesInRange.Where(f => f.FineStatus == FineStatus.Waived).Sum(f => f.Amount),
+                TotalFineUnpaid = finesInRange.Where(f => f.FineStatus == FineStatus.Unpaid).Sum(f => f.Amount)
             },
             DailyTrends = dailyList,
             OverdueLoans = overdueList,
             TopBooks = topList,
             FineSummary = fineSummary,
-            ReturnConditionGood = conditionGood,
-            ReturnConditionDamaged = conditionDamaged,
-            ReturnConditionLost = conditionLost
+            ReturnConditionGood = returnConditions.Count(c => c == ReturnCondition.Good),
+            ReturnConditionDamaged = returnConditions.Count(c => c == ReturnCondition.Damaged),
+            ReturnConditionLost = returnConditions.Count(c => c == ReturnCondition.Lost)
         };
     }
 
     public async Task<byte[]> ExportOverdueLoansCsvAsync(CancellationToken ct = default)
     {
         var today = dateTimeProvider.Today;
-        var setting = await unitOfWork.LibrarySettings.GetQueryable(asNoTracking: true)
-            .OrderByDescending(s => s.UpdatedAt)
-            .FirstOrDefaultAsync(ct);
-        var finePerDay = setting?.OverdueFinePerDay ?? 5000m;
-
-        var overdueRaw = await unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
-            .Where(d => d.Status != EntityStatus.Deleted && d.ReturnedAt == null && d.DueDate < today
-                        && d.BorrowSlip.Status != EntityStatus.Deleted)
-            .OrderBy(d => d.DueDate)
-            .Select(d => new
-            {
-                d.SlipId,
-                d.BorrowSlip.BorrowedAt,
-                d.DueDate,
-                ReaderName = d.BorrowSlip.Reader.FullName,
-                d.BorrowSlip.Reader.CardNo,
-                ReaderTypeName = d.BorrowSlip.Reader.ReaderType.Name,
-                d.BorrowSlip.Reader.Phone,
-                BookTitle = d.BookCopy.Book.Title,
-                d.BookCopy.Barcode,
-                ShelfCode = d.BookCopy.Shelf!.Code
-            })
-            .ToListAsync(ct);
+        var finePerDay = (await circulationPolicy.GetEffectiveSettingAsync(ct)).OverdueFinePerDay;
+        var overdueRaw = await OverdueQuery(today).ToListAsync(ct);
 
         var sb = new StringBuilder();
         sb.Append('\uFEFF'); // UTF-8 BOM
         sb.AppendLine("STT,Mã phiếu,Số thẻ,Họ tên độc giả,Số điện thoại,Đối tượng,Mã vạch,Tên tài liệu,Kệ sách,Ngày mượn,Hạn trả,Số ngày trễ,Tiền phạt tạm tính");
 
         var stt = 1;
+        var offset = dateTimeProvider.Now.Offset;
         foreach (var item in overdueRaw)
         {
-            var slipCode = $"PM-{item.BorrowedAt:yyyyMMdd}-{item.SlipId.ToString()[..4].ToUpper()}";
+            var slipCode = SlipCodeHelper.Format(item.SlipId, item.BorrowedAt);
             var overdueDays = Math.Max(0, today.DayNumber - item.DueDate.DayNumber);
             var estimatedFine = overdueDays * finePerDay;
 
@@ -308,54 +239,73 @@ public class ReportService(
                 EscapeCsv(slipCode),
                 EscapeCsv(item.CardNo),
                 EscapeCsv(item.ReaderName),
-                EscapeCsv(item.Phone ?? ""),
+                EscapeCsv(item.Phone ?? string.Empty),
                 EscapeCsv(item.ReaderTypeName),
                 EscapeCsv(item.Barcode),
                 EscapeCsv(item.BookTitle),
-                EscapeCsv(item.ShelfCode ?? ""),
-                item.BorrowedAt.ToOffset(dateTimeProvider.Now.Offset).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                EscapeCsv(item.ShelfCode ?? string.Empty),
+                item.BorrowedAt.ToOffset(offset).ToString(AppConstants.DefaultDateFormat, CultureInfo.InvariantCulture),
                 item.DueDate.ToString(AppConstants.DefaultDateFormat),
                 overdueDays,
-                estimatedFine.ToString(CultureInfo.InvariantCulture)
-            ));
+                estimatedFine.ToString(CultureInfo.InvariantCulture)));
         }
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
-    private static (DateOnly Start, DateOnly End) ResolveDateRange(ReportFilter filter, DateOnly today)
-    {
-        if (filter.Preset == "today")
-            return (today, today);
+    private sealed record OverdueProjection(
+        Guid DetailId,
+        Guid SlipId,
+        DateTimeOffset BorrowedAt,
+        DateOnly DueDate,
+        string ReaderName,
+        string CardNo,
+        string ReaderTypeName,
+        string? Phone,
+        string BookTitle,
+        string Barcode,
+        string? ShelfCode);
 
-        if (filter.Preset == "week")
-            return (today.AddDays(-6), today);
+    private IQueryable<OverdueProjection> OverdueQuery(DateOnly today) =>
+        unitOfWork.BorrowDetails.GetQueryable(asNoTracking: true)
+            .Where(d => d.Status != EntityStatus.Deleted
+                        && d.ReturnedAt == null
+                        && d.DueDate < today
+                        && d.BorrowSlip.Status != EntityStatus.Deleted)
+            .OrderBy(d => d.DueDate)
+            .Select(d => new OverdueProjection(
+                d.Id,
+                d.SlipId,
+                d.BorrowSlip.BorrowedAt,
+                d.DueDate,
+                d.BorrowSlip.Reader.FullName,
+                d.BorrowSlip.Reader.CardNo,
+                d.BorrowSlip.Reader.ReaderType.Name,
+                d.BorrowSlip.Reader.Phone,
+                d.BookCopy.Book.Title,
+                d.BookCopy.Barcode,
+                d.BookCopy.Shelf != null ? d.BookCopy.Shelf.Code : null));
 
-        if (filter.Preset == "month")
-            return (new DateOnly(today.Year, today.Month, 1), today);
-
-        if (filter.Preset == "year")
-            return (new DateOnly(today.Year, 1, 1), today);
-
-        if (filter.FromDate.HasValue && filter.ToDate.HasValue)
+    private static (DateOnly Start, DateOnly End) ResolveDateRange(ReportFilter filter, DateOnly today) =>
+        filter.Preset switch
         {
-            return filter.FromDate.Value <= filter.ToDate.Value
-                ? (filter.FromDate.Value, filter.ToDate.Value)
-                : (filter.ToDate.Value, filter.FromDate.Value);
-        }
-
-        if (filter.FromDate.HasValue)
-            return filter.FromDate.Value <= today ? (filter.FromDate.Value, today) : (today, filter.FromDate.Value);
-
-        if (filter.ToDate.HasValue)
-            return (DateOnly.FromDayNumber(Math.Max(0, filter.ToDate.Value.DayNumber - 30)), filter.ToDate.Value);
-
-        return (DateOnly.FromDayNumber(Math.Max(0, today.DayNumber - 30)), today);
-    }
+            "today" => (today, today),
+            "week" => (today.AddDays(-6), today),
+            "month" => (new DateOnly(today.Year, today.Month, 1), today),
+            "year" => (new DateOnly(today.Year, 1, 1), today),
+            _ when filter.FromDate.HasValue && filter.ToDate.HasValue =>
+                filter.FromDate.Value <= filter.ToDate.Value
+                    ? (filter.FromDate.Value, filter.ToDate.Value)
+                    : (filter.ToDate.Value, filter.FromDate.Value),
+            _ when filter.FromDate.HasValue =>
+                filter.FromDate.Value <= today ? (filter.FromDate.Value, today) : (today, filter.FromDate.Value),
+            _ when filter.ToDate.HasValue =>
+                (DateOnly.FromDayNumber(Math.Max(0, filter.ToDate.Value.DayNumber - 30)), filter.ToDate.Value),
+            _ => (DateOnly.FromDayNumber(Math.Max(0, today.DayNumber - 30)), today)
+        };
 
     private static string EscapeCsv(string field)
     {
-        // CSV quoting alone does not stop spreadsheet formula interpretation.
         var trimmed = field.AsSpan().TrimStart();
         if ((trimmed.Length > 0 && trimmed[0] is '=' or '+' or '-' or '@') ||
             (field.Length > 0 && field[0] is '\t' or '\r' or '\n'))

@@ -8,5 +8,6 @@ namespace web_mvc_management.Services;
 public interface IReportService
 {
     Task<ReportDashboardViewModel> GetReportDashboardAsync(ReportFilter filter, CancellationToken ct = default);
+
     Task<byte[]> ExportOverdueLoansCsvAsync(CancellationToken ct = default);
 }

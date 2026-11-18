@@ -1,4 +1,3 @@
-using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Data.SqlClient;
@@ -6,174 +5,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using web_mvc_management.Constant;
 using web_mvc_management.Data;
+using web_mvc_management.Data.Interceptors;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models;
 using web_mvc_management.Repositories;
 using web_mvc_management.Services;
 
 namespace web_mvc_management.Extensions;
-
-/// <summary>
-/// Interceptor mở kết nối SQL Server qua đường dẫn đồng bộ (0ms từ Connection Pool)
-/// để tránh lỗi bất đồng bộ của Microsoft.Data.SqlClient 5.1.6 trên .NET 10.0
-/// (TaskCanceledException trong OpenInternalAsync và Win32Exception wait timeout trên SNI).
-/// </summary>
-public sealed class FastLocalSqlConnectionInterceptor : DbConnectionInterceptor
-{
-    public override InterceptionResult ConnectionOpening(
-        DbConnection connection,
-        ConnectionEventData eventData,
-        InterceptionResult result)
-    {
-        if (connection.State != System.Data.ConnectionState.Open)
-        {
-            connection.Open();
-        }
-        return InterceptionResult.Suppress();
-    }
-
-    public override ValueTask<InterceptionResult> ConnectionOpeningAsync(
-        DbConnection connection,
-        ConnectionEventData eventData,
-        InterceptionResult result,
-        CancellationToken cancellationToken = default)
-    {
-        if (connection.State != System.Data.ConnectionState.Open)
-        {
-            connection.Open();
-        }
-        return ValueTask.FromResult(InterceptionResult.Suppress());
-    }
-
-    public override ValueTask<InterceptionResult> ConnectionClosingAsync(
-        DbConnection connection,
-        ConnectionEventData eventData,
-        InterceptionResult result)
-    {
-        if (connection.State != System.Data.ConnectionState.Closed)
-        {
-            connection.Close();
-        }
-        return ValueTask.FromResult(InterceptionResult.Suppress());
-    }
-}
-
-/// <summary>
-/// Bọc DbDataReader đồng bộ để mọi thao tác ReadAsync / IsDBNullAsync / GetFieldValueAsync / DisposeAsync
-/// của EF Core đều chạy trên luồng đồng bộ nhất quán với command.ExecuteReader(), không trộn lẫn Sync/Async trên TDS stream.
-/// </summary>
-public sealed class SyncDbDataReader(DbDataReader inner) : DbDataReader
-{
-    public override object this[int ordinal] => inner[ordinal];
-    public override object this[string name] => inner[name];
-    public override int Depth => inner.Depth;
-    public override int FieldCount => inner.FieldCount;
-    public override bool HasRows => inner.HasRows;
-    public override bool IsClosed => inner.IsClosed;
-    public override int RecordsAffected => inner.RecordsAffected;
-    public override int VisibleFieldCount => inner.VisibleFieldCount;
-
-    public override bool GetBoolean(int ordinal) => inner.GetBoolean(ordinal);
-    public override byte GetByte(int ordinal) => inner.GetByte(ordinal);
-    public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length) => inner.GetBytes(ordinal, dataOffset, buffer, bufferOffset, length);
-    public override char GetChar(int ordinal) => inner.GetChar(ordinal);
-    public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length) => inner.GetChars(ordinal, dataOffset, buffer, bufferOffset, length);
-    public override string GetDataTypeName(int ordinal) => inner.GetDataTypeName(ordinal);
-    public override DateTime GetDateTime(int ordinal) => inner.GetDateTime(ordinal);
-    public override decimal GetDecimal(int ordinal) => inner.GetDecimal(ordinal);
-    public override double GetDouble(int ordinal) => inner.GetDouble(ordinal);
-    public override System.Collections.IEnumerator GetEnumerator() => inner.GetEnumerator();
-    public override Type GetFieldType(int ordinal) => inner.GetFieldType(ordinal);
-    public override float GetFloat(int ordinal) => inner.GetFloat(ordinal);
-    public override Guid GetGuid(int ordinal) => inner.GetGuid(ordinal);
-    public override short GetInt16(int ordinal) => inner.GetInt16(ordinal);
-    public override int GetInt32(int ordinal) => inner.GetInt32(ordinal);
-    public override long GetInt64(int ordinal) => inner.GetInt64(ordinal);
-    public override string GetName(int ordinal) => inner.GetName(ordinal);
-    public override int GetOrdinal(string name) => inner.GetOrdinal(name);
-    public override string GetString(int ordinal) => inner.GetString(ordinal);
-    public override object GetValue(int ordinal) => inner.GetValue(ordinal);
-    public override int GetValues(object[] values) => inner.GetValues(values);
-    public override bool IsDBNull(int ordinal) => inner.IsDBNull(ordinal);
-    public override bool NextResult() => inner.NextResult();
-    public override bool Read() => inner.Read();
-    public override T GetFieldValue<T>(int ordinal) => inner.GetFieldValue<T>(ordinal);
-
-    public override Task<bool> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(inner.Read());
-    public override Task<bool> NextResultAsync(CancellationToken cancellationToken) => Task.FromResult(inner.NextResult());
-    public override Task<bool> IsDBNullAsync(int ordinal, CancellationToken cancellationToken) => Task.FromResult(inner.IsDBNull(ordinal));
-    public override Task<T> GetFieldValueAsync<T>(int ordinal, CancellationToken cancellationToken) => Task.FromResult(inner.GetFieldValue<T>(ordinal));
-
-    public override void Close() => inner.Close();
-    public override Task CloseAsync()
-    {
-        inner.Close();
-        return Task.CompletedTask;
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            inner.Dispose();
-        }
-        base.Dispose(disposing);
-    }
-
-    public override ValueTask DisposeAsync()
-    {
-        inner.Dispose();
-        GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
-    }
-}
-
-/// <summary>
-/// Interceptor thực thi DbCommand qua đường dẫn đồng bộ trên kết nối Loopback cục bộ
-/// nhằm triệt tiêu hoàn toàn lỗi Win32Exception (258) wait timeout của native SNI.dll
-/// trong EndExecuteNonQueryAsync / EndExecuteReaderAsync trên .NET 10.0.
-/// </summary>
-public sealed class FastLocalSqlCommandInterceptor : DbCommandInterceptor
-{
-    public override InterceptionResult<DbDataReader> ReaderExecuting(
-        DbCommand command,
-        CommandEventData eventData,
-        InterceptionResult<DbDataReader> result)
-    {
-        var reader = new SyncDbDataReader(command.ExecuteReader());
-        return InterceptionResult<DbDataReader>.SuppressWithResult(reader);
-    }
-
-    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-        DbCommand command,
-        CommandEventData eventData,
-        InterceptionResult<DbDataReader> result,
-        CancellationToken cancellationToken = default)
-    {
-        var reader = new SyncDbDataReader(command.ExecuteReader());
-        return ValueTask.FromResult(InterceptionResult<DbDataReader>.SuppressWithResult(reader));
-    }
-
-    public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
-        DbCommand command,
-        CommandEventData eventData,
-        InterceptionResult<int> result,
-        CancellationToken cancellationToken = default)
-    {
-        var rows = command.ExecuteNonQuery();
-        return ValueTask.FromResult(InterceptionResult<int>.SuppressWithResult(rows));
-    }
-
-    public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
-        DbCommand command,
-        CommandEventData eventData,
-        InterceptionResult<object> result,
-        CancellationToken cancellationToken = default)
-    {
-        var scalar = command.ExecuteScalar();
-        return ValueTask.FromResult(InterceptionResult<object>.SuppressWithResult(scalar!));
-    }
-}
 
 public static class ServiceCollectionExtensions
 {
@@ -206,9 +44,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Trích xuất chuỗi kết nối an toàn từ IConfiguration theo chuẩn phân cấp ASP.NET Core (ConnectionStrings / DatabaseSettings).
-    /// </summary>
     private static string ResolveConnectionString(IConfiguration configuration)
     {
         var rawConnectionString = configuration.GetConnectionString("DefaultConnection")
@@ -258,8 +93,6 @@ public static class ServiceCollectionExtensions
             );
         }
 
-        // Tối ưu kết nối cục bộ trên Windows: chuyển localhost -> 127.0.0.1 để tránh delay 1.3s do fallback IPv6 (::1),
-        // tắt Encrypt/MARS trên loopback để tránh treo SNI/SslStream và TaskCanceledException trong OpenInternalAsync.
         var csBuilder = new SqlConnectionStringBuilder(connectionString)
         {
             TrustServerCertificate = true,
@@ -280,9 +113,6 @@ public static class ServiceCollectionExtensions
         return csBuilder.ConnectionString;
     }
 
-    /// <summary>
-    /// Đăng ký Cookie Authentication với bảo mật cao (HttpOnly, Secure, SameSite, Sliding Expiration).
-    /// </summary>
     public static IServiceCollection AddCookieAuthentication(this IServiceCollection services)
     {
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -298,7 +128,6 @@ public static class ServiceCollectionExtensions
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
 
-                // SEC-05, SEC-21: Kiểm tra tính toàn vẹn của phiên qua Security Stamp
                 options.Events = new CookieAuthenticationEvents
                 {
                     OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync
@@ -308,16 +137,17 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Đăng ký các hạ tầng dùng chung (Infrastructure, Stateful Session, Caching).
-    /// </summary>
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
         services.AddScoped<IUserContext, UserContext>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
 
-        // Cấu hình Memory Cache, Distributed Memory Cache & Stateful Session (MVC Server-Side State)
+        services.AddHttpClient("Cloudinary", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+
         services.AddMemoryCache();
         services.AddDistributedMemoryCache();
         services.AddSession(options =>
@@ -333,9 +163,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Đăng ký Base Repository và UnitOfWork.
-    /// </summary>
     public static IServiceCollection AddRepositories(this IServiceCollection services)
     {
         services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
@@ -344,10 +171,49 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Đăng ký các application services và cấu hình IOptions.
-    /// </summary>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration? configuration = null)
+    {
+        ConfigureOptions(services, configuration);
+
+        // Domain Engines dùng chung
+        services.AddScoped<ICirculationPolicy, CirculationPolicy>();
+        services.AddScoped<IReservationQueueEngine, ReservationQueueEngine>();
+
+        // Xác thực & Hạ tầng
+        services.AddScoped<ICloudinaryService, CloudinaryService>();
+        services.AddScoped<IOtpService, OtpService>();
+        services.AddSingleton<IEmailService, EmailService>();
+        services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
+        services.AddScoped<IAuthService, AuthService>();
+
+        // Miền Danh mục sách (Catalog)
+        services.AddScoped<ICatalogLookupService, CatalogLookupService>();
+        services.AddScoped<IPublicCatalogService, PublicCatalogService>();
+        services.AddScoped<IBookAdminService, BookAdminService>();
+        services.AddScoped<IBookCopyService, BookCopyService>();
+        services.AddScoped<ICatalogMasterService, CatalogMasterService>();
+
+        // Miền Lưu thông (Circulation)
+        services.AddScoped<ILoanDeskService, LoanDeskService>();
+        services.AddScoped<IReservationService, ReservationService>();
+        services.AddScoped<IFineService, FineService>();
+
+        // Miền Bạn đọc (Reader)
+        services.AddScoped<IReaderPortalService, ReaderPortalService>();
+        services.AddScoped<IReaderAdminService, ReaderAdminService>();
+
+        // Miền Hệ thống & Báo cáo (System & Reports)
+        services.AddScoped<IStaffAdminService, StaffAdminService>();
+        services.AddScoped<IReaderTypeService, ReaderTypeService>();
+        services.AddScoped<ILibrarySettingService, LibrarySettingService>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<ILibraryInfoService, LibraryInfoService>();
+
+        return services;
+    }
+
+    private static void ConfigureOptions(IServiceCollection services, IConfiguration? configuration)
     {
         if (configuration != null)
         {
@@ -415,23 +281,5 @@ public static class ServiceCollectionExtensions
                 ? "library_management/books"
                 : options.Folder.Trim().Trim('"', '\'').Trim('/');
         });
-
-        services.AddScoped<ICloudinaryService, CloudinaryService>();
-        services.AddScoped<IOtpService, OtpService>();
-        services.AddSingleton<IEmailService, EmailService>();
-        services.AddSingleton<IIpRateLimiterService, IpRateLimiterService>();
-        services.AddScoped<IAuthService, AuthService>();
-
-        // Nghiệp vụ Danh mục sách, Quy định thư viện & Quản trị hệ thống kết nối SQL Server qua UnitOfWork
-        services.AddScoped<IBookService, BookService>();
-        services.AddScoped<ILibraryInfoService, LibraryInfoService>();
-        services.AddScoped<ICatalogMasterService, CatalogMasterService>();
-        services.AddScoped<ISystemAdminService, SystemAdminService>();
-        services.AddScoped<ICirculationService, CirculationService>();
-        services.AddScoped<IReaderAdminService, ReaderAdminService>();
-        services.AddScoped<IReaderPortalService, ReaderPortalService>();
-        services.AddScoped<IReportService, ReportService>();
-
-        return services;
     }
 }
