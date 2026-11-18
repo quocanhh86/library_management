@@ -12,10 +12,7 @@ using web_mvc_management.Models;
 namespace web_mvc_management.Services;
 
 /// <summary>
-/// Dịch vụ gửi email xác thực chuẩn an ninh:
-/// - SEC-17: Cooldown Engine 60 giây chống Mail Toll Fraud và Spam DoS.
-/// - Tích hợp Gmail SMTP bảo mật với TLS (Port 587) qua IOptions&lt;EmailSettings&gt;.
-/// - Chẩn đoán chi tiết mã phản hồi SMTP (535 5.7.8 BadCredentials, v.v.) và Fallback thông minh ghi log console trong môi trường dev.
+/// Dịch vụ gửi email xác thực chuẩn an ninh với Cooldown 60 giây (SEC-17) và Gmail SMTP TLS.
 /// </summary>
 public class EmailService(
     IOptions<EmailSettings> emailOptions,
@@ -24,7 +21,7 @@ public class EmailService(
     IHostEnvironment env) : IEmailService
 {
     public const int CooldownSeconds = 60;
-    private static readonly ConcurrentDictionary<string, DateTimeOffset> CooldownTracker = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _cooldownTracker = new();
 
     private readonly EmailSettings _settings = emailOptions.Value;
 
@@ -36,7 +33,7 @@ public class EmailService(
         }
 
         var key = email.Trim().ToLowerInvariant();
-        if (CooldownTracker.TryGetValue(key, out var lastSent))
+        if (_cooldownTracker.TryGetValue(key, out var lastSent))
         {
             var elapsed = dateTimeProvider.UtcNow - lastSent;
             var remaining = CooldownSeconds - (int)elapsed.TotalSeconds;
@@ -56,8 +53,6 @@ public class EmailService(
         ArgumentException.ThrowIfNullOrWhiteSpace(otpCode);
 
         var normalizedEmail = toEmail.Trim().ToLowerInvariant();
-
-        // SEC-17: Kiểm tra Cooldown 60s chống Mail Toll Fraud
         var remainingSeconds = GetRemainingCooldownSeconds(normalizedEmail);
         if (remainingSeconds > 0)
         {
@@ -109,15 +104,13 @@ public class EmailService(
                     normalizedEmail, purpose, otpCode);
             }
 
-            // Cập nhật mốc thời gian Cooldown
-            CooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
+            _cooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
             return ServiceResult.Success("Đã gửi mã mới tới email của bạn.");
         }
         catch (Exception ex)
         {
             var smtpDiag = await DiagnoseSmtpFailureAsync(ex, cancellationToken);
 
-            // Trong môi trường dev, ghi log rõ nguyên nhân SMTP + khung mã OTP nổi bật ở cuối log để lập trình viên lấy mã ngay
             if (env.IsDevelopment())
             {
                 logger.LogWarning(
@@ -142,7 +135,7 @@ public class EmailService(
                     purpose,
                     otpCode);
 
-                CooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
+                _cooldownTracker[normalizedEmail] = dateTimeProvider.UtcNow;
                 return ServiceResult.Success("Đã sinh mã OTP (Gmail SMTP từ chối xác thực tài khoản gửi - Môi trường Development: xem mã OTP trong cửa sổ Log của Server).");
             }
 
@@ -151,9 +144,6 @@ public class EmailService(
         }
     }
 
-    /// <summary>
-    /// Kiểm tra nhanh phản hồi thực tế từ máy chủ SMTP khi SmtpClient đóng kết nối đột ngột (ví dụ lỗi 535-5.7.8 BadCredentials của Gmail).
-    /// </summary>
     private async Task<string> DiagnoseSmtpFailureAsync(Exception originalException, CancellationToken ct)
     {
         try
@@ -167,7 +157,7 @@ public class EmailService(
             using var reader = new StreamReader(netStream, Encoding.ASCII, leaveOpen: true);
             await using var writer = new StreamWriter(netStream, Encoding.ASCII, leaveOpen: true) { AutoFlush = true };
 
-            _ = await reader.ReadLineAsync(cts.Token); // 220 banner
+            _ = await reader.ReadLineAsync(cts.Token);
             await writer.WriteLineAsync("EHLO localhost");
             while (await reader.ReadLineAsync(cts.Token) is { } ehloLine)
             {
@@ -195,10 +185,10 @@ public class EmailService(
                 }
 
                 await sslWriter.WriteLineAsync("AUTH LOGIN");
-                _ = await sslReader.ReadLineAsync(cts.Token); // 334 Username
+                _ = await sslReader.ReadLineAsync(cts.Token);
 
                 await sslWriter.WriteLineAsync(Convert.ToBase64String(Encoding.ASCII.GetBytes(_settings.Username)));
-                _ = await sslReader.ReadLineAsync(cts.Token); // 334 Password
+                _ = await sslReader.ReadLineAsync(cts.Token);
 
                 await sslWriter.WriteLineAsync(Convert.ToBase64String(Encoding.ASCII.GetBytes(_settings.Password)));
                 var authResp = await sslReader.ReadLineAsync(cts.Token);
@@ -227,9 +217,7 @@ public class EmailService(
         _ => ("[Thư Viện UTC] Mã xác thực OTP", "Xác Thực Hệ Thống")
     };
 
-    private static string GenerateEmailBody(string otpCode, string purposeTitle)
-    {
-        return $$"""
+    private static string GenerateEmailBody(string otpCode, string purposeTitle) => $$"""
         <!DOCTYPE html>
         <html>
         <head>
@@ -268,5 +256,4 @@ public class EmailService(
         </body>
         </html>
         """;
-    }
 }

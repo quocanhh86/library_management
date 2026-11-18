@@ -40,18 +40,9 @@ public class OtpVerificationResult
 /// </summary>
 public interface IOtpService
 {
-    /// <summary>
-    /// Sinh mã OTP 6 chữ số ngẫu nhiên an toàn, lưu bền vững vào CSDL và vô hiệu hóa mã cũ cùng mục đích.
-    /// </summary>
     Task<string> GenerateOtpAsync(string email, string purpose, TimeSpan? validity = null, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Kiểm tra mã OTP với cơ chế đếm số lần sai và tự động đốt hủy (Burn OTP) ở lần sai thứ 5.
-    /// </summary>
     Task<OtpVerificationResult> VerifyOtpAsync(string email, string purpose, string otpCode, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Thu hồi/hủy mã OTP hiện tại của một email và mục đích.
-    /// </summary>
     Task InvalidateOtpAsync(string email, string purpose, CancellationToken cancellationToken = default);
 }

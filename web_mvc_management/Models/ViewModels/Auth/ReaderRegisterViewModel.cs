@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using web_mvc_management.Common;
+using web_mvc_management.Infrastructure;
 
 namespace web_mvc_management.Models.ViewModels.Auth;
 
@@ -91,7 +92,8 @@ public class ReaderRegisterViewModel : IValidatableObject
     {
         if (DateOfBirth.HasValue)
         {
-            var today = DateOnly.FromDateTime(DateTime.Now);
+            var dateTimeProvider = validationContext.GetService(typeof(IDateTimeProvider)) as IDateTimeProvider;
+            var today = dateTimeProvider?.Today ?? DateOnly.FromDateTime(DateTime.Now);
             if (DateOfBirth.Value < new DateOnly(1900, 1, 1))
             {
                 yield return new ValidationResult(

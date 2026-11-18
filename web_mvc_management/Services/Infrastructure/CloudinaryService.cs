@@ -4,21 +4,24 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using web_mvc_management.Common;
+using web_mvc_management.Infrastructure;
 using web_mvc_management.Models;
 using web_mvc_management.Util;
 
 namespace web_mvc_management.Services;
 
 /// <summary>
-/// Triển khai dịch vụ lưu trữ hình ảnh sách qua Cloudinary REST API (SHA-1 Signed Upload).
-/// Tự động kiểm tra định dạng/dung lượng/Magic Bytes/Polyglot/SVG XSS an toàn và fallback lưu trữ tại wwwroot/uploads/books trong môi trường Dev.
+/// Dịch vụ lưu trữ hình ảnh sách qua Cloudinary REST API (SHA-1 Signed Upload) qua IHttpClientFactory
+/// với kiểm tra sâu Magic Bytes/SVG XSS và fallback lưu trữ tại wwwroot/uploads/books trong môi trường Dev.
 /// </summary>
 public class CloudinaryService(
     IOptions<CloudinarySettings> cloudinaryOptions,
+    IHttpClientFactory httpClientFactory,
+    IDateTimeProvider dateTimeProvider,
     IWebHostEnvironment env,
     ILogger<CloudinaryService> logger) : ICloudinaryService
 {
-    public const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+    public const long MaxFileSizeBytes = 10 * 1024 * 1024;
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"
@@ -28,7 +31,6 @@ public class CloudinaryService(
         "image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"
     };
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
     private readonly CloudinarySettings _settings = cloudinaryOptions.Value;
 
     public async Task<ServiceResult<ImageUploadResult>> UploadBookImageAsync(IFormFile file, CancellationToken ct = default)
@@ -46,10 +48,10 @@ public class CloudinaryService(
         var ext = Path.GetExtension(file.FileName);
         if (string.IsNullOrWhiteSpace(ext) || !AllowedExtensions.Contains(ext) || !AllowedContentTypes.Contains(file.ContentType))
         {
-            return ServiceResult<ImageUploadResult>.Failure($"Định dạng tệp \"{Path.GetFileName(file.FileName)}\" không hợp lệ. Chỉ chấp nhận ảnh .jpg, .jpeg, .png, .webp, .gif hoặc .svg.");
+            return ServiceResult<ImageUploadResult>.Failure(
+                $"Định dạng tệp \"{Path.GetFileName(file.FileName)}\" không hợp lệ. Chỉ chấp nhận ảnh .jpg, .jpeg, .png, .webp, .gif hoặc .svg.");
         }
 
-        // Kiểm tra sâu Magic Bytes, Double Extension, Polyglot File & SVG XSS
         var (isValidFile, fileSecurityError) = await InputSanitizer.ValidateUploadedImageAsync(file, MaxFileSizeBytes, ct);
         if (!isValidFile)
         {
@@ -57,14 +59,15 @@ public class CloudinaryService(
             return ServiceResult<ImageUploadResult>.Failure(fileSecurityError);
         }
 
+        var utcNow = dateTimeProvider.UtcNow;
+
         if (_settings.IsConfigured)
         {
             try
             {
-                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+                var timestamp = utcNow.ToUnixTimeSeconds().ToString();
                 var folder = string.IsNullOrWhiteSpace(_settings.Folder) ? "library_management/books" : _settings.Folder.Trim();
-                var signPayload = $"folder={folder}&timestamp={timestamp}{_settings.ApiSecret}";
-                var signature = ComputeSha1Hex(signPayload);
+                var signature = ComputeSha1Hex($"folder={folder}&timestamp={timestamp}{_settings.ApiSecret}");
 
                 using var form = new MultipartFormDataContent();
                 await using var fileStream = file.OpenReadStream();
@@ -77,8 +80,9 @@ public class CloudinaryService(
                 form.Add(new StringContent(folder), "folder");
                 form.Add(new StringContent(signature), "signature");
 
+                var http = httpClientFactory.CreateClient("Cloudinary");
                 var uploadUrl = $"https://api.cloudinary.com/v1_1/{_settings.CloudName}/image/upload";
-                using var response = await Http.PostAsync(uploadUrl, form, ct);
+                using var response = await http.PostAsync(uploadUrl, form, ct);
                 var body = await response.Content.ReadAsStringAsync(ct);
 
                 if (response.IsSuccessStatusCode)
@@ -102,11 +106,10 @@ public class CloudinaryService(
             }
         }
 
-        // Lưu trữ tại wwwroot/uploads/books khi chưa điền khóa Cloudinary hoặc fallback trong môi trường Dev
         var uploadsDir = Path.Combine(env.WebRootPath, "uploads", "books");
         Directory.CreateDirectory(uploadsDir);
 
-        var safeFileName = $"{DateTime.UtcNow:yyyyMMdd}_{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
+        var safeFileName = $"{utcNow:yyyyMMdd}_{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
         var fullPath = Path.Combine(uploadsDir, safeFileName);
 
         await using (var outStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -150,9 +153,8 @@ public class CloudinaryService(
         {
             try
             {
-                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-                var signPayload = $"public_id={publicId}&timestamp={timestamp}{_settings.ApiSecret}";
-                var signature = ComputeSha1Hex(signPayload);
+                var timestamp = dateTimeProvider.UtcNow.ToUnixTimeSeconds().ToString();
+                var signature = ComputeSha1Hex($"public_id={publicId}&timestamp={timestamp}{_settings.ApiSecret}");
 
                 using var form = new MultipartFormDataContent
                 {
@@ -162,8 +164,9 @@ public class CloudinaryService(
                     { new StringContent(signature), "signature" }
                 };
 
+                var http = httpClientFactory.CreateClient("Cloudinary");
                 var destroyUrl = $"https://api.cloudinary.com/v1_1/{_settings.CloudName}/image/destroy";
-                await Http.PostAsync(destroyUrl, form, ct);
+                await http.PostAsync(destroyUrl, form, ct);
             }
             catch (Exception ex)
             {

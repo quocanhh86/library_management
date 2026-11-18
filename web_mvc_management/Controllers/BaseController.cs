@@ -101,4 +101,58 @@ public abstract class BaseController : Controller
         SetErrorMessage(result.Message);
         return onFailure != null ? onFailure() : View();
     }
+
+    /// <summary>
+    /// Đồng bộ thông báo từ ServiceResult vào TempData trước khi điều hướng hoặc render View.
+    /// </summary>
+    protected void FlashResult(ServiceResult result, string? successFallback = null)
+    {
+        if (result.IsSuccess)
+        {
+            var msg = !string.IsNullOrWhiteSpace(result.Message) ? result.Message : successFallback;
+            if (!string.IsNullOrWhiteSpace(msg))
+            {
+                SetSuccessMessage(msg);
+            }
+            return;
+        }
+
+        SetErrorMessage(result.Message);
+    }
+
+    /// <summary>
+    /// Gắn thông báo Flash Message từ ServiceResult và chuyển hướng tới Action chỉ định.
+    /// </summary>
+    protected IActionResult RedirectWithFlash(
+        ServiceResult result,
+        string actionName,
+        string? controllerName = null,
+        object? routeValues = null,
+        string? successFallback = null)
+    {
+        FlashResult(result, successFallback);
+        return controllerName != null
+            ? RedirectToAction(actionName, controllerName, routeValues)
+            : RedirectToAction(actionName, routeValues);
+    }
+
+    /// <summary>
+    /// Trả về JSON nếu là AJAX request, hoặc Redirect kèm Flash Message nếu là form submit thông thường.
+    /// </summary>
+    protected IActionResult AjaxOrRedirect(
+        ServiceResult result,
+        string actionName,
+        string? controllerName = null,
+        object? routeValues = null,
+        object? data = null)
+    {
+        if (IsAjaxRequest)
+        {
+            return result.IsSuccess
+                ? AjaxSuccess(result.Message, data)
+                : AjaxError(result.Message, result.Errors);
+        }
+
+        return RedirectWithFlash(result, actionName, controllerName, routeValues);
+    }
 }

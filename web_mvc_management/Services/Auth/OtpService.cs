@@ -11,10 +11,7 @@ namespace web_mvc_management.Services;
 
 /// <summary>
 /// Triển khai dịch vụ OTP Engine chuẩn an ninh:
-/// - SEC-04: OTP Verification Brute-Force Defense và OTP Burning Engine (giới hạn 5 lần sai).
-/// - SEC-08: Persistent Database Storage (lưu SQL Server thông qua IUnitOfWork).
-/// - SEC-12: OTP Purpose và Namespace Isolation.
-/// - SEC-14: Concurrency Race Condition Defense.
+/// SEC-04 (5 lần sai đốt mã), SEC-08 (lưu DB bền vững), SEC-12 (Namespace Isolation), SEC-14 (Chống Race Condition).
 /// </summary>
 public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvider) : IOtpService
 {
@@ -22,7 +19,11 @@ public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvid
     public static readonly TimeSpan DefaultValidity = TimeSpan.FromMinutes(5);
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> ConcurrencyLocks = new();
 
-    public async Task<string> GenerateOtpAsync(string email, string purpose, TimeSpan? validity = null, CancellationToken cancellationToken = default)
+    public async Task<string> GenerateOtpAsync(
+        string email,
+        string purpose,
+        TimeSpan? validity = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
         ArgumentException.ThrowIfNullOrWhiteSpace(purpose);
@@ -31,7 +32,6 @@ public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvid
         var now = dateTimeProvider.UtcNow;
         var expiresAt = now.Add(validity ?? DefaultValidity);
 
-        // Vô hiệu hóa mọi OTP còn hiệu lực trước đó của email và purpose này (chống Replay)
         var oldOtps = await unitOfWork.Otps.FindAsync(
             x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed && x.ExpiresAt > now,
             asNoTracking: false,
@@ -42,9 +42,7 @@ public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvid
             old.IsUsed = true;
         }
 
-        // Sinh 6 chữ số ngẫu nhiên an toàn mã hóa (100000 -> 999999)
-        var codeNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
-        var otpCode = codeNumber.ToString();
+        var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
         var otpEntry = new OtpEntry
         {
@@ -64,7 +62,11 @@ public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvid
         return otpCode;
     }
 
-    public async Task<OtpVerificationResult> VerifyOtpAsync(string email, string purpose, string otpCode, CancellationToken cancellationToken = default)
+    public async Task<OtpVerificationResult> VerifyOtpAsync(
+        string email,
+        string purpose,
+        string otpCode,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
@@ -81,7 +83,6 @@ public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvid
 
         try
         {
-            // Tìm bản ghi OTP mới nhất chưa sử dụng cho email và purpose
             var entry = await unitOfWork.Otps
                 .GetQueryable(asNoTracking: false)
                 .Where(x => x.Email == normalizedEmail && x.Purpose == purpose && !x.IsUsed)
@@ -93,7 +94,6 @@ public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvid
                 return OtpVerificationResult.NotFound(ErrorMessages.Get(ErrorCode.OtpNotFound));
             }
 
-            // Kiểm tra quá hạn
             if (entry.ExpiresAt <= now)
             {
                 entry.IsUsed = true;
@@ -101,27 +101,22 @@ public class OtpService(IUnitOfWork unitOfWork, IDateTimeProvider dateTimeProvid
                 return OtpVerificationResult.Expired(ErrorMessages.Get(ErrorCode.OtpExpired));
             }
 
-            // Kiểm tra mã OTP đúng hay sai bằng FixedTimeEquals chống Timing Attack
             if (CryptographicOperations.FixedTimeEquals(
                     Encoding.UTF8.GetBytes(entry.OtpCode),
                     Encoding.UTF8.GetBytes(normalizedCode)))
             {
-                // SEC-04: Đúng mã -> Đánh dấu đã dùng ngay lập tức chống tấn công phát lại (Replay Attack)
                 entry.IsUsed = true;
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 return OtpVerificationResult.Success();
             }
 
-            // Sai mã -> Tăng số lần thử sai
             entry.FailedAttempts++;
 
-            // SEC-04: Đạt ngưỡng 5 lần sai -> ĐỐT HỦY MÃ (BURN OTP) NGAY LẬP TỨC
             if (entry.FailedAttempts >= MaxFailedAttempts)
             {
                 entry.IsUsed = true;
                 await unitOfWork.SaveChangesAsync(cancellationToken);
-                return OtpVerificationResult.Burned(
-                    ErrorMessages.Format(ErrorCode.OtpBurned, MaxFailedAttempts));
+                return OtpVerificationResult.Burned(ErrorMessages.Format(ErrorCode.OtpBurned, MaxFailedAttempts));
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);

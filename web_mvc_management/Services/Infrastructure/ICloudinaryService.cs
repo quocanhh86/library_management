@@ -16,4 +16,3 @@ public interface ICloudinaryService
 
     Task<ServiceResult> DeleteImageAsync(string? publicId, CancellationToken ct = default);
 }
-

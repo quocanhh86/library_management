@@ -2,7 +2,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using web_mvc_management.Common;
 using web_mvc_management.Constant;
-using web_mvc_management.Entity;
 using web_mvc_management.Infrastructure;
 using web_mvc_management.Models.ViewModels.Auth;
 using web_mvc_management.Services;
@@ -12,7 +11,6 @@ namespace web_mvc_management.Controllers;
 
 /// <summary>
 /// Trang styleguide và xem trước giao diện để duyệt hình thức. Chỉ tồn tại ở môi trường Development.
-/// Các trang xem trước giả lập người dùng / dữ liệu cho riêng request đó, không đăng nhập thật và không cần DB.
 /// </summary>
 [Route("dev")]
 public class DevController(IWebHostEnvironment env) : BaseController
@@ -46,7 +44,8 @@ public class DevController(IWebHostEnvironment env) : BaseController
     /// <summary>Trang chủ khi độc giả đã đăng nhập.</summary>
     [HttpGet("home-reader")]
     public async Task<IActionResult> HomeAsReader(
-        [FromServices] IBookService bookService,
+        [FromServices] IPublicCatalogService publicCatalogService,
+        [FromServices] ICatalogLookupService catalogLookupService,
         [FromServices] ILibraryInfoService libraryInfoService,
         [FromServices] IReaderPortalService readerPortalService,
         [FromServices] IDateTimeProvider dateTimeProvider,
@@ -58,7 +57,14 @@ public class DevController(IWebHostEnvironment env) : BaseController
         }
 
         ActAs("Lê Minh Châu", AppRoles.Reader);
-        var model = await HomeController.BuildModelAsync(bookService, libraryInfoService, readerPortalService, dateTimeProvider, null, ct);
+        var model = await HomeController.BuildModelAsync(
+            publicCatalogService,
+            catalogLookupService,
+            libraryInfoService,
+            readerPortalService,
+            dateTimeProvider,
+            null,
+            ct);
         return View("~/Views/Home/Index.cshtml", model);
     }
 
@@ -71,7 +77,7 @@ public class DevController(IWebHostEnvironment env) : BaseController
             return NotFound();
         }
 
-        ViewBag.ReaderTypes = new List<ReaderType>
+        ViewBag.ReaderTypes = new List<ReaderTypeOptionViewModel>
         {
             new() { Name = "Sinh viên", MaxBorrowBooks = 5, LoanDays = 14 },
             new() { Name = "Giảng viên", MaxBorrowBooks = 10, LoanDays = 30 },
@@ -93,6 +99,7 @@ public class DevController(IWebHostEnvironment env) : BaseController
         {
             ModelState.AddModelError(nameof(VerifyOtpViewModel.OtpCode), ErrorMessages.Format(ErrorCode.OtpInvalid, 3));
         }
+
         return View("~/Views/Account/VerifyOtp.cshtml", new VerifyOtpViewModel
         {
             Email = "lethuha@gmail.com",

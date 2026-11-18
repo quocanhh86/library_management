@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using web_mvc_management.Common;
-using web_mvc_management.Entity;
 using web_mvc_management.Models.ViewModels.Auth;
 
 namespace web_mvc_management.Services;
@@ -24,7 +23,7 @@ public interface IAuthService
     /// <summary>
     /// Hoàn tất đăng ký độc giả sau khi xác thực OTP thành công, cấp mã thẻ thư viện.
     /// </summary>
-    Task<ServiceResult<Reader>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default);
+    Task<ServiceResult<RegisteredReaderViewModel>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default);
 
     /// <summary>
     /// Bước 1 đăng nhập độc giả: kiểm tra tài khoản, mật khẩu (PBKDF2 và Timing Attack Defense),
@@ -54,7 +53,7 @@ public interface IAuthService
     Task<ServiceResult> ResendOtpAsync(string email, string purpose, string clientIp, CancellationToken ct = default);
 
     /// <summary>
-    /// Lấy danh sách các loại độc giả đang hoạt động để phục vụ form đăng ký mở thẻ.
+    /// Lấy danh sách các loại độc giả đang hoạt động để phục vụ form đăng ký mở thẻ (Strict ViewModel).
     /// </summary>
-    Task<IReadOnlyList<ReaderType>> GetActiveReaderTypesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<ReaderTypeOptionViewModel>> GetActiveReaderTypesAsync(CancellationToken ct = default);
 }

@@ -23,45 +23,29 @@ public class AuthService(
     private const int MaxFailedLoginAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
-    public const string PurposeRegister = "REGISTER";
-    public const string PurposeReaderLogin = "READER_LOGIN";
-    public const string PurposeStaffLogin = "STAFF_LOGIN";
+    public const string PurposeRegister = LibraryConstants.OtpPurpose.Register;
+    public const string PurposeReaderLogin = LibraryConstants.OtpPurpose.ReaderLogin;
+    public const string PurposeStaffLogin = LibraryConstants.OtpPurpose.StaffLogin;
 
     public async Task<ServiceResult> SendRegisterOtpAsync(ReaderRegisterViewModel model, string clientIp, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        // SEC-17: IP Rate Limiting (5 requests gửi OTP / phút)
         if (!rateLimiter.IsAllowed(clientIp, "SEND_OTP", 5))
         {
             return ServiceResult.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
-        var normalizedUsername = model.Username.Trim().ToLowerInvariant();
-        var normalizedPhone = model.Phone.Trim();
-        var normalizedMemberCode = string.IsNullOrWhiteSpace(model.MemberCode) ? null : model.MemberCode.Trim();
-
-        // SEC-22: Kiểm tra trùng lặp CSDL qua Repository
-        if (await unitOfWork.Readers.ExistsAsync(x => x.Username.ToLower() == normalizedUsername, ct))
+        var duplicateError = await CheckReaderDuplicatesAsync(
+            model.Username.Trim(),
+            normalizedEmail,
+            model.Phone.Trim(),
+            NormalizeOptional(model.MemberCode),
+            ct);
+        if (duplicateError != null)
         {
-            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicateUsername);
-        }
-
-        if (await unitOfWork.Readers.ExistsAsync(x => x.Email.ToLower() == normalizedEmail, ct))
-        {
-            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicateEmail);
-        }
-
-        if (await unitOfWork.Readers.ExistsAsync(x => x.Phone == normalizedPhone, ct))
-        {
-            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicatePhone);
-        }
-
-        if (normalizedMemberCode != null &&
-            await unitOfWork.Readers.ExistsAsync(x => x.MemberCode != null && x.MemberCode.ToLower() == normalizedMemberCode.ToLower(), ct))
-        {
-            return ServiceResult.ValidationError("Mã sinh viên / Mã cán bộ này đã được đăng ký thẻ thư viện.");
+            return duplicateError;
         }
 
         if (!await unitOfWork.ReaderTypes.ExistsAsync(x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active, ct))
@@ -69,106 +53,72 @@ public class AuthService(
             return ServiceResult.ValidationError(ErrorCode.RegisterInvalidReaderType);
         }
 
-        // Kiểm tra Cooldown gửi OTP
         var remainingCooldown = emailService.GetRemainingCooldownSeconds(normalizedEmail);
         if (remainingCooldown > 0)
         {
             return ServiceResult.Failure(ErrorMessages.Format(ErrorCode.OtpCooldownActive, remainingCooldown));
         }
 
-        // Sinh OTP & Gửi Email
         var otpCode = await otpService.GenerateOtpAsync(normalizedEmail, PurposeRegister, cancellationToken: ct);
         var sendResult = await emailService.SendOtpEmailAsync(normalizedEmail, otpCode, PurposeRegister, ct);
 
-        if (!sendResult.Succeeded)
-        {
-            return sendResult;
-        }
-
-        return ServiceResult.Success(sendResult.Message);
+        return sendResult.Succeeded
+            ? ServiceResult.Success(sendResult.Message)
+            : sendResult;
     }
 
-    public async Task<ServiceResult<Reader>> CompleteRegistrationAsync(ReaderRegisterViewModel model, string otpCode, string clientIp, CancellationToken ct = default)
+    public async Task<ServiceResult<RegisteredReaderViewModel>> CompleteRegistrationAsync(
+        ReaderRegisterViewModel model,
+        string otpCode,
+        string clientIp,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        // SEC-17: IP Rate Limiting (15 lần verify / phút)
         if (!rateLimiter.IsAllowed(clientIp, "VERIFY_OTP", 15))
         {
-            return ServiceResult<Reader>.Failure(ErrorCode.RateLimitOtpExceeded);
+            return ServiceResult<RegisteredReaderViewModel>.Failure(ErrorCode.RateLimitOtpExceeded);
         }
 
         var normalizedEmail = model.Email.Trim().ToLowerInvariant();
-
-        // SEC-04 & SEC-12: Verify OTP
         var verifyResult = await otpService.VerifyOtpAsync(normalizedEmail, PurposeRegister, otpCode, ct);
         if (!verifyResult.IsSuccess)
         {
-            return ServiceResult<Reader>.Failure(verifyResult.Message);
+            return ServiceResult<RegisteredReaderViewModel>.Failure(verifyResult.Message);
         }
 
         var normalizedUsername = model.Username.Trim();
         var normalizedPhone = model.Phone.Trim();
-        var normalizedMemberCode = string.IsNullOrWhiteSpace(model.MemberCode) ? null : model.MemberCode.Trim();
+        var normalizedMemberCode = NormalizeOptional(model.MemberCode);
 
-        await unitOfWork.BeginTransactionWithLockAsync("LIB_MUTATION_LOCK", 10000, ct);
-        try
+        return await unitOfWork.ExecuteInLockedTransactionAsync(async () =>
         {
-            if (await unitOfWork.Readers.ExistsAsync(x => x.Username.ToLower() == normalizedUsername.ToLower(), ct))
+            var duplicateError = await CheckReaderDuplicatesAsync(
+                normalizedUsername,
+                normalizedEmail,
+                normalizedPhone,
+                normalizedMemberCode,
+                ct);
+            if (duplicateError != null)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
-                return ServiceResult<Reader>.ValidationError(ErrorCode.RegisterDuplicateUsername);
+                return ServiceResult<RegisteredReaderViewModel>.ValidationError(
+                    duplicateError.Code ?? ErrorCode.CommonValidationError,
+                    duplicateError.Message);
             }
 
-            if (await unitOfWork.Readers.ExistsAsync(x => x.Email.ToLower() == normalizedEmail, ct))
-            {
-                await unitOfWork.RollbackTransactionAsync(ct);
-                return ServiceResult<Reader>.ValidationError(ErrorCode.RegisterDuplicateEmail);
-            }
-
-            if (await unitOfWork.Readers.ExistsAsync(x => x.Phone == normalizedPhone, ct))
-            {
-                await unitOfWork.RollbackTransactionAsync(ct);
-                return ServiceResult<Reader>.ValidationError(ErrorCode.RegisterDuplicatePhone);
-            }
-
-            if (normalizedMemberCode != null &&
-                await unitOfWork.Readers.ExistsAsync(x => x.MemberCode != null && x.MemberCode.ToLower() == normalizedMemberCode.ToLower(), ct))
-            {
-                await unitOfWork.RollbackTransactionAsync(ct);
-                return ServiceResult<Reader>.ValidationError("Mã sinh viên / Mã cán bộ này đã được đăng ký thẻ thư viện.");
-            }
-
-            // Lấy thông tin loại độc giả để tính hạn thẻ
             var readerType = await unitOfWork.ReaderTypes.FirstOrDefaultAsync(
                 x => x.Id == model.ReaderTypeId && x.Status == EntityStatus.Active,
                 asNoTracking: true,
                 cancellationToken: ct);
-
             if (readerType == null)
             {
-                await unitOfWork.RollbackTransactionAsync(ct);
-                return ServiceResult<Reader>.Failure(ErrorCode.RegisterInvalidReaderType);
+                return ServiceResult<RegisteredReaderViewModel>.Failure(ErrorCode.RegisterInvalidReaderType);
             }
 
             var today = dateTimeProvider.Today;
             var validMonths = readerType.CardValidMonths > 0 ? readerType.CardValidMonths : 48;
-            var cardExpiry = today.AddMonths(validMonths);
-
-            // Sinh số thẻ thư viện duy nhất
-            var cardPrefix = readerType.Code.ToUpperInvariant() switch
-            {
-                "LECTURER" => "GV",
-                "GUEST" => "DG",
-                _ => "SV"
-            };
-            var sequence = await unitOfWork.Readers.CountAsync(cancellationToken: ct) + 1;
-            string cardNo;
-            do
-            {
-                cardNo = $"{cardPrefix}{today.Year}{sequence:D5}";
-                sequence++;
-            } while (await unitOfWork.Readers.ExistsAsync(x => x.CardNo == cardNo, ct));
+            var cardNo = await GenerateUniqueCardNumberAsync(readerType.Code, today.Year, ct);
+            var now = dateTimeProvider.UtcNow;
 
             var reader = new Reader
             {
@@ -184,33 +134,38 @@ public class AuthService(
                 MemberCode = normalizedMemberCode,
                 CardNo = cardNo,
                 CardIssuedDate = today,
-                CardExpiryDate = cardExpiry,
+                CardExpiryDate = today.AddMonths(validMonths),
                 CardStatus = LibraryConstants.CardStatus.Active,
                 Status = EntityStatus.Active,
                 SecurityStamp = Guid.NewGuid().ToString("N"),
                 FailedLoginAttempts = 0,
-                CreatedAt = dateTimeProvider.UtcNow,
-                UpdatedAt = dateTimeProvider.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             await unitOfWork.Readers.AddAsync(reader, ct);
-            await unitOfWork.CommitTransactionAsync(ct);
-
             logger.LogInformation("Độc giả mới đăng ký thành công: {Username} ({CardNo})", reader.Username, reader.CardNo);
-            return ServiceResult<Reader>.Success(reader, "Đã mở thẻ thư viện.");
-        }
-        catch
-        {
-            await unitOfWork.RollbackTransactionAsync(ct);
-            throw;
-        }
+
+            return ServiceResult<RegisteredReaderViewModel>.Success(
+                new RegisteredReaderViewModel
+                {
+                    Id = reader.Id,
+                    Username = reader.Username,
+                    Email = reader.Email,
+                    FullName = reader.FullName,
+                    CardNo = reader.CardNo
+                },
+                "Đã mở thẻ thư viện.");
+        }, cancellationToken: ct);
     }
 
-    public async Task<ServiceResult<LoginStepResult>> InitiateReaderLoginAsync(ReaderLoginViewModel model, string clientIp, CancellationToken ct = default)
+    public async Task<ServiceResult<LoginStepResult>> InitiateReaderLoginAsync(
+        ReaderLoginViewModel model,
+        string clientIp,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        // SEC-17: IP Rate Limiting (30 requests đăng nhập / phút)
         if (!rateLimiter.IsAllowed(clientIp, "LOGIN", 30))
         {
             return ServiceResult<LoginStepResult>.Failure(ErrorCode.RateLimitLoginExceeded);
@@ -224,40 +179,29 @@ public class AuthService(
             asNoTracking: false,
             cancellationToken: ct);
 
-        // SEC-15: Timing Attack Defense nếu tài khoản không tồn tại
         if (reader == null)
         {
             PasswordHasher.VerifyDummyPassword(model.Password);
             return ServiceResult<LoginStepResult>.Failure(ErrorCode.AuthInvalidCredentials);
         }
 
-        // SEC-11: Kiểm tra khóa tài khoản do Brute-force
         if (reader.LockedUntil.HasValue)
         {
             if (reader.LockedUntil.Value > now)
             {
-                var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
-                return ServiceResult<LoginStepResult>.Failure(
-                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
+                return ServiceResult<LoginStepResult>.Failure(FormatAccountLockedMessage(reader.LockedUntil.Value, now));
             }
 
-            // Nếu thời gian khóa đã hết hạn, reset bộ đếm để cấp lại chu kỳ thử mới
             reader.LockedUntil = null;
             reader.FailedLoginAttempts = 0;
         }
 
-        // Kiểm tra trạng thái hoạt động của độc giả
         if (reader.Status != EntityStatus.Active || reader.CardStatus == LibraryConstants.CardStatus.Locked)
         {
-            return ServiceResult<LoginStepResult>.Failure(
-                reader.CardStatus == LibraryConstants.CardStatus.Locked
-                    ? ErrorMessages.Format(ErrorCode.AuthCardLocked, reader.LockReason ?? "Liên hệ thủ thư để được hỗ trợ")
-                    : ErrorMessages.Get(ErrorCode.AuthAccountInactive));
+            return ServiceResult<LoginStepResult>.Failure(FormatReaderBlockedMessage(reader));
         }
 
-        // Kiểm tra mật khẩu PBKDF2
-        var isPasswordValid = PasswordHasher.VerifyPassword(model.Password, reader.PasswordHash);
-        if (!isPasswordValid)
+        if (!PasswordHasher.VerifyPassword(model.Password, reader.PasswordHash))
         {
             reader.FailedLoginAttempts++;
             reader.LastLoginAttempt = now;
@@ -265,7 +209,7 @@ public class AuthService(
             if (reader.FailedLoginAttempts >= MaxFailedLoginAttempts)
             {
                 reader.LockedUntil = now.Add(LockoutDuration);
-                reader.SecurityStamp = Guid.NewGuid().ToString("N"); // NIST SP 800-63B: Thu hồi mọi phiên đang hoạt động khi bị khóa
+                reader.SecurityStamp = Guid.NewGuid().ToString("N");
                 await unitOfWork.SaveChangesAsync(ct);
                 logger.LogWarning("Tài khoản độc giả {Username} bị khóa 15 phút do nhập sai mật khẩu 5 lần", reader.Username);
                 return ServiceResult<LoginStepResult>.Failure(
@@ -278,10 +222,8 @@ public class AuthService(
                 ErrorMessages.Format(ErrorCode.AuthAttemptsRemaining, remaining));
         }
 
-        // Mật khẩu đúng -> Sinh OTP 2FA & Gửi về email của Reader
         var otpCode = await otpService.GenerateOtpAsync(reader.Email, PurposeReaderLogin, cancellationToken: ct);
         var sendResult = await emailService.SendOtpEmailAsync(reader.Email, otpCode, PurposeReaderLogin, ct);
-
         if (!sendResult.Succeeded)
         {
             return ServiceResult<LoginStepResult>.Failure(sendResult.Message);
@@ -297,7 +239,11 @@ public class AuthService(
         }, sendResult.Message);
     }
 
-    public async Task<ServiceResult<ClaimsPrincipal>> CompleteReaderLoginOtpAsync(string email, string otpCode, string clientIp, CancellationToken ct = default)
+    public async Task<ServiceResult<ClaimsPrincipal>> CompleteReaderLoginOtpAsync(
+        string email,
+        string otpCode,
+        string clientIp,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
@@ -325,9 +271,7 @@ public class AuthService(
         {
             if (reader.LockedUntil.Value > now)
             {
-                var remainingMinutes = (int)Math.Ceiling((reader.LockedUntil.Value - now).TotalMinutes);
-                return ServiceResult<ClaimsPrincipal>.Failure(
-                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(reader.LockedUntil.Value)));
+                return ServiceResult<ClaimsPrincipal>.Failure(FormatAccountLockedMessage(reader.LockedUntil.Value, now));
             }
 
             reader.LockedUntil = null;
@@ -336,19 +280,9 @@ public class AuthService(
 
         if (reader.Status != EntityStatus.Active || reader.CardStatus == LibraryConstants.CardStatus.Locked)
         {
-            return ServiceResult<ClaimsPrincipal>.Failure(
-                reader.CardStatus == LibraryConstants.CardStatus.Locked
-                    ? ErrorMessages.Format(ErrorCode.AuthCardLocked, reader.LockReason ?? "Liên hệ thủ thư để được hỗ trợ")
-                    : ErrorMessages.Get(ErrorCode.AuthAccountInactive));
+            return ServiceResult<ClaimsPrincipal>.Failure(FormatReaderBlockedMessage(reader));
         }
 
-        // Account state can change after the password step while the OTP is pending.
-        if (reader.Status != EntityStatus.Active || reader.CardStatus == LibraryConstants.CardStatus.Locked)
-        {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.AuthAccountInactive);
-        }
-
-        // SEC-04: Xác thực OTP
         var verifyResult = await otpService.VerifyOtpAsync(normalizedEmail, PurposeReaderLogin, otpCode, ct);
         if (!verifyResult.IsSuccess)
         {
@@ -363,15 +297,13 @@ public class AuthService(
             return ServiceResult<ClaimsPrincipal>.Failure(verifyResult.Message);
         }
 
-        // Đăng nhập thành công -> Reset bộ đếm lỗi & Cập nhật LastLoginAt
         reader.FailedLoginAttempts = 0;
         reader.LockedUntil = null;
         reader.LastLoginAt = now;
         await unitOfWork.SaveChangesAsync(ct);
 
-        // Tạo ClaimsPrincipal cho Cookie Authentication
-        var claims = new List<Claim>
-        {
+        List<Claim> claims =
+        [
             new(ClaimTypes.NameIdentifier, reader.Id.ToString()),
             new(ClaimTypes.Name, reader.Username),
             new(ClaimTypes.Email, reader.Email),
@@ -379,16 +311,17 @@ public class AuthService(
             new("FullName", reader.FullName),
             new("CardNo", reader.CardNo),
             new(SecurityStampValidator.SecurityStampClaimType, reader.SecurityStamp)
-        };
+        ];
 
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
-
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
         logger.LogInformation("Độc giả đăng nhập thành công: {Username} ({CardNo})", reader.Username, reader.CardNo);
         return ServiceResult<ClaimsPrincipal>.Success(principal, "Đăng nhập thành công!");
     }
 
-    public async Task<ServiceResult<LoginStepResult>> InitiateStaffLoginAsync(StaffLoginViewModel model, string clientIp, CancellationToken ct = default)
+    public async Task<ServiceResult<LoginStepResult>> InitiateStaffLoginAsync(
+        StaffLoginViewModel model,
+        string clientIp,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(model);
 
@@ -405,10 +338,9 @@ public class AuthService(
             asNoTracking: false,
             cancellationToken: ct);
 
-        // SEC-09: Account Enumeration Defense - Không báo email không tồn tại!
+        // SEC-09: Account Enumeration Defense - Không báo email không tồn tại
         if (staff == null || staff.Status != EntityStatus.Active)
         {
-            // SEC-15: Chạy dummy PBKDF2
             PasswordHasher.VerifyDummyPassword(normalizedEmail);
             return ServiceResult<LoginStepResult>.Success(new LoginStepResult
             {
@@ -420,14 +352,11 @@ public class AuthService(
             }, "Mã xác thực OTP đã được gửi đến email của bạn nếu thông tin hợp lệ.");
         }
 
-        // SEC-11: Kiểm tra khóa tài khoản
         if (staff.LockedUntil.HasValue)
         {
             if (staff.LockedUntil.Value > now)
             {
-                var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
-                return ServiceResult<LoginStepResult>.Failure(
-                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
+                return ServiceResult<LoginStepResult>.Failure(FormatAccountLockedMessage(staff.LockedUntil.Value, now));
             }
 
             staff.LockedUntil = null;
@@ -435,10 +364,8 @@ public class AuthService(
             await unitOfWork.SaveChangesAsync(ct);
         }
 
-        // Sinh OTP & Gửi Gmail
         var otpCode = await otpService.GenerateOtpAsync(staff.Email, PurposeStaffLogin, cancellationToken: ct);
         var sendResult = await emailService.SendOtpEmailAsync(staff.Email, otpCode, PurposeStaffLogin, ct);
-
         if (!sendResult.Succeeded)
         {
             return ServiceResult<LoginStepResult>.Failure(sendResult.Message);
@@ -454,7 +381,11 @@ public class AuthService(
         }, sendResult.Message);
     }
 
-    public async Task<ServiceResult<ClaimsPrincipal>> CompleteStaffLoginOtpAsync(string email, string otpCode, string clientIp, CancellationToken ct = default)
+    public async Task<ServiceResult<ClaimsPrincipal>> CompleteStaffLoginOtpAsync(
+        string email,
+        string otpCode,
+        string clientIp,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otpCode))
         {
@@ -482,21 +413,13 @@ public class AuthService(
         {
             if (staff.LockedUntil.Value > now)
             {
-                var remainingMinutes = (int)Math.Ceiling((staff.LockedUntil.Value - now).TotalMinutes);
-                return ServiceResult<ClaimsPrincipal>.Failure(
-                    ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(staff.LockedUntil.Value)));
+                return ServiceResult<ClaimsPrincipal>.Failure(FormatAccountLockedMessage(staff.LockedUntil.Value, now));
             }
 
             staff.LockedUntil = null;
             staff.FailedLoginAttempts = 0;
         }
 
-        if (staff.Status != EntityStatus.Active)
-        {
-            return ServiceResult<ClaimsPrincipal>.Failure(ErrorCode.AuthAccountInactive);
-        }
-
-        // SEC-04 & SEC-12: Xác thực OTP với Purpose = STAFF_LOGIN
         var verifyResult = await otpService.VerifyOtpAsync(normalizedEmail, PurposeStaffLogin, otpCode, ct);
         if (!verifyResult.IsSuccess)
         {
@@ -511,37 +434,41 @@ public class AuthService(
             return ServiceResult<ClaimsPrincipal>.Failure(verifyResult.Message);
         }
 
-        // Đăng nhập thành công -> Reset lỗi
         staff.FailedLoginAttempts = 0;
         staff.LockedUntil = null;
         staff.LastLoginAt = now;
         await unitOfWork.SaveChangesAsync(ct);
 
-        // Gán Role chuẩn: Admin hoặc Librarian từ trường role của Staff
         var assignedRole = staff.Role == AppRoles.Admin ? AppRoles.Admin : AppRoles.Librarian;
-
-        var claims = new List<Claim>
-        {
+        List<Claim> claims =
+        [
             new(ClaimTypes.NameIdentifier, staff.Id.ToString()),
             new(ClaimTypes.Name, staff.Username),
             new(ClaimTypes.Email, staff.Email),
             new(ClaimTypes.Role, assignedRole),
             new("FullName", staff.FullName),
             new(SecurityStampValidator.SecurityStampClaimType, staff.SecurityStamp)
-        };
+        ];
 
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
-
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
         logger.LogInformation("Cán bộ thư viện đăng nhập thành công: {Username} (Role: {Role})", staff.Username, assignedRole);
         return ServiceResult<ClaimsPrincipal>.Success(principal, "Đăng nhập thành công!");
     }
 
-    public async Task<ServiceResult> ResendOtpAsync(string email, string purpose, string clientIp, CancellationToken ct = default)
+    public async Task<ServiceResult> ResendOtpAsync(
+        string email,
+        string purpose,
+        string clientIp,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(purpose))
         {
             return ServiceResult.Failure(ErrorCode.CommonInvalidRequest);
+        }
+
+        if (purpose is not (PurposeRegister or PurposeReaderLogin or PurposeStaffLogin))
+        {
+            return ServiceResult.Failure(ErrorCode.OtpPurposeMismatch);
         }
 
         if (!rateLimiter.IsAllowed(clientIp, "SEND_OTP", 5))
@@ -560,12 +487,86 @@ public class AuthService(
         return await emailService.SendOtpEmailAsync(normalizedEmail, otpCode, purpose, ct);
     }
 
-    public async Task<IReadOnlyList<ReaderType>> GetActiveReaderTypesAsync(CancellationToken ct = default)
-    {
-        return await unitOfWork.ReaderTypes
+    public async Task<IReadOnlyList<ReaderTypeOptionViewModel>> GetActiveReaderTypesAsync(CancellationToken ct = default) =>
+        await unitOfWork.ReaderTypes
             .GetQueryable(asNoTracking: true)
             .Where(x => x.Status == EntityStatus.Active)
             .OrderBy(x => x.Name)
+            .Select(x => new ReaderTypeOptionViewModel
+            {
+                Id = x.Id,
+                Code = x.Code,
+                Name = x.Name,
+                MaxBorrowBooks = x.MaxBorrowBooks,
+                LoanDays = x.LoanDays
+            })
             .ToListAsync(ct);
+
+    // ===== Helpers nội bộ =====
+
+    private async Task<ServiceResult?> CheckReaderDuplicatesAsync(
+        string username,
+        string normalizedEmail,
+        string phone,
+        string? memberCode,
+        CancellationToken ct)
+    {
+        if (await unitOfWork.Readers.ExistsAsync(x => x.Username.ToLower() == username.ToLower(), ct))
+        {
+            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicateUsername);
+        }
+
+        if (await unitOfWork.Readers.ExistsAsync(x => x.Email.ToLower() == normalizedEmail, ct))
+        {
+            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicateEmail);
+        }
+
+        if (await unitOfWork.Readers.ExistsAsync(x => x.Phone == phone, ct))
+        {
+            return ServiceResult.ValidationError(ErrorCode.RegisterDuplicatePhone);
+        }
+
+        if (memberCode != null &&
+            await unitOfWork.Readers.ExistsAsync(x => x.MemberCode != null && x.MemberCode.ToLower() == memberCode.ToLower(), ct))
+        {
+            return ServiceResult.ValidationError("Mã sinh viên / Mã cán bộ này đã được đăng ký thẻ thư viện.");
+        }
+
+        return null;
     }
+
+    private async Task<string> GenerateUniqueCardNumberAsync(string readerTypeCode, int year, CancellationToken ct)
+    {
+        var cardPrefix = readerTypeCode.ToUpperInvariant() switch
+        {
+            "LECTURER" => LibraryConstants.CardPrefix.Staff,
+            "GUEST" => LibraryConstants.CardPrefix.Guest,
+            _ => LibraryConstants.CardPrefix.Student
+        };
+
+        var sequence = await unitOfWork.Readers.CountAsync(cancellationToken: ct) + 1;
+        string cardNo;
+        do
+        {
+            cardNo = $"{cardPrefix}{year}{sequence:D5}";
+            sequence++;
+        }
+        while (await unitOfWork.Readers.ExistsAsync(x => x.CardNo == cardNo, ct));
+
+        return cardNo;
+    }
+
+    private static string FormatAccountLockedMessage(DateTimeOffset lockedUntil, DateTimeOffset now)
+    {
+        var remainingMinutes = (int)Math.Ceiling((lockedUntil - now).TotalMinutes);
+        return ErrorMessages.Format(ErrorCode.AuthAccountLocked, remainingMinutes, DateTimeHelper.ToVietnamTimeString(lockedUntil));
+    }
+
+    private static string FormatReaderBlockedMessage(Reader reader) =>
+        reader.CardStatus == LibraryConstants.CardStatus.Locked
+            ? ErrorMessages.Format(ErrorCode.AuthCardLocked, reader.LockReason ?? "Liên hệ thủ thư để được hỗ trợ")
+            : ErrorMessages.Get(ErrorCode.AuthAccountInactive);
+
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
